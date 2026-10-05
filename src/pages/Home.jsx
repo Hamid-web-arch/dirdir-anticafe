@@ -1,5 +1,6 @@
 import Hero from '../components/Hero.jsx'
-import About from '../components/About.jsx'
+import Highlights from '../components/Highlights.jsx'
+import Calculator from '../components/Calculator.jsx'
 import Pricing from '../components/Pricing.jsx'
 import Menu from '../components/Menu.jsx'
 import Events from '../components/Events.jsx'
@@ -9,7 +10,8 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <About />
+      <Highlights />
+      <Calculator />
       <Pricing />
       <Menu />
       <Events />

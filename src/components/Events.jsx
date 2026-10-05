@@ -7,7 +7,7 @@ export default function Events() {
     <section id="events" className="py-24">
       <div className="max-w-[1120px] mx-auto px-7">
         <Reveal className="max-w-[640px] mb-12">
-          <span className="inline-block text-[0.8rem] tracking-wide uppercase text-[#00806E] font-bold mb-3 bg-[#DEFBF5] px-3 py-1.5 rounded-full">
+          <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             Oyunlar & aktivlik
           </span>
           <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">
@@ -19,7 +19,7 @@ export default function Events() {
           {business.amenities.map((a, i) => (
             <Reveal key={a.title} delay={i * 70}>
               <div className="bg-card border border-ink/10 rounded-2xl p-7 flex gap-4 items-start h-full">
-                <span className="w-12 h-12 shrink-0 rounded-xl bg-[#FFE3EC] text-brand-pink flex items-center justify-center">
+                <span className="w-12 h-12 shrink-0 rounded-xl bg-brand-pink-soft text-brand-pink flex items-center justify-center">
                   <a.icon size={22} />
                 </span>
                 <div>
@@ -32,7 +32,7 @@ export default function Events() {
         </div>
 
         <Reveal>
-          <div className="bg-[#FFF3CC] rounded-2xl px-6 py-5 text-[0.92rem] text-[#6b5100] font-semibold flex gap-3 items-center">
+          <div className="bg-brand-yellow-soft rounded-2xl px-6 py-5 text-[0.92rem] text-brand-yellow-deep font-semibold flex gap-3 items-center">
             <PiChatCircleDots size={20} className="shrink-0" />
             Həftəlik tədbir cədvəli tez-tez yenilənir — ən dəqiq və güncəl proqram üçün Instagram
             story-lərinə baxın.

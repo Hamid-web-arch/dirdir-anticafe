@@ -7,7 +7,7 @@ export default function Pricing() {
     <section id="pricing" className="py-24">
       <div className="max-w-[1120px] mx-auto px-7">
         <Reveal className="max-w-[640px] mb-12">
-          <span className="inline-block text-[0.8rem] tracking-wide uppercase text-[#00806E] font-bold mb-3 bg-[#DEFBF5] px-3 py-1.5 rounded-full">
+          <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             Qiymət
           </span>
           <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">
