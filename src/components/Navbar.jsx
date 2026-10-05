@@ -31,14 +31,14 @@ export default function Navbar() {
         <ul className="hidden lg:flex items-center gap-6 xl:gap-8">
           {links.map((l) => (
             <li key={l.href}>
-              <a
-                href={l.href}
+              <Link
+                to={l.href}
                 className={`inline-block font-semibold text-[0.94rem] transition-colors whitespace-nowrap ${
                   isHashActive(l.href) ? 'text-primary' : 'text-inkdim hover:text-primary'
                 }`}
               >
                 {l.label}
-              </a>
+              </Link>
             </li>
           ))}
           {pageLinks.map((l) => (
@@ -93,15 +93,15 @@ export default function Navbar() {
           <ul className="flex flex-col px-5 sm:px-7 py-2">
             {links.map((l) => (
               <li key={l.href} className="border-b border-ink/10 last:border-none">
-                <a
-                  href={l.href}
+                <Link
+                  to={l.href}
                   onClick={() => setOpen(false)}
                   className={`block py-3.5 font-semibold text-[0.94rem] transition-colors ${
                     isHashActive(l.href) ? 'text-primary' : 'text-inkdim hover:text-primary'
                   }`}
                 >
                   {l.label}
-                </a>
+                </Link>
               </li>
             ))}
             {pageLinks.map((l) => (

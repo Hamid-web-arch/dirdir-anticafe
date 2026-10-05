@@ -11,14 +11,17 @@ export default function Hero() {
       <div className="relative z-10 max-w-[1120px] mx-auto px-7 grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
         <Reveal direction="left">
           <span className="inline-flex items-center gap-1.5 text-[0.82rem] tracking-wide uppercase text-brand-purple font-bold mb-5 bg-brand-purple-soft px-3.5 py-1.5 rounded-full">
-            <PiMapPin size={16} /> Sahil m. · saatı {business.pricePerHour}{business.currency}
+            <PiMapPin size={16} /> Sahil m. · ilk saat {business.pricePerHour}{business.currency}
           </span>
           <h1 className="font-display font-bold text-[2.5rem] sm:text-[3rem] md:text-[4rem] leading-[1.06] mb-5">
             1 saat 4 manat — <span className="text-accent">limitsiz və çox rahat</span>
           </h1>
           <p className="text-[1.12rem] text-inkdim max-w-[46ch] mb-8">
-            {business.name}-də hər saat cəmi {business.pricePerHour}{business.currency}-dir və şirniyyat, çay, kofe,
-            sərin içkilər limitsiz daxildir. Üstəlük stolüstü oyunlar və öz kino otağımız var.
+            {business.name}-də ilk saat cəmi {business.pricePerHour}{business.currency}, sonrakı hər saat{' '}
+            {business.pricing.hall.nextHour}
+            {business.currency}-dir — nə qədər qalsan da, {business.pricing.hall.cap}
+            {business.currency}-dan artıq ödəmirsən. Şirniyyat, çay, kofe, sərin içkilər limitsiz daxildir,
+            üstəlik stolüstü oyunlar və öz kino otağımız var.
           </p>
           <div className="flex gap-3.5 flex-wrap">
             <a
@@ -42,7 +45,7 @@ export default function Hero() {
               <strong className="block font-display text-[1.7rem] text-brand-purple">
                 {business.pricePerHour}{business.currency}
               </strong>
-              <span className="text-[0.82rem] text-inkdim font-semibold">/ saat, hər şey daxil</span>
+              <span className="text-[0.82rem] text-inkdim font-semibold">ilk saat, hər şey daxil</span>
             </div>
             <div>
               <strong className="block font-display text-[1.7rem] text-brand-purple">11–23</strong>
@@ -88,7 +91,7 @@ function SpinnerSignature({ price, currency }) {
         {price}{currency}
       </text>
       <text x="170" y="184" textAnchor="middle" fontWeight="600" fontSize="12" className="font-body fill-white" opacity="0.8">
-        / SAAT
+        İLK SAAT
       </text>
       <polygon points="170,96 160,116 180,116" className="fill-ink" />
     </svg>

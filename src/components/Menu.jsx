@@ -36,7 +36,7 @@ export default function Menu() {
         <Reveal>
           <span className="inline-flex items-center gap-2 mt-7 text-[0.85rem] text-brand-teal-deep font-bold bg-brand-teal-soft px-4 py-2 rounded-full">
             <PiCheckBold size={16} />
-            hamısı {business.pricePerHour}{business.currency}/saat qiymətinə daxildir
+            hamısı saat haqqına daxildir
           </span>
         </Reveal>
       </div>

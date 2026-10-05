@@ -34,11 +34,10 @@ export const business = {
   },
   // Tələbə endirimi (yalnız zalda): minHours saat və daha çox qalanda percent faiz.
   studentDiscount: { percent: 20, minHours: 3 },
-  // Promokodlar: KOD: endirim faizi. Böyük/kiçik hərf fərq etmir.
+  // Promokodlar: KOD: endirim faizi, məs. { YAY2026: 15 }. Böyük/kiçik hərf fərq etmir.
   // Endirimlər toplanmır — tələbə endirimi ilə promokoddan hansı böyükdürsə, o tətbiq olunur.
-  promoCodes: {
-    DIRDIR10: 10, // NÜMUNƏ — real kodla əvəz et
-  },
+  // Siyahı boş olanda hesablayıcıda promokod sahəsi görünmür.
+  promoCodes: {},
   // Hesablayıcıdakı slayderlərin hədləri (hər rejim üçün)
   calculator: {
     hall: { people: { min: 1, max: 20 }, hours: { min: 1, max: 12, step: 0.5 } },

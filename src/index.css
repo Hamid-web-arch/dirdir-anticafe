@@ -70,6 +70,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 72px; /* bölməyə keçəndə başlıq yapışqan navbar-ın altında qalmasın */
 }
 
 body {

@@ -3,7 +3,8 @@ import { useLocation } from 'react-router-dom'
 
 // Scrolls to the top on every route change, except when landing on a hash (e.g. /#about).
 export default function ScrollToTop() {
-  const { pathname, hash } = useLocation()
+  // key hər klikdə dəyişir — eyni linkə ikinci dəfə basanda da bölməyə qayıdır.
+  const { pathname, hash, key } = useLocation()
 
   useEffect(() => {
     if (hash) {
@@ -14,7 +15,7 @@ export default function ScrollToTop() {
       return () => timers.forEach(clearTimeout)
     }
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [pathname, hash])
+  }, [pathname, hash, key])
 
   return null
 }

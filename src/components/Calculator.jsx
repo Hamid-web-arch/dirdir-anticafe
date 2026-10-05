@@ -19,6 +19,7 @@ import { business } from '../data/business.js'
 
 const { currency, pricing, studentDiscount, promoCodes, calculator } = business
 const { hall, room } = pricing
+const hasPromoCodes = Object.keys(promoCodes).length > 0
 const { smallGroup, group } = room
 
 const money = (n) =>
@@ -256,50 +257,52 @@ export default function Calculator() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-2.5">
-                <span className="flex items-center gap-2 font-semibold">
-                  <PiTicketBold size={18} className="text-primary" /> Promokod
-                </span>
-                {promo ? (
-                  <div className="flex items-center gap-3 bg-brand-teal-soft text-brand-teal-deep rounded-2xl px-4 py-3">
-                    <PiCheckBold size={18} className="shrink-0" />
-                    <span className="font-bold">{promo.code}</span>
-                    <span className="text-[0.88rem] font-semibold">−{promo.percent}% tətbiq olundu</span>
-                    <button
-                      onClick={removePromo}
-                      aria-label="Promokodu sil"
-                      className="ml-auto w-8 h-8 rounded-full flex items-center justify-center hover:bg-brand-teal/15"
-                    >
-                      <PiXBold size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={applyPromo} className="flex gap-2.5">
-                    <input
-                      value={promoInput}
-                      onChange={(e) => {
-                        setPromoInput(e.target.value)
-                        setPromoError(false)
-                      }}
-                      placeholder="Kodu yaz"
-                      aria-label="Promokod"
-                      aria-invalid={promoError}
-                      className={`flex-1 min-w-0 bg-card border-2 rounded-full px-5 py-3 font-semibold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-inkdim/60 outline-none transition-colors ${
-                        promoError ? 'border-brand-pink' : 'border-ink/15 focus:border-primary'
-                      }`}
-                    />
-                    <button
-                      type="submit"
-                      className="shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
-                    >
-                      Tətbiq et
-                    </button>
-                  </form>
-                )}
-                {promoError && (
-                  <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">Bu promokod tapılmadı.</p>
-                )}
-              </div>
+              {hasPromoCodes && (
+                <div className="flex flex-col gap-2.5">
+                  <span className="flex items-center gap-2 font-semibold">
+                    <PiTicketBold size={18} className="text-primary" /> Promokod
+                  </span>
+                  {promo ? (
+                    <div className="flex items-center gap-3 bg-brand-teal-soft text-brand-teal-deep rounded-2xl px-4 py-3">
+                      <PiCheckBold size={18} className="shrink-0" />
+                      <span className="font-bold">{promo.code}</span>
+                      <span className="text-[0.88rem] font-semibold">−{promo.percent}% tətbiq olundu</span>
+                      <button
+                        onClick={removePromo}
+                        aria-label="Promokodu sil"
+                        className="ml-auto w-8 h-8 rounded-full flex items-center justify-center hover:bg-brand-teal/15"
+                      >
+                        <PiXBold size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={applyPromo} className="flex gap-2.5">
+                      <input
+                        value={promoInput}
+                        onChange={(e) => {
+                          setPromoInput(e.target.value)
+                          setPromoError(false)
+                        }}
+                        placeholder="Kodu yaz"
+                        aria-label="Promokod"
+                        aria-invalid={promoError}
+                        className={`flex-1 min-w-0 bg-card border-2 rounded-full px-5 py-3 font-semibold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-inkdim/60 outline-none transition-colors ${
+                          promoError ? 'border-brand-pink' : 'border-ink/15 focus:border-primary'
+                        }`}
+                      />
+                      <button
+                        type="submit"
+                        className="shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
+                      >
+                        Tətbiq et
+                      </button>
+                    </form>
+                  )}
+                  {promoError && (
+                    <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">Bu promokod tapılmadı.</p>
+                  )}
+                </div>
+              )}
             </div>
           </Reveal>
 
