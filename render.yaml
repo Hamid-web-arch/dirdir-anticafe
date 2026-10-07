@@ -7,7 +7,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: server
-    # Yalnız server/ dəyişəndə yenidən deploy olunur (frontend dəyişiklikləri GitHub Pages-ə gedir)
+    # Yalnız server/ dəyişəndə yenidən deploy olunur (frontend dəyişiklikləri Vercel-ə gedir)
     buildFilter:
       paths:
         - server/**
@@ -22,7 +22,7 @@ services:
         value: "22"
       - key: CORS_ORIGINS
         # Saytın ünvanları (vergüllə). Öz domen qoşulanda bura əlavə et, məs. https://dirdir.az,https://www.dirdir.az
-        value: https://hamid-web-arch.github.io,https://dirdir-anticafe.vercel.app
+        value: https://dirdir-anticafe.vercel.app
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL

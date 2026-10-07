@@ -18,7 +18,15 @@ npm run build
 npm run preview
 ```
 
-`dist/` qovluğu deploy üçün hazır statik fayllardan ibarət olacaq (Vercel, Netlify, GitHub Pages və s. üçün uyğundur).
+## Canlı sayt
+
+| Hissə | Harada | Yenilənmə |
+|---|---|---|
+| Sayt | Vercel — https://dirdir-anticafe.vercel.app | `main`-ə push → avtomatik |
+| Server (`server/`) | Render — https://dirdir-api.onrender.com | `server/` dəyişəndə avtomatik |
+| Baza | Neon (PostgreSQL, Frankfurt) | — |
+
+Backend-in qurulumu və API: [server/README.md](server/README.md).
 
 ## Struktur
 

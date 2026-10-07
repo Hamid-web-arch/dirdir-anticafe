@@ -65,7 +65,8 @@ Kök qovluqdakı [`render.yaml`](../render.yaml) serverin bütün parametrlərin
    `DATABASE_URL` (Neon ünvanı), `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_PHONE`. `JWT_SECRET` avtomatik yaradılır.
    Server hər başlayanda admin hesabını yoxlayır: yoxdursa yaradır, varsa şifrəsinə toxunmur.
 3. **Yoxla:** `https://<render-ünvanı>/api/health` → `{"ok":true}`.
-4. **Frontend:** GitHub repo → Settings → Secrets and variables → Actions → **Variables** → `VITE_API_URL` = Render ünvanı
-   (məs. `https://dirdir-api.onrender.com`), sonra Actions-da son deploy-u *Re-run* et.
+4. **Frontend:** sayt Vercel-dədir; backend ünvanı kök qovluqdakı `.env.production` faylındadır
+   (`VITE_API_URL=https://dirdir-api.onrender.com`). Saytın yeni ünvanı (məs. öz domen) `render.yaml`-dakı
+   `CORS_ORIGINS`-ə əlavə olunmalıdır.
 
 Qeyd: Render-in pulsuz planında server 15 dəqiqə sorğu gəlməyəndə yatır; sonrakı ilk sorğu ~30–60 saniyə gecikə bilər.
