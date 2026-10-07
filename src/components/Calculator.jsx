@@ -16,10 +16,12 @@ import {
 } from 'react-icons/pi'
 import Reveal from './Reveal.jsx'
 import { business } from '../data/business.js'
+import { api, apiEnabled } from '../lib/api.js'
 
 const { currency, pricing, studentDiscount, promoCodes, calculator } = business
 const { hall, room } = pricing
-const hasPromoCodes = Object.keys(promoCodes).length > 0
+// Backend qoşulubsa kodları server yoxlayır; yoxsa business.js-dəki siyahı (boşdursa sahə gizlənir).
+const hasPromoCodes = apiEnabled || Object.keys(promoCodes).length > 0
 const { smallGroup, group } = room
 
 const money = (n) =>
@@ -91,7 +93,8 @@ export default function Calculator() {
   const [student, setStudent] = useState(false)
   const [promoInput, setPromoInput] = useState('')
   const [promo, setPromo] = useState(null) // { code, percent }
-  const [promoError, setPromoError] = useState(false)
+  const [promoError, setPromoError] = useState(null)
+  const [promoChecking, setPromoChecking] = useState(false)
 
   const limits = calculator[mode]
   const { subtotal, rows, capped } = quote(mode, people, hours)
@@ -112,23 +115,32 @@ export default function Calculator() {
     setMode(next)
   }
 
-  const applyPromo = (e) => {
+  const applyPromo = async (e) => {
     e.preventDefault()
     const code = promoInput.trim().toUpperCase()
-    if (!code) return
-    if (promoCodes[code]) {
-      setPromo({ code, percent: promoCodes[code] })
-      setPromoError(false)
-    } else {
-      setPromo(null)
-      setPromoError(true)
+    if (!code || promoChecking) return
+    setPromoError(null)
+
+    if (!apiEnabled) {
+      if (promoCodes[code]) setPromo({ code, percent: promoCodes[code] })
+      else setPromoError('Bu promokod tapılmadı.')
+      return
+    }
+
+    setPromoChecking(true)
+    try {
+      setPromo(await api('/promo/validate', { method: 'POST', body: { code } }))
+    } catch (err) {
+      setPromoError(err.message)
+    } finally {
+      setPromoChecking(false)
     }
   }
 
   const removePromo = () => {
     setPromo(null)
     setPromoInput('')
-    setPromoError(false)
+    setPromoError(null)
   }
 
   const hoursHint =
@@ -281,25 +293,26 @@ export default function Calculator() {
                         value={promoInput}
                         onChange={(e) => {
                           setPromoInput(e.target.value)
-                          setPromoError(false)
+                          setPromoError(null)
                         }}
                         placeholder="Kodu yaz"
                         aria-label="Promokod"
-                        aria-invalid={promoError}
+                        aria-invalid={Boolean(promoError)}
                         className={`flex-1 min-w-0 bg-card border-2 rounded-full px-5 py-3 font-semibold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-inkdim/60 outline-none transition-colors ${
                           promoError ? 'border-brand-pink' : 'border-ink/15 focus:border-primary'
                         }`}
                       />
                       <button
                         type="submit"
-                        className="shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
+                        disabled={promoChecking}
+                        className="disabled:opacity-60 shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
                       >
-                        Tətbiq et
+                        {promoChecking ? 'Yoxlanılır...' : 'Tətbiq et'}
                       </button>
                     </form>
                   )}
                   {promoError && (
-                    <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">Bu promokod tapılmadı.</p>
+                    <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">{promoError}</p>
                   )}
                 </div>
               )}

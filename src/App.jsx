@@ -7,6 +7,7 @@ import Arena from './pages/Arena.jsx'
 import Sponsors from './pages/Sponsors.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
+import Account from './pages/Account.jsx'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/sponsorlar" element={<Sponsors />} />
           <Route path="/giris" element={<Login />} />
           <Route path="/qeydiyyat" element={<Register />} />
+          <Route path="/hesabim" element={<Account />} />
         </Routes>
       </main>
       <Footer />

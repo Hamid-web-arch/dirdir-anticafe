@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PiEyeBold, PiEyeSlashBold, PiWarningCircleBold } from 'react-icons/pi'
+import { PiEyeBold, PiEyeSlashBold, PiWarningCircleBold, PiSpinnerBold } from 'react-icons/pi'
 import Reveal from './Reveal.jsx'
 import hallImg from '../assets/upper-hal.jpeg'
 
@@ -84,18 +84,38 @@ export function PasswordField(props) {
   )
 }
 
-export function SubmitButton({ children }) {
+export function SubmitButton({ children, loading }) {
   return (
     <button
       type="submit"
-      className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-full font-bold text-[0.95rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover active:translate-y-0 transition-all"
+      disabled={loading}
+      aria-busy={loading}
+      className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-full font-bold text-[0.95rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover active:translate-y-0 transition-all disabled:opacity-70 disabled:pointer-events-none"
     >
-      {children}
+      {loading ? (
+        <>
+          <PiSpinnerBold size={18} className="animate-spin" /> Gözlə...
+        </>
+      ) : (
+        children
+      )}
     </button>
   )
 }
 
-// Backend hələ qoşulmayıb — forma düzgün doldurulanda bunu göstəririk.
+// Serverdən gələn ümumi xəta (sahəyə aid olmayan).
+export function FormError({ children }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-center gap-2 rounded-2xl bg-brand-pink-soft text-brand-pink-deep px-4 py-3.5 text-[0.9rem] font-semibold"
+    >
+      <PiWarningCircleBold size={18} className="shrink-0" /> {children}
+    </div>
+  )
+}
+
+// Demo rejim (VITE_API_URL yoxdur) — forma düzgün doldurulanda bunu göstəririk.
 export function DemoNotice({ children }) {
   return (
     <div

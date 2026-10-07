@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PiListBold, PiXBold, PiTrophyBold, PiHandshake, PiUserCircleBold, PiWhatsappLogoBold } from 'react-icons/pi'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { reserveUrl } from '../data/business.js'
+import { useAuth } from '../auth/AuthContext.jsx'
 
 const links = [
   { href: '/#neler-var', label: 'Nələr var?' },
@@ -18,6 +19,9 @@ const pageLinks = [
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const { pathname, hash } = useLocation()
+  const { user } = useAuth()
+  // Daxil olubsa düymə hesaba aparır və adını göstərir
+  const account = user ? { to: '/hesabim', label: user.firstName } : { to: '/giris', label: 'Daxil ol' }
 
   const isHashActive = (href) => pathname === '/' && hash === `#${href.split('#')[1]}`
 
@@ -59,11 +63,11 @@ export default function Navbar() {
 
         <div className="flex items-center gap-3">
           <Link
-            to="/giris"
-            aria-label="Daxil ol"
+            to={account.to}
+            aria-label={account.label}
             className="hidden lg:inline-flex items-center gap-1.5 border-2 border-ink text-ink px-3 xl:px-5 py-2.5 rounded-full font-bold text-sm hover:bg-ink hover:text-white transition-colors whitespace-nowrap"
           >
-            <PiUserCircleBold size={18} /> <span className="hidden xl:inline">Daxil ol</span>
+            <PiUserCircleBold size={18} /> <span className="hidden xl:inline max-w-[8rem] truncate">{account.label}</span>
           </Link>
           <a
             href={reserveUrl}
@@ -121,11 +125,11 @@ export default function Navbar() {
             ))}
             <li className="py-3.5 flex flex-wrap gap-2.5">
               <Link
-                to="/giris"
+                to={account.to}
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center gap-1.5 border-2 border-ink text-ink px-5 py-2.5 rounded-full font-bold text-sm hover:bg-ink hover:text-white transition-colors"
               >
-                <PiUserCircleBold size={18} /> Daxil ol
+                <PiUserCircleBold size={18} /> {account.label}
               </Link>
               <a
                 href={reserveUrl}

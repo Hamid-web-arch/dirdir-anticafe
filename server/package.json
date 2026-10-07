@@ -1,0 +1,37 @@
+{
+  "name": "dirdir-anticafe-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env src/index.js",
+    "start": "node src/index.js",
+    "db:local": "node scripts/local-db.js",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:new": "prisma migrate dev",
+    "db:seed": "node --env-file-if-exists=.env prisma/seed.js",
+    "postinstall": "prisma generate",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "prisma": "6.19.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "embedded-postgres": "18.4.0-beta.17",
+    "supertest": "^7.3.1"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  }
+}

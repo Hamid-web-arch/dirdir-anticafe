@@ -20,7 +20,11 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # Backend ünvanı: GitHub → Settings → Secrets and variables → Actions → Variables → VITE_API_URL.
+      # Boş qalsa sayt demo rejimdə yığılır (formalar yalnız yoxlayır, Arena nümunə lövhəni göstərir).
       - run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
       - run: cp dist/index.html dist/404.html
 
       - uses: peaceiris/actions-gh-pages@v3

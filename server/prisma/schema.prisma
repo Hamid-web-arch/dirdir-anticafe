@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String   @unique // həmişə kiçik hərflə saxlanır
+  phone        String   @unique // 9 rəqəm, +994-süz (məs. 501234567)
+  passwordHash String
+  role         Role     @default(USER)
+  // Arena xalı. Dəyişikliklərin tarixçəsi PointEntry-dədir.
+  points       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pointEntries   PointEntry[] @relation("PointEntryUser")
+  pointsAwarded  PointEntry[] @relation("PointEntryAdmin")
+
+  @@index([points])
+}
+
+// Hər xal dəyişikliyi: kim, nə qədər, niyə, hansı admin.
+model PointEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("PointEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int
+  reason      String
+  createdById String?
+  createdBy   User?    @relation("PointEntryAdmin", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PromoCode {
+  id        String    @id @default(cuid())
+  code      String    @unique // həmişə böyük hərflə saxlanır
+  percent   Int
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}

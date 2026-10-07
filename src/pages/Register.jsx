@@ -1,7 +1,16 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { PiUserPlusBold } from 'react-icons/pi'
-import AuthLayout, { Field, PasswordField, SubmitButton, DemoNotice, isEmail } from '../components/AuthLayout.jsx'
+import AuthLayout, {
+  Field,
+  PasswordField,
+  SubmitButton,
+  DemoNotice,
+  FormError,
+  isEmail,
+} from '../components/AuthLayout.jsx'
+import { useAuth } from '../auth/AuthContext.jsx'
+import { apiEnabled } from '../lib/api.js'
 
 // Azərbaycan mobil operator kodları (+994 XX ...)
 const OPERATOR_CODES = ['10', '50', '51', '55', '60', '70', '77', '99']
@@ -12,13 +21,18 @@ const formatPhone = (digits) =>
   [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)].filter(Boolean).join(' ')
 
 export default function Register() {
+  const { user, register } = useAuth()
+  const navigate = useNavigate()
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', confirm: '' })
   const [errors, setErrors] = useState({})
+  const [formError, setFormError] = useState(null)
+  const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
   const set = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((er) => ({ ...er, [key]: null }))
+    setFormError(null)
     setSent(false)
   }
   const update = (key) => (e) => set(key, e.target.value)
@@ -31,7 +45,7 @@ export default function Register() {
     set('phone', digits.slice(0, 9))
   }
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     const next = {}
     if (!form.firstName.trim()) next.firstName = 'Adını yaz.'
@@ -42,8 +56,25 @@ export default function Register() {
     if (form.password.length < MIN_PASSWORD) next.password = `Şifrə ən azı ${MIN_PASSWORD} simvol olmalıdır.`
     if (form.confirm !== form.password || !form.confirm) next.confirm = 'Şifrələr eyni deyil.'
     setErrors(next)
-    setSent(Object.keys(next).length === 0)
+    if (Object.keys(next).length > 0) return
+
+    if (!apiEnabled) return setSent(true)
+
+    setLoading(true)
+    try {
+      const { confirm, ...data } = form
+      await register(data)
+      navigate('/hesabim')
+    } catch (err) {
+      // Server sahə xətası qaytarırsa (məs. email artıq var), onu həmin sahənin altında göstəririk.
+      setErrors(err.fields)
+      setFormError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  if (user) return <Navigate to="/hesabim" replace />
 
   return (
     <AuthLayout
@@ -122,7 +153,9 @@ export default function Register() {
           error={errors.confirm}
         />
 
-        <SubmitButton>
+        {formError && <FormError>{formError}</FormError>}
+
+        <SubmitButton loading={loading}>
           <PiUserPlusBold size={18} /> Qeydiyyatdan keç
         </SubmitButton>
 

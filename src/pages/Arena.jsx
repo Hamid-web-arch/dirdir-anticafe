@@ -14,9 +14,12 @@ import {
   PiTicket,
   PiAirplaneTilt,
 } from 'react-icons/pi'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Reveal from '../components/Reveal.jsx'
 import { business } from '../data/business.js'
+import { api, apiEnabled } from '../lib/api.js'
+import { useAuth } from '../auth/AuthContext.jsx'
 
 const top3 = [
   {
@@ -61,7 +64,6 @@ const rest = [
   { rank: 10, name: 'Yeni Üzv', points: 390 },
 ]
 
-const maxRestPoints = Math.max(...rest.map((r) => r.points))
 
 const gifts = [
   { icon: PiSteeringWheel, title: 'Kartinqdə yarış', desc: 'Adrenalin dolu kart yarışında sürət hissi.' },
@@ -78,6 +80,26 @@ const steps = [
 ]
 
 export default function Arena() {
+  const { user } = useAuth()
+  // Backend qoşulubsa real lövhə; hələ heç kimin xalı yoxdursa, nümunə dizayn qalır.
+  const [live, setLive] = useState(null)
+
+  useEffect(() => {
+    if (!apiEnabled) return
+    api('/arena/leaderboard?limit=10')
+      .then((d) => setLive(d.leaderboard))
+      .catch(() => setLive(null))
+  }, [])
+
+  const isLive = live?.length > 0
+  // Real nəticələr nümunədəki medal/mükafat dizaynını saxlayır, yalnız ad və xal dəyişir.
+  const podium = isLive
+    ? top3.slice(0, live.length).map((p, i) => ({ ...p, id: live[i].id, name: live[i].name, points: live[i].points }))
+    : top3
+  const list = isLive ? live.slice(3) : rest
+  const maxListPoints = Math.max(1, ...list.map((r) => r.points))
+  const isMe = (id) => Boolean(user && id === user.id)
+
   return (
     <section className="relative overflow-hidden py-16 sm:py-24">
       <div className="absolute w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] bg-brand-purple/20 rounded-full blur-3xl -top-28 -right-24 pointer-events-none" />
@@ -95,18 +117,25 @@ export default function Arena() {
             Liderlər Lövhəsi
           </h1>
           <p className="text-inkdim text-[0.95rem] sm:text-[1.03rem] max-w-[52ch] mx-auto mb-3 px-1">
-            İlk rəqabət hələ elan olunmayıb, amma lövhə belə görünəcək: ən çox xal toplayan
-            ilk üç nəfər xüsusi mükafat qazanır.
+            {isLive
+              ? 'Ən çox xal toplayan ilk üç nəfər xüsusi mükafat qazanır. Xallar hər oyundan sonra yenilənir.'
+              : 'İlk rəqabət hələ elan olunmayıb, amma lövhə belə görünəcək: ən çox xal toplayan ilk üç nəfər xüsusi mükafat qazanır.'}
           </p>
-          <span className="inline-block text-[0.72rem] tracking-wide uppercase font-bold text-inkdim/70 border border-dashed border-ink/20 rounded-full px-3 py-1 mb-10 sm:mb-12">
-            nümunə dizayn — real nəticələr deyil
-          </span>
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5 text-[0.72rem] tracking-wide uppercase font-bold text-brand-teal-deep bg-brand-teal-soft rounded-full px-3 py-1 mb-10 sm:mb-12">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-teal animate-pulse" /> canlı nəticələr
+            </span>
+          ) : (
+            <span className="inline-block text-[0.72rem] tracking-wide uppercase font-bold text-inkdim/70 border border-dashed border-ink/20 rounded-full px-3 py-1 mb-10 sm:mb-12">
+              nümunə dizayn — real nəticələr deyil
+            </span>
+          )}
         </Reveal>
 
         {/* Podium */}
         <Reveal delay={120}>
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-4 mb-6">
-            {top3.map((p) => (
+            {podium.map((p) => (
               <div
                 key={p.rank}
                 className={`flex-1 bg-card border-2 ${p.ring} rounded-2xl p-5 sm:p-6 relative
@@ -125,7 +154,10 @@ export default function Arena() {
                 >
                   <p.icon size={p.rank === 1 ? 34 : 28} />
                 </div>
-                <h3 className="font-display font-bold text-[1.05rem] sm:text-[1.15rem] mb-1">{p.name}</h3>
+                <h3 className="font-display font-bold text-[1.05rem] sm:text-[1.15rem] mb-1">
+                  {p.name}
+                  {isMe(p.id) && <span className="ml-1.5 text-primary">(sən)</span>}
+                </h3>
                 <p className="text-[0.82rem] text-inkdim font-semibold mb-3">{p.points} xal</p>
                 <span className={`inline-flex items-center gap-1.5 text-[0.76rem] font-bold px-3 py-1.5 rounded-full ${p.badge}`}>
                   <PiGift size={14} /> {p.prize}
@@ -137,18 +169,25 @@ export default function Arena() {
 
         {/* Ranks 4-10 */}
         <Reveal delay={180}>
-          <div className="bg-card border border-ink/10 rounded-2xl p-2 sm:p-3 mb-16 sm:mb-20 text-left">
-            {rest.map((r) => (
+          <div
+            className={`bg-card border border-ink/10 rounded-2xl p-2 sm:p-3 mb-16 sm:mb-20 text-left ${list.length ? '' : 'hidden'}`}
+          >
+            {list.map((r) => (
               <div
                 key={r.rank}
-                className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-ink/5 last:border-none"
+                className={`flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-ink/5 last:border-none ${
+                  isMe(r.id) ? 'bg-brand-orange-soft rounded-xl' : ''
+                }`}
               >
                 <span className="w-7 shrink-0 text-center text-[0.85rem] font-bold text-inkdim">{r.rank}</span>
-                <span className="flex-1 font-semibold text-[0.92rem] truncate">{r.name}</span>
+                <span className="flex-1 font-semibold text-[0.92rem] truncate">
+                  {r.name}
+                  {isMe(r.id) && <span className="ml-1.5 text-primary">(sən)</span>}
+                </span>
                 <span className="hidden sm:block w-28 h-1.5 rounded-full bg-bg overflow-hidden shrink-0">
                   <span
                     className="block h-full rounded-full bg-brand-purple/60"
-                    style={{ width: `${(r.points / maxRestPoints) * 100}%` }}
+                    style={{ width: `${(r.points / maxListPoints) * 100}%` }}
                   />
                 </span>
                 <span className="shrink-0 text-[0.85rem] font-bold text-inkdim w-14 text-right">{r.points} xal</span>
