@@ -21,7 +21,8 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: CORS_ORIGINS
-        value: https://hamid-web-arch.github.io
+        # Saytın ünvanları (vergüllə). Öz domen qoşulanda bura əlavə et, məs. https://dirdir.az,https://www.dirdir.az
+        value: https://hamid-web-arch.github.io,https://dirdir-anticafe.vercel.app
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL

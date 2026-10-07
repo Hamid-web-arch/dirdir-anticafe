@@ -20,11 +20,11 @@ jobs:
           cache: npm
 
       - run: npm ci
-      # Backend ünvanı: GitHub → Settings → Secrets and variables → Actions → Variables → VITE_API_URL.
-      # Boş qalsa sayt demo rejimdə yığılır (formalar yalnız yoxlayır, Arena nümunə lövhəni göstərir).
+      # GitHub Pages-də sayt /dirdir-anticafe/ altındadır (Vercel-də isə kökdə).
+      # Backend ünvanı .env.production faylından gəlir.
       - run: npm run build
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_BASE: /dirdir-anticafe/
       - run: cp dist/index.html dist/404.html
 
       - uses: peaceiris/actions-gh-pages@v3
