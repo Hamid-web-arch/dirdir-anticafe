@@ -55,14 +55,17 @@ Daxil olmaq tələb edən ünvanlara `Authorization: Bearer <token>` başlığı
 Təhlükəsizlik: şifrələr bcrypt ilə saxlanır; giriş (15 dəqiqədə 10), qeydiyyat və promokod yoxlaması üçün sorğu limiti var;
 yalnız `CORS_ORIGINS`-dəki saytlar API-yə brauzerdən müraciət edə bilər.
 
-## Canlıya çıxarmaq (məs. Render + Neon)
+## Canlıya çıxarmaq (Render + Neon)
 
-1. **Baza:** [neon.tech](https://neon.tech)-də pulsuz PostgreSQL yarat, bağlantı ünvanını (`postgresql://...`) götür.
-2. **Server:** [render.com](https://render.com)-da *New → Web Service*, bu repo:
-   - Root Directory: `server`
-   - Build Command: `npm ci && npx prisma migrate deploy`
-   - Start Command: `npm start`
-   - Environment: `DATABASE_URL`, `JWT_SECRET` (uzun təsadüfi sətir), `CORS_ORIGINS=https://hamid-web-arch.github.io`, `NODE_ENV=production`
-3. **Admin:** Render Shell-də `ADMIN_EMAIL=... ADMIN_PASSWORD=... ADMIN_PHONE=... npm run db:seed`.
+Kök qovluqdakı [`render.yaml`](../render.yaml) serverin bütün parametrlərini təsvir edir.
+
+1. **Baza:** [neon.tech](https://neon.tech)-də pulsuz layihə yarat (region: Frankfurt). *Connection string*-i
+   **connection pooling söndürülmüş** halda kopyala (`postgresql://...?sslmode=require`).
+2. **Server:** [render.com](https://render.com) → *New → Blueprint* → bu repo. Render 4 dəyər soruşacaq:
+   `DATABASE_URL` (Neon ünvanı), `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_PHONE`. `JWT_SECRET` avtomatik yaradılır.
+   Server hər başlayanda admin hesabını yoxlayır: yoxdursa yaradır, varsa şifrəsinə toxunmur.
+3. **Yoxla:** `https://<render-ünvanı>/api/health` → `{"ok":true}`.
 4. **Frontend:** GitHub repo → Settings → Secrets and variables → Actions → **Variables** → `VITE_API_URL` = Render ünvanı
-   (məs. `https://dirdir-api.onrender.com`), sonra `main`-ə push və ya workflow-u yenidən işə sal.
+   (məs. `https://dirdir-api.onrender.com`), sonra Actions-da son deploy-u *Re-run* et.
+
+Qeyd: Render-in pulsuz planında server 15 dəqiqə sorğu gəlməyəndə yatır; sonrakı ilk sorğu ~30–60 saniyə gecikə bilər.

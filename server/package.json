@@ -14,7 +14,8 @@
     "db:migrate:new": "prisma migrate dev",
     "db:seed": "node --env-file-if-exists=.env prisma/seed.js",
     "postinstall": "prisma generate",
-    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "start:prod": "node prisma/seed.js --if-configured && node src/index.js"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

@@ -1,0 +1,34 @@
+# Render Blueprint — backend (server/) üçün. Render → New → Blueprint → bu repo.
+# "sync: false" olan dəyərləri Render ilk dəfə soruşur; JWT_SECRET avtomatik yaradılır.
+services:
+  - type: web
+    name: dirdir-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: server
+    # Yalnız server/ dəyişəndə yenidən deploy olunur (frontend dəyişiklikləri GitHub Pages-ə gedir)
+    buildFilter:
+      paths:
+        - server/**
+    buildCommand: npm ci && npx prisma migrate deploy
+    # Admin dəyişənləri varsa, ilk admin hesabını yaradır, sonra serveri işə salır
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: CORS_ORIGINS
+        value: https://hamid-web-arch.github.io
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
