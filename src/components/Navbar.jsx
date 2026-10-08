@@ -88,8 +88,11 @@ export default function Navbar() {
           ))}
         </ul>
 
-        <div className="flex items-center gap-2.5">
-          <ThemeToggle />
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Ən dar telefonlarda yer çatsın deyə açar menyunun içindədir */}
+          <span className="hidden sm:inline-flex">
+            <ThemeToggle />
+          </span>
           <LanguageMenu />
           <Link
             to={account.to}
@@ -98,13 +101,14 @@ export default function Navbar() {
           >
             {accountIcon} <span className="hidden xl:inline max-w-[8rem] truncate">{account.label}</span>
           </Link>
+          {/* Bütün ekranlarda yuxarıda: kiçik telefonda və lg-də (menyu sıx olanda) yalnız ikon, qalanında yazı ilə */}
           <ReserveButton
             href={reserveUrl}
             label={t('nav.reserve')}
-            wrapClassName="hidden lg:inline-flex"
-            className="inline-flex items-center gap-1.5 bg-primary text-white shadow-cta px-3 xl:px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-orange-deep transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 bg-primary text-white shadow-cta px-3 sm:px-5 lg:px-3 xl:px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-orange-deep transition-colors whitespace-nowrap"
           >
-            <PiWhatsappLogoBold size={18} className="reserve-icon" /> <span className="hidden xl:inline">{t('nav.reserve')}</span>
+            <PiWhatsappLogoBold size={18} className="reserve-icon" />{' '}
+            <span className="hidden sm:inline lg:hidden xl:inline">{t('nav.reserve')}</span>
           </ReserveButton>
 
           <button
@@ -152,8 +156,12 @@ export default function Navbar() {
                 </NavLink>
               </li>
             ))}
-            {/* Yuxarı-aşağı yer: rezerv düyməsinin pişiyinin başı və quyruğu kəsilməsin */}
-            <li className="pt-6 pb-9 flex flex-wrap items-center gap-2.5">
+            {/* Qaranlıq rejim açarı — ən dar telefonlarda yuxarıda yer olmadığı üçün burada */}
+            <li className="sm:hidden border-b border-ink/10 py-3.5 flex items-center justify-between gap-3">
+              <span className="font-semibold text-[0.94rem] text-inkdim">{t('nav.darkMode')}</span>
+              <ThemeToggle />
+            </li>
+            <li className="py-3.5">
               <Link
                 to={account.to}
                 onClick={() => setOpen(false)}
@@ -161,14 +169,6 @@ export default function Navbar() {
               >
                 {accountIcon} {account.label}
               </Link>
-              <ReserveButton
-                href={reserveUrl}
-                label={t('nav.reserve')}
-                onClick={() => setOpen(false)}
-                className="inline-flex items-center gap-1.5 bg-primary text-white shadow-cta px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-orange-deep transition-colors"
-              >
-                <PiWhatsappLogoBold size={18} className="reserve-icon" /> {t('nav.reserve')}
-              </ReserveButton>
             </li>
           </ul>
         </div>
