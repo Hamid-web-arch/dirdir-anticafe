@@ -11,7 +11,7 @@ promoRouter.post('/validate', async (req, res) => {
   const promo = await prisma.promoCode.findUnique({ where: { code } })
 
   const usable = promo && promo.active && (!promo.expiresAt || promo.expiresAt > new Date())
-  if (!usable) throw new HttpError(404, 'Bu promokod tapılmadı.')
+  if (!usable) throw new HttpError(404, 'PROMO_NOT_FOUND', 'Bu promokod tapılmadı.')
 
   res.json({ code: promo.code, percent: promo.percent })
 })

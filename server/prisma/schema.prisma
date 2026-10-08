@@ -12,6 +12,12 @@ enum Role {
   ADMIN
 }
 
+enum CompetitionStatus {
+  UPCOMING // elan olunub, hələ başlamayıb
+  ONGOING // gedir
+  FINISHED // bitib
+}
+
 model User {
   id           String   @id @default(cuid())
   firstName    String
@@ -20,29 +26,107 @@ model User {
   phone        String   @unique // 9 rəqəm, +994-süz (məs. 501234567)
   passwordHash String
   role         Role     @default(USER)
-  // Arena xalı. Dəyişikliklərin tarixçəsi PointEntry-dədir.
-  points       Int      @default(0)
+  blockedAt    DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
+  newsletter   Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)
+  avatarId     String?  @unique
+  avatar       Image?   @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  pointEntries   PointEntry[] @relation("PointEntryUser")
-  pointsAwarded  PointEntry[] @relation("PointEntryAdmin")
-
-  @@index([points])
+  teams         Team[]
+  pointsAwarded TeamPointEntry[]
+  feedback      Feedback[]
+  broadcasts    Broadcast[]
 }
 
-// Hər xal dəyişikliyi: kim, nə qədər, niyə, hansı admin.
-model PointEntry {
+// Yüklənmiş şəkillər (slider, profil). Serverdə kiçildilib WebP-yə çevrilir.
+model Image {
+  id        String   @id @default(cuid())
+  mime      String
+  data      Bytes
+  width     Int
+  height    Int
+  size      Int
+  createdAt DateTime @default(now())
+
+  slide Slide?
+  game  Game?
+  user  User?  @relation("UserAvatar")
+}
+
+// "Nələr var?" slayderi. Mətnlər { az, en, ru } obyektidir.
+model Slide {
+  id        String   @id @default(cuid())
+  position  Int
+  imageId   String   @unique
+  image     Image    @relation(fields: [imageId], references: [id])
+  fit       String   @default("cover") // cover | contain (yazılı posterlər üçün)
+  title     Json
+  desc      Json
+  body      Json     @default("{}") // "Ətraflı" səhifəsinin mətni { az, en, ru }; boşdursa səhifə yoxdur
+  link      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
+}
+
+model Competition {
+  id               String            @id @default(cuid())
+  title            Json // { az, en, ru }
+  description      Json // { az, en, ru }
+  startsAt         DateTime
+  status           CompetitionStatus @default(UPCOMING)
+  registrationOpen Boolean           @default(true)
+  maxTeams         Int?
+  prizes           Json              @default("[]") // [{ place: 1, title: { az, en, ru } }], yerə görə sıralı
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  teams Team[]
+
+  @@index([status, startsAt])
+}
+
+// Yarışa qoşulma: bir istifadəçi bir yarışa bir komanda adı ilə qoşulur.
+model Team {
+  id            String      @id @default(cuid())
+  competitionId String
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  nameKey       String // kiçik hərflə — eyni yarışda təkrar ad olmasın
+  points        Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  pointEntries TeamPointEntry[]
+
+  @@unique([competitionId, userId])
+  @@unique([competitionId, nameKey])
+  @@index([competitionId, points])
+}
+
+// Komandaya verilən hər xal: kim, nə qədər, niyə.
+model TeamPointEntry {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation("PointEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   amount      Int
   reason      String
   createdById String?
-  createdBy   User?    @relation("PointEntryAdmin", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
-  @@index([userId, createdAt])
+  @@index([teamId, createdAt])
+}
+
+// Kiçik açar-dəyər qeydləri (məs. "standart slaydlar artıq əlavə olunub").
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model PromoCode {
@@ -53,4 +137,51 @@ model PromoCode {
   expiresAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+// Oyunlar səhifəsi: admin kart kimi əlavə edir; karta basanda oyunun öz səhifəsi açılır.
+model Game {
+  id        String   @id @default(cuid())
+  position  Int
+  imageId   String   @unique
+  image     Image    @relation(fields: [imageId], references: [id])
+  title     Json // { az, en, ru }
+  summary   Json // kartdakı qısa təsvir
+  howTo     Json // necə oynanılır (oyunun səhifəsində)
+  players   String? // məs. "2–6"
+  duration  String? // məs. "30–45 dəq"
+  age       String? // məs. "8+"
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
+}
+
+// Saytdakı "Rəy və təkliflər" forması
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String?
+  contact   String? // email və ya telefon (könüllü)
+  message   String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read, createdAt])
+}
+
+// Admin paneldən istifadəçilərə göndərilən xəbərlər (tarixçə)
+model Broadcast {
+  id             String   @id @default(cuid())
+  channel        String // email | whatsapp
+  subject        String
+  body           String
+  recipientCount Int
+  sentCount      Int      @default(0)
+  failedCount    Int      @default(0)
+  createdById    String?
+  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
 }

@@ -34,7 +34,9 @@ export async function startTestServer() {
     prisma,
     hashPassword,
     async reset() {
-      await prisma.$executeRawUnsafe('TRUNCATE "PointEntry", "PromoCode", "User" CASCADE')
+      await prisma.$executeRawUnsafe(
+        'TRUNCATE "Broadcast", "Feedback", "Game", "TeamPointEntry", "Team", "Competition", "Slide", "Image", "PromoCode", "AppSetting", "User" CASCADE',
+      )
     },
     async stop() {
       await prisma.$disconnect()

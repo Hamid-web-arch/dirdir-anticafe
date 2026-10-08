@@ -2,35 +2,40 @@ import { PiCheckCircleFill, PiArmchairBold, PiFilmSlateBold, PiCalculatorBold } 
 import { Link } from 'react-router-dom'
 import Reveal from './Reveal.jsx'
 import { business } from '../data/business.js'
+import { useI18n } from '../i18n/index.jsx'
+import { usePricing } from '../pricing/PricingContext.jsx'
 
-const { currency, pricing, studentDiscount } = business
-const { hall, room } = pricing
-const money = (n) => `${n}${currency}`
-
-// Qiymət cədvəli business.js-dəki pricing-dən qurulur.
-const hallRows = [
-  ['İlk saat', money(hall.firstHour)],
-  ['Növbəti hər saat', money(hall.nextHour)],
-  ['Stop çek', money(hall.cap)],
-  ['Tələbələrə', `${studentDiscount.percent}%-dək endirim`],
-]
-
-const roomRows = [
-  [`${room.smallGroup.maxPeople} nəfərə qədər, ilk saat`, money(room.smallGroup.firstHour)],
-  ['Növbəti hər saat', money(room.smallGroup.nextHour)],
-  [`${room.smallGroup.maxPeople + 1}–${room.group.includedPeople} nəfər, saatı`, money(room.group.perHour)],
-  [`${room.group.includedPeople}-dən çox, hər əlavə nəfər`, `+${money(room.group.extraPerPerson)}/saat`],
-]
+const money = (n) => `${n}${business.currency}`
 
 export default function Pricing() {
+  const { t } = useI18n()
+  const { hall, room, studentDiscount } = usePricing()
+
+  // Qiymət cədvəli admin paneldəki qiymətlərdən qurulur.
+  const hallRows = [
+    [t('pricing.firstHour'), money(hall.firstHour)],
+    [t('pricing.nextHour'), money(hall.nextHour)],
+    [t('pricing.cap'), money(hall.cap)],
+    studentDiscount.percent > 0 && [t('pricing.students'), t('pricing.studentsValue', { percent: studentDiscount.percent })],
+  ].filter(Boolean)
+  const roomRows = [
+    [t('pricing.roomSmallFirst', { small: room.smallGroup.maxPeople }), money(room.smallGroup.firstHour)],
+    [t('pricing.nextHour'), money(room.smallGroup.nextHour)],
+    [t('pricing.roomGroup', { from: room.smallGroup.maxPeople + 1, to: room.group.includedPeople }), money(room.group.perHour)],
+    [
+      t('pricing.roomExtra', { included: room.group.includedPeople }),
+      `+${money(room.group.extraPerPerson)}${t('pricing.perHourSuffix')}`,
+    ],
+  ]
+
   return (
     <section id="pricing" className="py-24">
       <div className="max-w-[1120px] mx-auto px-7">
         <Reveal className="max-w-[640px] mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
-            Qiymət
+            {t('pricing.chip')}
           </span>
-          <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">Vaxtına görə ödə, hər şey daxil</h2>
+          <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">{t('pricing.title')}</h2>
         </Reveal>
 
         <Reveal>
@@ -38,14 +43,12 @@ export default function Pricing() {
             <div className="absolute w-[260px] h-[260px] bg-white/10 rounded-full -top-24 -right-16" />
             <div className="relative z-10">
               <h3 className="font-display font-bold text-[1.6rem] mb-3">
-                İlk saat {money(hall.firstHour)}, {money(hall.cap)}-dan artıq yox.
+                {t('pricing.headline', { first: money(hall.firstHour), cap: money(hall.cap) })}
               </h3>
-              <p className="opacity-90 mb-6 max-w-[44ch]">
-                Əlavə menyu, gizli xərc, çaşdırıcı paket yoxdur. Ödədiyin vaxtın içinə hər şey daxildir:
-              </p>
+              <p className="opacity-90 mb-6 max-w-[44ch]">{t('pricing.text')}</p>
               <ul className="flex flex-col gap-2.5">
-                {business.included.map((item, i) => (
-                  <li key={item}>
+                {t('pricing.included').map((item, i) => (
+                  <li key={i}>
                     <Reveal direction="left" delay={i * 60} className="flex gap-2.5 items-start font-medium">
                       <PiCheckCircleFill className="text-brand-yellow shrink-0 mt-0.5" size={18} />
                       {item}
@@ -56,20 +59,25 @@ export default function Pricing() {
             </div>
 
             <div className="relative z-10 flex flex-col gap-4">
-              <PriceCard icon={PiArmchairBold} title="Zal" note="nəfər başına" rows={hallRows} />
-              <PriceCard icon={PiFilmSlateBold} title="Kino otağı" note={`${room.maxPeople} nəfərə kimi`} rows={roomRows} />
+              <PriceCard icon={PiArmchairBold} title={t('pricing.hall')} note={t('pricing.perPerson')} rows={hallRows} />
+              <PriceCard
+                icon={PiFilmSlateBold}
+                title={t('pricing.room')}
+                note={t('pricing.roomUpTo', { max: room.maxPeople })}
+                rows={roomRows}
+              />
             </div>
           </div>
         </Reveal>
 
         <Reveal>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-5 mt-7 text-center">
-            <p className="text-inkdim text-[0.92rem]">Neçə nəfər, neçə saat? Məbləği dəqiq hesabla:</p>
+            <p className="text-inkdim text-[0.92rem]">{t('pricing.calcPrompt')}</p>
             <Link
               to="/#hesabla"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg active:scale-[0.98] transition-all"
             >
-              <PiCalculatorBold size={18} /> Hesablayıcıya keç
+              <PiCalculatorBold size={18} /> {t('pricing.calcCta')}
             </Link>
           </div>
         </Reveal>

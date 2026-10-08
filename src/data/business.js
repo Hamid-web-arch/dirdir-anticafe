@@ -1,13 +1,6 @@
-// Bütün real biznes məlumatları burada saxlanılır.
-// Instagram (@dirdiranticafe) profilindən təsdiqlənib. Dəyişiklik olsa, yalnız
-// bu faylı yeniləmək kifayətdir — bütün komponentlər buradan oxuyur.
+// Biznes məlumatları: qiymətlər, əlaqə, ikonlar. Saytdakı mətnlər (3 dildə) src/i18n/*.js-dədir.
 
-import { PiDiceFive, PiFilmSlate, PiCookie, PiCalendarBlank, PiTeaBag, PiCoffee, PiPintGlass, PiArmchair, PiFlagCheckered, PiGift } from 'react-icons/pi'
-import cinemaImg from '../assets/cinema.jpeg'
-import hallImg from '../assets/upper-hal.jpeg'
-import racingImg from '../assets/racing.jpeg'
-import clawImg from '../assets/oyuncaq-aparati.jpeg'
-import menuImg from '../assets/test.jpeg'
+import { PiDiceFive, PiFilmSlate, PiCookie, PiCalendarBlank, PiTeaBag, PiCoffee, PiPintGlass } from 'react-icons/pi'
 
 export const business = {
   name: 'DırDır Anticafe',
@@ -17,9 +10,9 @@ export const business = {
   // Boş qalsa, "Rezerv et" düymələri Instagram-a yönləndirir.
   whatsappNumber: '994775530305',
   whatsappMessage: 'Salam! DırDır Anticafe-də kino otağını rezerv etmək istəyirəm. _Vaxt aralığı_ üçün otaq boşdurmu?',
-  pricePerHour: 4,
   currency: '₼',
-  // Qiymət cədvəli (Instagram "Qiymət" story-sindən). Hesablayıcı buradan oxuyur.
+  // Standart qiymət cədvəli. Əsl qiymətlər admin paneldən dəyişir və serverdən gəlir (src/pricing/PricingContext.jsx);
+  // bu cədvəl yalnız server cavab verənə qədər və ya backend qoşulmayanda işləyir. server/src/pricing.js ilə eyni olmalıdır.
   pricing: {
     // Ümumi zal: ilk saat + sonrakı hər saat; bir nəfər stop çekdən artıq ödəmir.
     hall: { firstHour: 4, nextHour: 3, cap: 13 },
@@ -31,83 +24,41 @@ export const business = {
       smallGroup: { maxPeople: 2, firstHour: 15, nextHour: 10 },
       group: { perHour: 20, includedPeople: 5, extraPerPerson: 2 },
     },
+    // Tələbə endirimi (yalnız zalda): minHours saat və daha çox qalanda percent faiz.
+    studentDiscount: { percent: 20, minHours: 3 },
   },
-  // Tələbə endirimi (yalnız zalda): minHours saat və daha çox qalanda percent faiz.
-  studentDiscount: { percent: 20, minHours: 3 },
   // Promokodlar: KOD: endirim faizi, məs. { YAY2026: 15 }. Böyük/kiçik hərf fərq etmir.
   // Endirimlər toplanmır — tələbə endirimi ilə promokoddan hansı böyükdürsə, o tətbiq olunur.
   // Siyahı boş olanda hesablayıcıda promokod sahəsi görünmür.
   promoCodes: {},
-  // Hesablayıcıdakı slayderlərin hədləri (hər rejim üçün)
+  // Hesablayıcıdakı slayderlərin hədləri (kino otağında nəfər həddi qiymətlərdəki otaq tutumundan gəlir)
   calculator: {
     hall: { people: { min: 1, max: 20 }, hours: { min: 1, max: 12, step: 0.5 } },
-    room: { people: { min: 1, max: 8 }, hours: { min: 1, max: 12, step: 1 } },
+    room: { people: { min: 1 }, hours: { min: 1, max: 12, step: 1 } },
   },
   hours: '11:00 – 23:00',
-  address: 'Sahil m., Zərifə Əliyeva pr. 21/9, Bakı',
-  reservation: 'Instagram DM üzərindən',
   mapEmbedUrl:
-    'https://www.google.com/maps?q=Dir+Dir+Anticafe,40.3705961,49.8420727&z=17&output=embed',
+    // Yalnız koordinat verəndə Google dəqiq yerə qırmızı nişan qoyur
+    'https://maps.google.com/maps?q=40.3705961,49.8420727&z=17&output=embed',
   mapUrl: 'https://maps.app.goo.gl/ELRPJtAMzjBzA2yH9',
-  included: ['Limitsiz çay', 'Limitsiz kofe', 'Limitsiz şirniyyat', 'Sərin içkilər', 'Stolüstü oyunlar'],
-  amenities: [
-    { icon: PiDiceFive, title: 'Stolüstü oyun kolleksiyası', desc: 'İstədiyin qədər oyna, əlavə haqq yoxdur — saat haqqına daxildir.' },
-    { icon: PiFilmSlate, title: 'Kino otağı', desc: 'Ayrıca kino otağında rahat film izləmə imkanı.' },
-    { icon: PiCookie, title: 'Squid Game Dalgona şəkəri', desc: 'Instagram profilində qeyd olunan xüsusi aktivlik — güncəl tarixlər üçün profilə bax.' },
-    { icon: PiCalendarBlank, title: 'Rezervasiya', desc: 'Yer və qrup rezervasiyası üçün Instagram-dan DM yazmaq kifayətdir.' },
-  ],
-  menuCategories: [
-    { icon: PiTeaBag, title: 'Çay', note: 'İstədiyin qədər, limitsiz' },
-    { icon: PiCoffee, title: 'Kofe', note: 'İstədiyin qədər, limitsiz' },
-    { icon: PiCookie, title: 'Şirniyyat', note: 'Limitsiz atışdırmalıq' },
-    { icon: PiPintGlass, title: 'Sərin içkilər', note: 'Limitsiz seçim' },
-  ],
-  // "Nələr var?" slayderi — sıra burada necədirsə, saytda da elədir.
-  // Şəkillər src/assets/ qovluğundadır. link olmayan slaydda "Ətraflı bax" çıxmır.
-  // fit: 'contain' — şəkil kəsilmədən tam göstərilir (üzərində yazı olan posterlər üçün).
-  highlights: [
-    {
-      image: cinemaImg,
-      icon: PiFilmSlate,
-      tone: 'from-brand-purple to-brand-cyan',
-      title: 'Kino otağı',
-      desc: 'Ayrıca otaqda, böyük ekranda film izlə — çay, kofe və şirniyyat da yanında.',
-      link: '/#events',
-    },
-    {
-      image: hallImg,
-      icon: PiArmchair,
-      tone: 'from-brand-teal to-brand-cyan',
-      title: 'Rahat zal',
-      desc: 'Yumşaq divanlar, rəngli yastıqlar və stolüstü oyun rəfi — dostlarla oturmaq üçün.',
-    },
-    {
-      image: racingImg,
-      icon: PiFlagCheckered,
-      tone: 'from-brand-pink to-brand-orange',
-      title: 'Mini yarış treki',
-      desc: 'İşıqforlu start xətti, maketlər və miniatür maşınlar — əsl trek atmosferi.',
-    },
-    {
-      image: clawImg,
-      icon: PiGift,
-      tone: 'from-brand-cyan to-brand-purple',
-      title: 'Oyuncaq aparatı',
-      desc: 'Şansını sına, sevdiyin yumşaq oyuncağı qap.',
-    },
-    {
-      image: menuImg,
-      fit: 'contain',
-      icon: PiCoffee,
-      tone: 'from-brand-orange to-brand-yellow',
-      title: '4₼-a nələr daxildir?',
-      desc: 'Coca-Cola, Sprite, Fanta, çay, kofe, peçenye, kreker və şirniyyatlar — hamısı saat haqqına daxildir.',
-      link: '/#menu',
-    },
-  ],
+  // Mətnlər: src/i18n/*.js → events.items (eyni sıra ilə)
+  amenityIcons: [PiDiceFive, PiFilmSlate, PiCookie, PiCalendarBlank],
+  // Mətnlər: src/i18n/*.js → menu.items (eyni sıra ilə)
+  menuIcons: [PiTeaBag, PiCoffee, PiCookie, PiPintGlass],
+  // "Nələr var?" slayderi artıq bazadadır — admin paneldən idarə olunur.
 }
 
-// "Rezerv et" linki: nömrə varsa WhatsApp (hazır mesajla), yoxdursa Instagram.
-export const reserveUrl = business.whatsappNumber
-  ? `https://wa.me/${business.whatsappNumber}?text=${encodeURIComponent(business.whatsappMessage)}`
-  : business.instagramUrl
+// WhatsApp linki hazır mesajla; nömrə boşdursa Instagram-a yönləndirir.
+export const whatsappUrl = (message) =>
+  business.whatsappNumber
+    ? `https://wa.me/${business.whatsappNumber}${message ? `?text=${encodeURIComponent(message)}` : ''}`
+    : business.instagramUrl
+
+// Ekranda göstərmək üçün: "994775530305" → "+994 77 553 03 05"
+export const whatsappDisplay = business.whatsappNumber.replace(/^(\d{3})(\d{2})(\d{3})(\d{2})(\d{2})$/, '+$1 $2 $3 $4 $5')
+
+// "Rezerv et" linki (kino otağı mesajı ilə)
+export const reserveUrl = whatsappUrl(business.whatsappMessage)
+
+// Sponsorluq müraciəti üçün hazır mesaj
+export const sponsorUrl = whatsappUrl('Salam! DırDır Anticafe-yə sponsor olmaq istəyirəm. Şərtlər barədə danışa bilərikmi?')

@@ -1,68 +1,73 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { PiSignInBold } from 'react-icons/pi'
-import AuthLayout, {
-  Field,
-  PasswordField,
-  SubmitButton,
-  DemoNotice,
-  FormError,
-  isEmail,
-} from '../components/AuthLayout.jsx'
+import AuthLayout, { Field, PasswordField, SubmitButton, DemoNotice, FormError } from '../components/AuthLayout.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { apiEnabled } from '../lib/api.js'
+import { isEmail, isPhone, phoneDigits, safeNext, fieldMessage } from '../lib/forms.js'
+import { useI18n } from '../i18n/index.jsx'
 
 export default function Login() {
   const { user, login } = useAuth()
+  const i18n = useI18n()
+  const { t, errorText } = i18n
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next'))
+
+  const [form, setForm] = useState({ login: '', password: '' })
   const [errors, setErrors] = useState({})
-  const [formError, setFormError] = useState(null)
+  const [serverError, setServerError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
-  if (user) return <Navigate to="/hesabim" replace />
+  if (user) return <Navigate to={next} replace />
 
   const update = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }))
     setErrors((er) => ({ ...er, [key]: null }))
-    setFormError(null)
+    setServerError(null)
     setSent(false)
   }
 
   const submit = async (e) => {
     e.preventDefault()
-    const next = {}
-    if (!isEmail(form.email)) next.email = 'Düzgün email ünvanı yaz.'
-    if (!form.password) next.password = 'Şifrəni yaz.'
-    setErrors(next)
-    if (Object.keys(next).length > 0) return
+    const found = {}
+    // Email və ya telefon: @ varsa email, yoxdursa nömrə kimi yoxlanır
+    const identifier = form.login.trim()
+    if (identifier.includes('@') ? !isEmail(identifier) : !isPhone(phoneDigits(identifier))) found.login = { key: 'validation.login' }
+    if (!form.password) found.password = { key: 'validation.passwordRequired' }
+    setErrors(found)
+    if (Object.keys(found).length > 0) return
 
     if (!apiEnabled) return setSent(true)
 
     setLoading(true)
     try {
       await login(form)
-      navigate('/hesabim')
+      navigate(next)
     } catch (err) {
-      setErrors(err.fields)
-      setFormError(err.message)
+      setServerError(err)
     } finally {
       setLoading(false)
     }
   }
 
+  const message = (field) => fieldMessage(field, errors, serverError, i18n)
+  const registerHref = params.get('next') ? `/qeydiyyat?next=${encodeURIComponent(next)}` : '/qeydiyyat'
+
   return (
     <AuthLayout
-      title="Xoş gəldin!"
-      subtitle="Hesabına daxil ol və Arena xallarını izlə."
-      panelTitle="Yenidən görüşdük"
-      panelText="Çay hazırdır, oyunlar rəfdədir — sadəcə daxil ol."
+      imageKey="login"
+      title={t('auth.loginTitle')}
+      subtitle={t('auth.loginSubtitle')}
+      panelTitle={t('auth.loginPanelTitle')}
+      panelText={t('auth.loginPanelText')}
       footer={
         <>
-          Hesabın yoxdur?{' '}
-          <Link to="/qeydiyyat" className="font-bold text-primary hover:underline">
-            Qeydiyyatdan keç
+          {t('auth.noAccount')}{' '}
+          <Link to={registerHref} className="font-bold text-primary hover:underline">
+            {t('auth.registerLink')}
           </Link>
         </>
       }
@@ -70,31 +75,31 @@ export default function Login() {
       <form onSubmit={submit} noValidate className="flex flex-col gap-5">
         <Field
           id="login-email"
-          label="Email"
-          type="email"
-          autoComplete="email"
-          placeholder="ad@mail.com"
-          value={form.email}
-          onChange={update('email')}
-          error={errors.email}
+          label={t('auth.emailOrPhone')}
+          type="text"
+          autoComplete="username"
+          placeholder="ad@mail.com / 50 123 45 67"
+          value={form.login}
+          onChange={update('login')}
+          error={message('login')}
         />
         <PasswordField
           id="login-password"
-          label="Şifrə"
+          label={t('auth.password')}
           autoComplete="current-password"
           placeholder="••••••••"
           value={form.password}
           onChange={update('password')}
-          error={errors.password}
+          error={message('password')}
         />
 
-        {formError && <FormError>{formError}</FormError>}
+        {serverError && <FormError>{errorText(serverError)}</FormError>}
 
         <SubmitButton loading={loading}>
-          <PiSignInBold size={18} /> Daxil ol
+          <PiSignInBold size={18} /> {t('auth.loginSubmit')}
         </SubmitButton>
 
-        {sent && <DemoNotice>Forma düzgündür. Giriş sistemi tezliklə işə düşəcək — hələlik məlumat göndərilmir.</DemoNotice>}
+        {sent && <DemoNotice>{t('auth.demoLogin')}</DemoNotice>}
       </form>
     </AuthLayout>
   )

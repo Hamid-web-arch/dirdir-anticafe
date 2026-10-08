@@ -8,55 +8,45 @@ import {
   PiPlusBold,
   PiCheckBold,
   PiXBold,
-  PiInstagramLogoBold,
+  PiWhatsappLogoBold,
   PiArmchairBold,
   PiFilmSlateBold,
   PiCheckCircleFill,
   PiConfettiBold,
 } from 'react-icons/pi'
 import Reveal from './Reveal.jsx'
-import { business } from '../data/business.js'
+import { business, whatsappUrl } from '../data/business.js'
 import { api, apiEnabled } from '../lib/api.js'
+import { useI18n } from '../i18n/index.jsx'
+import { usePricing } from '../pricing/PricingContext.jsx'
 
-const { currency, pricing, studentDiscount, promoCodes, calculator } = business
-const { hall, room } = pricing
+const { currency, promoCodes } = business
 // Backend qoşulubsa kodları server yoxlayır; yoxsa business.js-dəki siyahı (boşdursa sahə gizlənir).
 const hasPromoCodes = apiEnabled || Object.keys(promoCodes).length > 0
-const { smallGroup, group } = room
 
-const money = (n) =>
-  `${n.toLocaleString('az-AZ', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${currency}`
-const hoursLabel = (h) => `${h.toLocaleString('az-AZ')} saat`
+// Zalda bu saatdan sonra stop çek işə düşür (4 + 3 + 3 + 3 = 13 → 4 saat); yarım saata yuxarı yuvarlanır.
+const capHours = (hall) => Math.ceil((1 + (hall.cap - hall.firstHour) / hall.nextHour) * 2) / 2
 
-// Zalda bu saatdan sonra stop çek işə düşür (4 + 3 + 3 + 3 = 13 → 4 saat).
-const hallCapHours = 1 + (hall.cap - hall.firstHour) / hall.nextHour
-
-const MODES = [
-  {
-    id: 'hall',
-    label: 'Zal',
-    icon: PiArmchairBold,
-    note: `İlk saat ${money(hall.firstHour)}, sonra ${money(hall.nextHour)}/saat`,
-  },
-  {
-    id: 'room',
-    label: 'Kino otağı',
-    icon: PiFilmSlateBold,
-    note: `${smallGroup.maxPeople} nəfərə ${money(smallGroup.firstHour)}-dan, ${room.maxPeople} nəfərə kimi`,
-  },
-]
+// Slayder hədləri: kino otağında nəfər həddi qiymətlərdəki otaq tutumudur.
+const limitsFor = (mode, pricing) =>
+  mode === 'room'
+    ? { ...business.calculator.room, people: { ...business.calculator.room.people, max: pricing.room.maxPeople } }
+    : business.calculator.hall
 
 const clamp = (v, { min, max }) => Math.min(max, Math.max(min, v))
 
-// Hər rejim üçün məbləği və hesab sətirlərini qaytarır.
-function quote(mode, people, hours) {
+// Hər rejim üçün məbləği və hesab sətirlərini qaytarır. f — dilə görə formatlayıcılar.
+function quote(pricing, mode, people, hours, f) {
+  const { t, money, hoursText } = f
+  const { hall, room } = pricing
+  const { smallGroup, group } = room
   if (mode === 'room') {
     if (people <= smallGroup.maxPeople) {
       const extraHours = hours - 1
-      const rows = [{ label: `İlk saat (${smallGroup.maxPeople} nəfərə qədər)`, value: money(smallGroup.firstHour) }]
+      const rows = [{ label: t('calc.rowFirstHourSmall', { small: smallGroup.maxPeople }), value: money(smallGroup.firstHour) }]
       if (extraHours > 0) {
         rows.push({
-          label: `Sonrakı ${hoursLabel(extraHours)} × ${money(smallGroup.nextHour)}`,
+          label: t('calc.rowNextHours', { hours: hoursText(extraHours), price: money(smallGroup.nextHour) }),
           value: money(extraHours * smallGroup.nextHour),
         })
       }
@@ -65,10 +55,10 @@ function quote(mode, people, hours) {
     const roomCost = group.perHour * hours
     const extraPeople = Math.max(0, people - group.includedPeople)
     const extraCost = extraPeople * group.extraPerPerson * hours
-    const rows = [{ label: `Otaq: ${hoursLabel(hours)} × ${money(group.perHour)}`, value: money(roomCost) }]
+    const rows = [{ label: t('calc.rowRoom', { hours: hoursText(hours), price: money(group.perHour) }), value: money(roomCost) }]
     if (extraPeople > 0) {
       rows.push({
-        label: `${extraPeople} əlavə nəfər × ${money(group.extraPerPerson)} × ${hoursLabel(hours)}`,
+        label: t('calc.rowExtraPeople', { count: extraPeople, price: money(group.extraPerPerson), hours: hoursText(hours) }),
         value: money(extraCost),
       })
     }
@@ -80,36 +70,75 @@ function quote(mode, people, hours) {
     subtotal: people * perPerson,
     capped: raw > hall.cap,
     rows: [
-      { label: 'Nəfər başına', value: money(perPerson), note: raw > hall.cap ? 'stop çek' : null },
-      { label: `${people} nəfər × ${money(perPerson)}`, value: money(people * perPerson) },
+      { label: t('calc.rowPerPerson'), value: money(perPerson), note: raw > hall.cap ? t('calc.capNote') : null },
+      {
+        label: t('calc.rowPeopleTimes', { people: t('units.people', { count: people }), price: money(perPerson) }),
+        value: money(people * perPerson),
+      },
     ],
   }
 }
 
 export default function Calculator() {
+  const { t, number, errorText } = useI18n()
+  const pricing = usePricing()
+  const { hall, room, studentDiscount } = pricing
+  const { smallGroup, group } = room
+  const money = (n) => `${number(n, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${currency}`
+  const hoursText = (h) => t('units.hours', { count: h })
+
   const [mode, setMode] = useState('hall')
-  const [people, setPeople] = useState(2)
+  const [chosenPeople, setPeople] = useState(2)
   const [hours, setHours] = useState(2)
   const [student, setStudent] = useState(false)
   const [promoInput, setPromoInput] = useState('')
   const [promo, setPromo] = useState(null) // { code, percent }
-  const [promoError, setPromoError] = useState(null)
+  const [promoError, setPromoError] = useState(null) // xəta obyekti — dil dəyişəndə mətni də dəyişir
   const [promoChecking, setPromoChecking] = useState(false)
 
-  const limits = calculator[mode]
-  const { subtotal, rows, capped } = quote(mode, people, hours)
+  const limits = limitsFor(mode, pricing)
+  // Admin otağın tutumunu azaldıbsa, seçilmiş nəfər sayı yeni həddi keçməsin.
+  const people = clamp(chosenPeople, limits.people)
+  const { subtotal, rows, capped } = quote(pricing, mode, people, hours, { t, money, hoursText })
 
   const studentEligible = mode === 'hall' && student && hours >= studentDiscount.minHours
   const studentPct = studentEligible ? studentDiscount.percent : 0
   const promoPct = promo?.percent ?? 0
   const discountPct = Math.max(studentPct, promoPct)
-  const discountSource = discountPct === 0 ? null : promoPct > studentPct ? `promokod ${promo.code}` : 'tələbə endirimi'
+  const discountSource =
+    discountPct === 0
+      ? null
+      : promoPct > studentPct
+        ? t('calc.discountPromo', { code: promo.code })
+        : t('calc.discountStudent')
   const discount = (subtotal * discountPct) / 100
   const total = subtotal - discount
 
+  // WhatsApp-a hesablama ilə hazır mesaj (əməkdaş üçün həmişə azərbaycanca)
+  const reserveLink = whatsappUrl(
+    `Salam! Rezerv etmək istəyirəm: ${mode === 'room' ? 'kino otağı' : 'ümumi zal'}, ${people} nəfər, ${hours} saat.` +
+      (promo && promoPct > studentPct ? ` Promokod: ${promo.code}.` : studentPct ? ' Tələbəyəm.' : '') +
+      ` Hesablayıcıda təxmini məbləğ: ${Math.round(total * 100) / 100}${currency}.`,
+  )
+
+  const modes = [
+    {
+      id: 'hall',
+      label: t('calc.modeHall'),
+      icon: PiArmchairBold,
+      note: t('calc.modeHallNote', { first: money(hall.firstHour), next: money(hall.nextHour) }),
+    },
+    {
+      id: 'room',
+      label: t('calc.modeRoom'),
+      icon: PiFilmSlateBold,
+      note: t('calc.modeRoomNote', { small: smallGroup.maxPeople, price: money(smallGroup.firstHour), max: room.maxPeople }),
+    },
+  ]
+
   // Rejim dəyişəndə nəfər və saatı yeni rejimin hədlərinə salırıq.
   const switchMode = (next) => {
-    const l = calculator[next]
+    const l = limitsFor(next, pricing)
     setPeople((p) => clamp(p, l.people))
     setHours((h) => clamp(Math.round(h / l.hours.step) * l.hours.step, l.hours))
     setMode(next)
@@ -123,7 +152,7 @@ export default function Calculator() {
 
     if (!apiEnabled) {
       if (promoCodes[code]) setPromo({ code, percent: promoCodes[code] })
-      else setPromoError('Bu promokod tapılmadı.')
+      else setPromoError({ code: 'PROMO_NOT_FOUND' })
       return
     }
 
@@ -131,7 +160,7 @@ export default function Calculator() {
     try {
       setPromo(await api('/promo/validate', { method: 'POST', body: { code } }))
     } catch (err) {
-      setPromoError(err.message)
+      setPromoError(err)
     } finally {
       setPromoChecking(false)
     }
@@ -150,41 +179,35 @@ export default function Calculator() {
           <PiConfettiBold size={22} />
         </span>
         <div className="flex flex-col">
-          <span className="font-display font-bold text-[1.05rem] leading-tight">
-            Stop çek işə düşdü — qalan vaxt pulsuz!
-          </span>
-          <span className="text-[0.85rem] font-semibold text-inkdim">
-            {hallCapHours} saatdan sonra nə qədər qalsan da, qiymət dəyişməyəcək.
-          </span>
+          <span className="font-display font-bold text-[1.05rem] leading-tight">{t('calc.capTitle')}</span>
+          <span className="text-[0.85rem] font-semibold text-inkdim">{t('calc.capText', { hours: capHours(hall) })}</span>
         </div>
       </div>
     ) : null
 
   const roomPeopleHint =
     people <= smallGroup.maxPeople
-      ? `${smallGroup.maxPeople} nəfərə qədər: ilk saat ${money(smallGroup.firstHour)}, sonrakı hər saat ${money(smallGroup.nextHour)}.`
+      ? t('calc.roomSmall', { small: smallGroup.maxPeople, first: money(smallGroup.firstHour), next: money(smallGroup.nextHour) })
       : people <= group.includedPeople
-        ? `${smallGroup.maxPeople + 1}–${group.includedPeople} nəfər: saatı ${money(group.perHour)}.`
-        : `${group.includedPeople} nəfərdən çox: hər əlavə nəfər üçün saatda +${money(group.extraPerPerson)}. Maksimum ${room.maxPeople} nəfər.`
+        ? t('calc.roomGroup', { from: smallGroup.maxPeople + 1, to: group.includedPeople, price: money(group.perHour) })
+        : t('calc.roomExtra', { included: group.includedPeople, extra: money(group.extraPerPerson), max: room.maxPeople })
 
   return (
     <section id="hesabla" className="bg-card border-y border-ink/10 py-20">
       <div className="max-w-[1120px] mx-auto px-7">
         <Reveal className="max-w-[640px] mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
-            Hesablayıcı
+            {t('calc.chip')}
           </span>
-          <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">Nə qədər ödəyəcəksən?</h2>
-          <p className="text-inkdim text-[1.03rem]">
-            Harada oturacağını, neçə nəfər gəldiyinizi və nə qədər qalacağınızı seç — məbləğ dərhal hesablanır.
-          </p>
+          <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem] mb-3">{t('calc.title')}</h2>
+          <p className="text-inkdim text-[1.03rem]">{t('calc.intro')}</p>
         </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6 md:gap-8 items-start">
           <Reveal direction="left">
             <div className="bg-bg border border-ink/10 rounded-[24px] p-6 sm:p-8 flex flex-col gap-9">
-              <div role="radiogroup" aria-label="Harada?" className="grid grid-cols-2 gap-3">
-                {MODES.map((m) => {
+              <div role="radiogroup" aria-label={t('calc.where')} className="grid grid-cols-2 gap-3">
+                {modes.map((m) => {
                   const active = mode === m.id
                   return (
                     <button
@@ -217,9 +240,9 @@ export default function Calculator() {
 
               <RangeControl
                 icon={PiUsersThreeBold}
-                label="Nəfər sayı"
+                label={t('calc.people')}
                 value={people}
-                valueLabel={`${people} nəfər`}
+                valueLabel={t('units.people', { count: people })}
                 min={limits.people.min}
                 max={limits.people.max}
                 step={1}
@@ -231,9 +254,9 @@ export default function Calculator() {
 
               <RangeControl
                 icon={PiClockBold}
-                label="Vaxt"
+                label={t('calc.time')}
                 value={hours}
-                valueLabel={hoursLabel(hours)}
+                valueLabel={hoursText(hours)}
                 min={limits.hours.min}
                 max={limits.hours.max}
                 step={limits.hours.step}
@@ -242,7 +265,7 @@ export default function Calculator() {
                 hint={hoursHint}
               />
 
-              {mode === 'hall' && (
+              {mode === 'hall' && studentDiscount.percent > 0 && (
                 <div className="flex flex-col gap-2.5">
                   <label className="flex items-center gap-3 cursor-pointer select-none group">
                     <input
@@ -255,7 +278,7 @@ export default function Calculator() {
                       {student && <PiCheckBold size={14} />}
                     </span>
                     <span className="flex items-center gap-2 font-semibold">
-                      <PiStudentBold size={18} className="text-primary" /> Tələbəyik
+                      <PiStudentBold size={18} className="text-primary" /> {t('calc.student')}
                     </span>
                     <span className="ml-auto text-[0.78rem] font-bold px-2.5 py-1 rounded-full bg-brand-orange-soft text-brand-orange-deep">
                       -{studentDiscount.percent}%
@@ -263,8 +286,8 @@ export default function Calculator() {
                   </label>
                   <p className="text-[0.85rem] text-inkdim pl-9">
                     {student && !studentEligible
-                      ? `Endirim ${studentDiscount.minHours} saat və daha çox qalanda keçərlidir — vaxtı artır.`
-                      : `${studentDiscount.minHours} saat və daha çox qalanda ${studentDiscount.percent}% endirim. Tələbə bileti tələb olunur.`}
+                      ? t('calc.studentTooShort', { hours: studentDiscount.minHours })
+                      : t('calc.studentHint', { hours: studentDiscount.minHours, percent: studentDiscount.percent })}
                   </p>
                 </div>
               )}
@@ -272,16 +295,16 @@ export default function Calculator() {
               {hasPromoCodes && (
                 <div className="flex flex-col gap-2.5">
                   <span className="flex items-center gap-2 font-semibold">
-                    <PiTicketBold size={18} className="text-primary" /> Promokod
+                    <PiTicketBold size={18} className="text-primary" /> {t('calc.promo')}
                   </span>
                   {promo ? (
                     <div className="flex items-center gap-3 bg-brand-teal-soft text-brand-teal-deep rounded-2xl px-4 py-3">
                       <PiCheckBold size={18} className="shrink-0" />
                       <span className="font-bold">{promo.code}</span>
-                      <span className="text-[0.88rem] font-semibold">−{promo.percent}% tətbiq olundu</span>
+                      <span className="text-[0.88rem] font-semibold">{t('calc.promoApplied', { percent: promo.percent })}</span>
                       <button
                         onClick={removePromo}
-                        aria-label="Promokodu sil"
+                        aria-label={t('calc.promoRemove')}
                         className="ml-auto w-8 h-8 rounded-full flex items-center justify-center hover:bg-brand-teal/15"
                       >
                         <PiXBold size={14} />
@@ -295,8 +318,8 @@ export default function Calculator() {
                           setPromoInput(e.target.value)
                           setPromoError(null)
                         }}
-                        placeholder="Kodu yaz"
-                        aria-label="Promokod"
+                        placeholder={t('calc.promoPlaceholder')}
+                        aria-label={t('calc.promo')}
                         aria-invalid={Boolean(promoError)}
                         className={`flex-1 min-w-0 bg-card border-2 rounded-full px-5 py-3 font-semibold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-inkdim/60 outline-none transition-colors ${
                           promoError ? 'border-brand-pink' : 'border-ink/15 focus:border-primary'
@@ -305,14 +328,14 @@ export default function Calculator() {
                       <button
                         type="submit"
                         disabled={promoChecking}
-                        className="disabled:opacity-60 shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
+                        className="disabled:opacity-60 shrink-0 px-6 py-3 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg active:scale-[0.98] transition-all"
                       >
-                        {promoChecking ? 'Yoxlanılır...' : 'Tətbiq et'}
+                        {promoChecking ? t('calc.promoChecking') : t('calc.promoApply')}
                       </button>
                     </form>
                   )}
                   {promoError && (
-                    <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">{promoError}</p>
+                    <p className="text-[0.85rem] font-semibold text-brand-pink-deep pl-1">{errorText(promoError)}</p>
                   )}
                 </div>
               )}
@@ -320,10 +343,10 @@ export default function Calculator() {
           </Reveal>
 
           <Reveal direction="right" delay={100} className="md:sticky md:top-24">
-            <div className="relative overflow-hidden bg-ink text-white rounded-[24px] p-7 sm:p-8">
+            <div className="relative overflow-hidden bg-night text-white rounded-[24px] p-7 sm:p-8">
               <div className="absolute w-[220px] h-[220px] bg-primary/25 rounded-full blur-3xl -top-20 -right-16 pointer-events-none" />
               <div className="relative">
-                <div className="text-[0.8rem] tracking-wide uppercase font-bold text-white/60 mb-2">Cəmi ödəniş</div>
+                <div className="text-[0.8rem] tracking-wide uppercase font-bold text-white/60 mb-2">{t('calc.total')}</div>
                 <div className="flex items-end gap-3 flex-wrap mb-1">
                   <span className="font-display font-bold text-[3rem] leading-none">{money(total)}</span>
                   {discount > 0 && (
@@ -331,7 +354,7 @@ export default function Calculator() {
                   )}
                 </div>
                 <div className="text-[0.88rem] text-white/70 font-semibold mb-7">
-                  {MODES.find((m) => m.id === mode).label} · {people} nəfər · {hoursLabel(hours)}
+                  {modes.find((m) => m.id === mode).label} · {t('units.people', { count: people })} · {hoursText(hours)}
                 </div>
 
                 <dl className="flex flex-col gap-3 text-[0.92rem] border-t border-white/15 pt-5 mb-7">
@@ -339,21 +362,23 @@ export default function Calculator() {
                     <Row key={r.label} {...r} />
                   ))}
                   {discount > 0 && (
-                    <Row label={`Endirim (${discountSource}, ${discountPct}%)`} value={`−${money(discount)}`} accent />
+                    <Row
+                      label={t('calc.discount', { source: discountSource, percent: discountPct })}
+                      value={`−${money(discount)}`}
+                      accent
+                    />
                   )}
                 </dl>
 
                 <a
-                  href={business.instagramUrl}
+                  href={reserveLink}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-full font-bold text-[0.95rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover active:translate-y-0 transition-all"
                 >
-                  <PiInstagramLogoBold size={18} /> DM-dən yer saxla
+                  <PiWhatsappLogoBold size={18} /> {t('calc.reserve')}
                 </a>
-                <p className="text-[0.78rem] text-white/50 text-center mt-3">
-                  Təxmini hesablamadır — son məbləğ kassada dəqiqləşir.
-                </p>
+                <p className="text-[0.78rem] text-white/50 text-center mt-3">{t('calc.disclaimer')}</p>
               </div>
             </div>
           </Reveal>
@@ -364,6 +389,7 @@ export default function Calculator() {
 }
 
 function RangeControl({ icon: Icon, label, value, valueLabel, min, max, step, onChange, ticks, hint, stepper }) {
+  const { t } = useI18n()
   const fill = ((value - min) / (max - min)) * 100
   const bounds = { min, max }
 
@@ -375,13 +401,13 @@ function RangeControl({ icon: Icon, label, value, valueLabel, min, max, step, on
         </span>
         <div className="flex items-center gap-2">
           {stepper && (
-            <StepButton onClick={() => onChange(clamp(value - step, bounds))} disabled={value <= min} label={`${label}: azalt`}>
+            <StepButton onClick={() => onChange(clamp(value - step, bounds))} disabled={value <= min} label={t('calc.decrease', { label })}>
               <PiMinusBold size={14} />
             </StepButton>
           )}
           <span className="font-display font-bold text-[1.25rem] min-w-[5.5rem] text-center">{valueLabel}</span>
           {stepper && (
-            <StepButton onClick={() => onChange(clamp(value + step, bounds))} disabled={value >= max} label={`${label}: artır`}>
+            <StepButton onClick={() => onChange(clamp(value + step, bounds))} disabled={value >= max} label={t('calc.increase', { label })}>
               <PiPlusBold size={14} />
             </StepButton>
           )}
@@ -403,22 +429,20 @@ function RangeControl({ icon: Icon, label, value, valueLabel, min, max, step, on
 
       {/* Rəqəmlər slayder düyməsinin mərkəzi ilə üst-üstə düşür (düymə 28px → kənarlardan 14px) */}
       <div className="relative h-4 text-[0.75rem] font-semibold text-inkdim/70">
-        {ticks.map(({ value: t, minor }) => (
+        {ticks.map(({ value: tick, minor }) => (
           <span
-            key={t}
-            className={`absolute -translate-x-1/2 ${minor ? 'hidden sm:block' : ''} ${t === value ? 'text-primary font-bold' : ''}`}
-            style={{ left: `calc(14px + (100% - 28px) * ${(t - min) / (max - min)})` }}
+            key={tick}
+            className={`absolute -translate-x-1/2 ${minor ? 'hidden sm:block' : ''} ${tick === value ? 'text-primary font-bold' : ''}`}
+            style={{ left: `calc(14px + (100% - 28px) * ${(tick - min) / (max - min)})` }}
           >
-            {t}
+            {tick}
           </span>
         ))}
       </div>
 
       {/* Mətn ipucu sadə qutuda, hazır element (məs. stop çek kartı) olduğu kimi göstərilir */}
       {typeof hint === 'string' ? (
-        <p className="text-[0.85rem] font-semibold text-brand-teal-deep bg-brand-teal-soft rounded-xl px-3.5 py-2.5">
-          {hint}
-        </p>
+        <p className="text-[0.85rem] font-semibold text-brand-teal-deep bg-brand-teal-soft rounded-xl px-3.5 py-2.5">{hint}</p>
       ) : (
         hint
       )}

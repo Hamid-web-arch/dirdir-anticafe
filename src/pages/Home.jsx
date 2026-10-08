@@ -5,6 +5,7 @@ import Pricing from '../components/Pricing.jsx'
 import Menu from '../components/Menu.jsx'
 import Events from '../components/Events.jsx'
 import Contact from '../components/Contact.jsx'
+import Feedback from '../components/Feedback.jsx'
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
       <Pricing />
       <Menu />
       <Events />
+      <Feedback />
       <Contact />
     </>
   )

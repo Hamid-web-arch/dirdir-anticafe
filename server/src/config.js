@@ -18,6 +18,13 @@ const schema = z.object({
         .filter(Boolean),
     ),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
+  // Email göndərmək (admin paneldən xəbərlər). Boş qalsa, email kanalı söndürülür.
+  // Gmail üçün: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=ünvan, SMTP_PASS="App password" (16 hərf).
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default(''), // məs. "DırDır Anticafe <dirdir@gmail.com>"; boşdursa SMTP_USER
   // Testlərdə rate limit söndürülür
   RATE_LIMIT_ENABLED: z
     .enum(['true', 'false'])

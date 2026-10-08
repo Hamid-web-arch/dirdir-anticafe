@@ -21,6 +21,11 @@
   --color-card: #FFFFFF;    /* kart fonu */
   --color-ink: #1D2B24;     /* əsas mətn */
   --color-inkdim: #5B6A62;  /* ikinci dərəcəli mətn */
+  --color-night: #1D2B24;   /* həmişə tünd qalan panellər (hesablayıcının cəmi, şəkil fonu) */
+
+  /* -soft tonlar bu rənglə, -deep tonlar bununla qarışdırılır (qaranlıq rejimdə yerlərini dəyişir) */
+  --tone-light: white;
+  --tone-dark: black;
 
   /* --- Brend palitrası --- */
   --brand-pink: #FF4F81;
@@ -44,28 +49,43 @@
      adətən dəyişməyə ehtiyac yoxdur.
      -soft = açıq fon tonu, -deep = həmin fonda oxunaqlı tünd ton
      ------------------------------------------------------------ */
-  --brand-pink-soft: color-mix(in srgb, var(--brand-pink) 15%, white);
-  --brand-pink-deep: color-mix(in srgb, var(--brand-pink) 75%, black);
-  --brand-purple-soft: color-mix(in srgb, var(--brand-purple) 14%, white);
-  --brand-purple-deep: color-mix(in srgb, var(--brand-purple) 75%, black);
-  --brand-yellow-soft: color-mix(in srgb, var(--brand-yellow) 25%, white);
-  --brand-yellow-deep: color-mix(in srgb, var(--brand-yellow) 55%, black);
-  --brand-teal-soft: color-mix(in srgb, var(--brand-teal) 13%, white);
-  --brand-teal-deep: color-mix(in srgb, var(--brand-teal) 67%, black);
-  --brand-orange-soft: color-mix(in srgb, var(--brand-orange) 12%, white);
-  --brand-orange-deep: color-mix(in srgb, var(--brand-orange) 75%, black);
-  --brand-cyan-soft: color-mix(in srgb, var(--brand-cyan) 15%, white);
-  --brand-cyan-deep: color-mix(in srgb, var(--brand-cyan) 55%, black);
+  --brand-pink-soft: color-mix(in srgb, var(--brand-pink) 15%, var(--tone-light));
+  --brand-pink-deep: color-mix(in srgb, var(--brand-pink) 75%, var(--tone-dark));
+  --brand-purple-soft: color-mix(in srgb, var(--brand-purple) 14%, var(--tone-light));
+  --brand-purple-deep: color-mix(in srgb, var(--brand-purple) 75%, var(--tone-dark));
+  --brand-yellow-soft: color-mix(in srgb, var(--brand-yellow) 25%, var(--tone-light));
+  --brand-yellow-deep: color-mix(in srgb, var(--brand-yellow) 55%, var(--tone-dark));
+  --brand-teal-soft: color-mix(in srgb, var(--brand-teal) 13%, var(--tone-light));
+  --brand-teal-deep: color-mix(in srgb, var(--brand-teal) 67%, var(--tone-dark));
+  --brand-orange-soft: color-mix(in srgb, var(--brand-orange) 12%, var(--tone-light));
+  --brand-orange-deep: color-mix(in srgb, var(--brand-orange) 75%, var(--tone-dark));
+  --brand-cyan-soft: color-mix(in srgb, var(--brand-cyan) 15%, var(--tone-light));
+  --brand-cyan-deep: color-mix(in srgb, var(--brand-cyan) 55%, var(--tone-dark));
 
   --medal-gold-ring: var(--medal-gold);
   --medal-gold-soft: var(--brand-yellow-soft);
   --medal-gold-deep: var(--brand-yellow-deep);
-  --medal-silver-ring: color-mix(in srgb, var(--medal-silver) 55%, white);
-  --medal-silver-soft: color-mix(in srgb, var(--medal-silver) 18%, white);
-  --medal-silver-deep: color-mix(in srgb, var(--medal-silver) 60%, black);
-  --medal-bronze-ring: color-mix(in srgb, var(--medal-bronze) 55%, white);
-  --medal-bronze-soft: color-mix(in srgb, var(--medal-bronze) 18%, white);
-  --medal-bronze-deep: color-mix(in srgb, var(--medal-bronze) 75%, black);
+  --medal-silver-ring: color-mix(in srgb, var(--medal-silver) 55%, var(--tone-light));
+  --medal-silver-soft: color-mix(in srgb, var(--medal-silver) 18%, var(--tone-light));
+  --medal-silver-deep: color-mix(in srgb, var(--medal-silver) 60%, var(--tone-dark));
+  --medal-bronze-ring: color-mix(in srgb, var(--medal-bronze) 55%, var(--tone-light));
+  --medal-bronze-soft: color-mix(in srgb, var(--medal-bronze) 18%, var(--tone-light));
+  --medal-bronze-deep: color-mix(in srgb, var(--medal-bronze) 75%, var(--tone-dark));
+}
+
+/* ============================================================
+   QARANLIQ REJİM — menyudakı düymə <html data-theme="dark"> qoyur.
+   Yalnız əsas rənglər dəyişir; -soft/-deep tonlar avtomatik uyğunlaşır.
+   ============================================================ */
+:root[data-theme='dark'] {
+  --color-bg: #111A16;
+  --color-card: #1A2620;
+  --color-ink: #E8F1EC;
+  --color-inkdim: #9DB0A6;
+  --color-night: #0B120F;
+  --tone-light: #111A16; /* açıq fon tonları tünd fona qarışır */
+  --tone-dark: white;    /* "tünd" mətn tonları qaranlıqda açıq olur ki, oxunsun */
+  color-scheme: dark;
 }
 
 html {
@@ -77,6 +97,255 @@ body {
   background-color: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
+}
+
+/* "Rezerv et" düyməsi və arxasında gizlənən pişik (src/components/ReserveButton.jsx), 5 saniyəlik dövr:
+   pəncələr düyməni yuxarıdan tutur → arxadan baş çıxır, başını əyir, göz qırpır → altdan quyruq yırğalanır →
+   pişik gizlənir → düymədən narıncı dalğa yayılır. Üzərinə gələndə dayanır; "reduce motion"da işləmir.
+   Qatlar: baş və quyruq düymənin arxasında (z 0), düymə (z 1), pəncələr önündə (z 2). */
+@layer components {
+  .reserve-wrap {
+    position: relative;
+    animation: reserve-bounce 5s ease-in-out infinite;
+  }
+  .reserve-cta {
+    position: relative;
+    z-index: 1;
+    animation: reserve-pulse 5s ease-out infinite;
+  }
+  .reserve-cta .reserve-icon {
+    transform-origin: 50% 60%;
+    animation: reserve-ring-icon 5s ease-in-out infinite;
+  }
+
+  .reserve-head,
+  .reserve-tail,
+  .reserve-paw {
+    position: absolute;
+    pointer-events: none;
+  }
+  .reserve-head svg,
+  .reserve-tail svg,
+  .reserve-paw svg {
+    display: block;
+  }
+  /* Başın alt yarısı həmişə düymənin arxasında qalır */
+  .reserve-head {
+    left: 50%;
+    bottom: calc(100% - 14px);
+    z-index: 0;
+    transform: translate(-50%, 16px);
+    animation: reserve-head 5s ease-in-out infinite;
+  }
+  .reserve-eyes {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: reserve-blink 5s linear infinite;
+  }
+  .reserve-paw {
+    bottom: calc(100% - 5px);
+    transform-origin: 50% 100%; /* tutanda barmaqlar kənara doğru yığılır */
+    z-index: 2;
+    opacity: 0;
+    animation: reserve-paw 5s ease-in-out infinite;
+  }
+  /* Dairəvi düymədə gizlənəndə küncdən görünməsinlər deyə mərkəzə yaxın */
+  .reserve-paw-left {
+    left: calc(50% - 19px);
+  }
+  .reserve-paw-right {
+    left: calc(50% + 2px);
+    animation-delay: 0.08s;
+  }
+  /* Quyruğun yuxarı ucu düymənin arxasındadır, ondan sallanır */
+  .reserve-tail {
+    top: calc(100% - 8px);
+    left: calc(50% + 4px);
+    z-index: 0;
+    opacity: 0;
+    transform-origin: 50% 0;
+    animation: reserve-tail 5s ease-in-out infinite;
+  }
+
+  .reserve-wrap:hover,
+  .reserve-wrap:hover * {
+    animation: none;
+  }
+
+  /* Pəncələr həqiqətən düymənin arxasından gəlir və ora qayıdır:
+     arxada aşağıdan qalxır → kənarın üstünə çıxıb öndən tutur → buraxanda qalxır, yenə arxaya keçib aşağı sürüşür.
+     Arxada olanda düymə onları örtür (z-index 0), tutanda önə keçir (z-index 2). */
+  @keyframes reserve-paw {
+    0%,
+    10% {
+      opacity: 1;
+      z-index: 0;
+      transform: translateY(20px);
+    }
+    18% {
+      z-index: 0;
+      transform: translateY(-7px);
+    }
+    19% {
+      z-index: 2;
+      transform: translateY(-7px);
+    }
+    /* kənara düşüb tutur — bir az basıb geri qalxır */
+    22% {
+      z-index: 2;
+      transform: translateY(1px) scaleY(0.9);
+    }
+    25%,
+    70% {
+      z-index: 2;
+      transform: translateY(0) scaleY(1);
+    }
+    /* buraxır: kənardan qalxır... */
+    74% {
+      z-index: 2;
+      transform: translateY(-7px);
+    }
+    75% {
+      z-index: 0;
+      transform: translateY(-7px);
+    }
+    /* ...və düymənin arxasına sürüşür */
+    82%,
+    100% {
+      opacity: 1;
+      z-index: 0;
+      transform: translateY(20px);
+    }
+  }
+  /* Pəncələr tutanda düymə bir az aşağı əyilir */
+  @keyframes reserve-bounce {
+    0%,
+    21%,
+    28%,
+    100% {
+      transform: translateY(0);
+    }
+    24% {
+      transform: translateY(2px);
+    }
+  }
+  @keyframes reserve-head {
+    0%,
+    22% {
+      transform: translate(-50%, 16px);
+    }
+    30% {
+      transform: translate(-50%, 0);
+    }
+    40% {
+      transform: translate(-50%, 0) rotate(-10deg);
+    }
+    50% {
+      transform: translate(-50%, 0) rotate(8deg);
+    }
+    60%,
+    70% {
+      transform: translate(-50%, 0) rotate(0);
+    }
+    80%,
+    100% {
+      transform: translate(-50%, 16px);
+    }
+  }
+  @keyframes reserve-blink {
+    0%,
+    46%,
+    50%,
+    56%,
+    60%,
+    100% {
+      transform: scaleY(1);
+    }
+    48%,
+    58% {
+      transform: scaleY(0.1);
+    }
+  }
+  @keyframes reserve-tail {
+    0%,
+    24% {
+      opacity: 0;
+      transform: translateY(-60%) rotate(0);
+    }
+    32% {
+      opacity: 1;
+      transform: translateY(0) rotate(0);
+    }
+    40% {
+      transform: translateY(0) rotate(22deg);
+    }
+    48% {
+      transform: translateY(0) rotate(-18deg);
+    }
+    56% {
+      transform: translateY(0) rotate(16deg);
+    }
+    64% {
+      transform: translateY(0) rotate(-12deg);
+    }
+    72% {
+      opacity: 1;
+      transform: translateY(0) rotate(0);
+    }
+    80%,
+    100% {
+      opacity: 0;
+      transform: translateY(-60%) rotate(0);
+    }
+  }
+  @keyframes reserve-ring-icon {
+    0%,
+    40%,
+    100% {
+      transform: rotate(0);
+    }
+    44% {
+      transform: rotate(-16deg);
+    }
+    48% {
+      transform: rotate(14deg);
+    }
+    52% {
+      transform: rotate(-10deg);
+    }
+    56% {
+      transform: rotate(6deg);
+    }
+    60% {
+      transform: rotate(0);
+    }
+  }
+  /* Pişik gizlənəndən sonra iki dalğa */
+  @keyframes reserve-pulse {
+    0%,
+    82% {
+      box-shadow:
+        0 0 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+        0 0 0 0 color-mix(in srgb, var(--color-primary) 40%, transparent);
+    }
+    93% {
+      box-shadow:
+        0 0 0 12px transparent,
+        0 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+    }
+    100% {
+      box-shadow:
+        0 0 0 14px transparent,
+        0 0 0 16px transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reserve-wrap,
+    .reserve-wrap * {
+      animation: none;
+    }
+  }
 }
 
 /* Hesablayıcıdakı slayderlər: dolu hissə --fill faizi ilə rənglənir */

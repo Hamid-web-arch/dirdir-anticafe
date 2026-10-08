@@ -1,8 +1,17 @@
 import { PiMapPin, PiFilmSlate } from 'react-icons/pi'
 import Reveal from './Reveal.jsx'
 import { business } from '../data/business.js'
+import { useI18n } from '../i18n/index.jsx'
+import { usePricing } from '../pricing/PricingContext.jsx'
+
+const money = (n) => `${n}${business.currency}`
 
 export default function Hero() {
+  const { t } = useI18n()
+  const pricing = usePricing()
+  // Saatlıq qiymət — zalda ilk saat
+  const pricePerHour = pricing.hall.firstHour
+
   return (
     <section id="top" className="relative overflow-hidden pt-20 pb-16">
       <div className="absolute w-[380px] h-[380px] bg-brand-yellow/35 rounded-full blur-3xl -top-32 -right-20 pointer-events-none" />
@@ -11,64 +20,74 @@ export default function Hero() {
       <div className="relative z-10 max-w-[1120px] mx-auto px-7 grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
         <Reveal direction="left">
           <span className="inline-flex items-center gap-1.5 text-[0.82rem] tracking-wide uppercase text-brand-purple font-bold mb-5 bg-brand-purple-soft px-3.5 py-1.5 rounded-full">
-            <PiMapPin size={16} /> Sahil m. · ilk saat {business.pricePerHour}{business.currency}
+            <PiMapPin size={16} /> {t('hero.badge', { price: money(pricePerHour) })}
           </span>
           <h1 className="font-display font-bold text-[2.5rem] sm:text-[3rem] md:text-[4rem] leading-[1.06] mb-5">
-            1 saat 4 manat — <span className="text-accent">limitsiz və çox rahat</span>
+            {t('hero.titleA', { price: pricePerHour })} <span className="text-accent">{t('hero.titleB')}</span>
           </h1>
           <p className="text-[1.12rem] text-inkdim max-w-[46ch] mb-8">
-            {business.name}-də ilk saat cəmi {business.pricePerHour}{business.currency}, sonrakı hər saat{' '}
-            {business.pricing.hall.nextHour}
-            {business.currency}-dir — nə qədər qalsan da, {business.pricing.hall.cap}
-            {business.currency}-dan artıq ödəmirsən. Şirniyyat, çay, kofe, sərin içkilər limitsiz daxildir,
-            üstəlik stolüstü oyunlar və öz kino otağımız var.
+            {t('hero.text', {
+              name: business.name,
+              first: money(pricing.hall.firstHour),
+              next: money(pricing.hall.nextHour),
+              cap: money(pricing.hall.cap),
+            })}
           </p>
           <div className="flex gap-3.5 flex-wrap">
             <a
               href="#pricing"
               className="inline-flex items-center gap-2 px-7 sm:px-8 py-4 rounded-full font-bold text-[0.95rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover active:translate-y-0 transition-all"
             >
-              Qiymətə bax →
+              {t('hero.ctaPrice')}
             </a>
             <a
               href={business.instagramUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 px-7 sm:px-8 py-4 rounded-full font-bold text-[0.95rem] border-2 border-ink text-ink hover:bg-ink hover:text-white active:scale-[0.98] transition-all"
+              className="inline-flex items-center gap-2 px-7 sm:px-8 py-4 rounded-full font-bold text-[0.95rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg active:scale-[0.98] transition-all"
             >
-              Instagramda izlə
+              {t('hero.ctaInstagram')}
             </a>
           </div>
 
           <div className="flex gap-8 flex-wrap mt-10">
             <div>
-              <strong className="block font-display text-[1.7rem] text-brand-purple">
-                {business.pricePerHour}{business.currency}
-              </strong>
-              <span className="text-[0.82rem] text-inkdim font-semibold">ilk saat, hər şey daxil</span>
+              <strong className="block font-display text-[1.7rem] text-brand-purple">{money(pricePerHour)}</strong>
+              <span className="text-[0.82rem] text-inkdim font-semibold">{t('hero.statFirst')}</span>
             </div>
             <div>
               <strong className="block font-display text-[1.7rem] text-brand-purple">11–23</strong>
-              <span className="text-[0.82rem] text-inkdim font-semibold">gündəlik iş saatları</span>
+              <span className="text-[0.82rem] text-inkdim font-semibold">{t('hero.statHours')}</span>
             </div>
             <div>
               <strong className="block font-display text-[1.7rem] text-brand-purple">
                 <PiFilmSlate />
               </strong>
-              <span className="text-[0.82rem] text-inkdim font-semibold">öz kino otağımız</span>
+              <span className="text-[0.82rem] text-inkdim font-semibold">{t('hero.statCinema')}</span>
             </div>
           </div>
         </Reveal>
 
         <Reveal direction="right" delay={120} className="flex justify-center items-center order-first md:order-last">
-          <SpinnerSignature price={business.pricePerHour} currency={business.currency} />
+          <SpinnerSignature price={money(pricePerHour)} />
         </Reveal>
       </div>
     </section>
   )
 }
 
-function SpinnerSignature({ price, currency }) {
+// Çarxdakı söz uzundursa (məs. "СЛАДОСТИ"), şrift kiçilir ki, dilimə sığsın.
+const fit = (label, base, room = 100) => Math.min(base, Math.floor(room / (label.length * 0.62)))
+
+function SpinnerSignature({ price }) {
+  const { t } = useI18n()
+  const w = (key) => t(`hero.wheel.${key}`)
+  const label = (x, y, key, base, fill = 'fill-white') => (
+    <text x={x} y={y} textAnchor="middle" fontWeight="700" fontSize={fit(w(key), base)} className={`font-display ${fill}`}>
+      {w(key)}
+    </text>
+  )
+
   return (
     <svg viewBox="0 0 340 340" width="320" height="320" className="drop-shadow-soft">
       <g className="origin-[170px_170px] animate-spin-slow">
@@ -79,19 +98,27 @@ function SpinnerSignature({ price, currency }) {
         <path d="M170,170 L170,320 A150,150 0 0,1 40,245 Z" className="fill-brand-purple" />
         <path d="M170,170 L40,245 A150,150 0 0,1 40,95 Z" className="fill-brand-orange" />
         <path d="M170,170 L40,95 A150,150 0 0,1 170,20 Z" className="fill-brand-cyan" />
-        <text x="170" y="70" textAnchor="middle" fontWeight="700" fontSize="22" className="font-display fill-white">ÇAY</text>
-        <text x="255" y="140" textAnchor="middle" fontWeight="700" fontSize="20" className="font-display fill-white">KOFE</text>
-        <text x="255" y="205" textAnchor="middle" fontWeight="700" fontSize="18" className="font-display fill-white">KİNO</text>
-        <text x="170" y="285" textAnchor="middle" fontWeight="700" fontSize="18" className="font-display fill-white">OYUN</text>
-        <text x="90" y="205" textAnchor="middle" fontWeight="700" fontSize="17" className="font-display fill-ink">ŞİRNİ</text>
-        <text x="90" y="140" textAnchor="middle" fontWeight="700" fontSize="14" className="font-display fill-ink">SƏRİN İÇKİ</text>
+        {label(170, 70, 'tea', 22)}
+        {label(255, 140, 'coffee', 20)}
+        {label(255, 205, 'cinema', 18)}
+        {label(170, 285, 'games', 18)}
+        {label(90, 205, 'sweets', 17, 'fill-ink')}
+        {label(90, 140, 'drinks', 14, 'fill-ink')}
       </g>
       <circle cx="170" cy="170" r="58" className="fill-ink" />
       <text x="170" y="163" textAnchor="middle" fontWeight="700" fontSize="26" className="font-display fill-white">
-        {price}{currency}
+        {price}
       </text>
-      <text x="170" y="184" textAnchor="middle" fontWeight="600" fontSize="12" className="font-body fill-white" opacity="0.8">
-        İLK SAAT
+      <text
+        x="170"
+        y="184"
+        textAnchor="middle"
+        fontWeight="600"
+        fontSize={fit(t('hero.wheel.firstHour'), 12, 90)}
+        className="font-body fill-white"
+        opacity="0.8"
+      >
+        {t('hero.wheel.firstHour')}
       </text>
       <polygon points="170,96 160,116 180,116" className="fill-ink" />
     </svg>

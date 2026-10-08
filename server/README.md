@@ -1,6 +1,6 @@
 # DırDır Anticafe — API
 
-Node.js + Express + PostgreSQL (Prisma). Saytın qeydiyyat/giriş, Arena xalları və promokodlarını idarə edir.
+Node.js + Express + PostgreSQL (Prisma). Saytın qeydiyyat/giriş, yarışlar, slayder, qiymətlər və promokodlarını idarə edir.
 
 ## Lokal işə salmaq
 
@@ -41,19 +41,53 @@ Daxil olmaq tələb edən ünvanlara `Authorization: Bearer <token>` başlığı
 |---|---|---|---|
 | GET | `/api/health` | hamı | Server və baza işləyir? |
 | POST | `/api/auth/register` | hamı | `{ firstName, lastName, email, phone, password }` → `{ token, user }` |
-| POST | `/api/auth/login` | hamı | `{ email, password }` → `{ token, user }` |
-| GET | `/api/auth/me` | istifadəçi | Öz profili |
-| GET | `/api/arena/leaderboard?limit=10` | hamı | Lövhə (ad "Aysel M." formasında, email/telefon yoxdur) |
-| GET | `/api/arena/me` | istifadəçi | Öz yeri və xalı |
+| POST | `/api/auth/login` | hamı | `{ login, password }` → `{ token, user }`; `login` — email və ya telefon nömrəsi (köhnə `email` sahəsi də qəbul olunur) |
+| GET / PATCH | `/api/auth/me` | istifadəçi | Profil / ad, soyad, telefonu dəyiş |
+| POST | `/api/auth/me/password` | istifadəçi | `{ currentPassword, newPassword }` |
+| PUT / DELETE | `/api/auth/me/avatar` | istifadəçi | Profil şəkli (faylın özü, `Content-Type: image/*`) / sil |
+| GET | `/api/auth/me/teams` | istifadəçi | Yarış tarixçəsi: komanda, xal, yer |
+| GET | `/api/competitions` | hamı | Yarışlar (daxil olubsa — `myTeam`) |
+| GET | `/api/competitions/:id?period=` | hamı | Yarış + komanda lövhəsi; `period`: `week` (bu həftə), `month` (bu ay), `all` (ümumi) — Bakı vaxtı ilə |
+| POST / DELETE | `/api/competitions/:id/join` | istifadəçi | `{ teamName }` ilə qoşul / çıx (yalnız başlamamış yarışdan) |
+| GET | `/api/slides` | hamı | Saytdakı slayder (aktiv slaydlar) |
+| GET | `/api/pricing` | hamı | Qiymət cədvəli (zal, kino otağı, tələbə endirimi) |
+| GET | `/api/slides/:id` | hamı | Slaydın "Ətraflı" səhifəsi (`body` — uzun mətn) |
+| GET | `/api/games`, `/api/games/:id` | hamı | Oyunlar səhifəsi / bir oyun (`howTo` — necə oynanılır) |
+| POST | `/api/feedback` | hamı | Rəy və təklif `{ name?, contact?, message }` |
+| GET | `/api/site` | hamı | Admin paneldən dəyişən şəkillər (giriş / qeydiyyat) |
+| GET | `/api/images/:id` | hamı | Şəkil (WebP, həmişəlik keşlənir) |
 | POST | `/api/promo/validate` | hamı | `{ code }` → `{ code, percent }` və ya 404 |
-| GET | `/api/admin/users?q=` | admin | Ad/email/telefonla axtarış |
-| POST | `/api/admin/users/:id/points` | admin | `{ amount, reason }` — xal ver (+) və ya çıx (−) |
-| GET | `/api/admin/users/:id/points` | admin | Xal tarixçəsi |
-| GET/POST | `/api/admin/promo-codes` | admin | Kodların siyahısı / yeni kod `{ code, percent, expiresAt? }` |
-| PATCH/DELETE | `/api/admin/promo-codes/:id` | admin | Kodu dəyiş (məs. `{ active: false }`) / sil |
+| GET | `/api/admin/users` | admin | Axtarış `q` + filtrlər: `status` (active/blocked), `role`, `joined` (yes/no), `competitionId`, `sort` (new/old/name), `limit`, `offset` |
+| GET | `/api/admin/users/:id` | admin | İstifadəçi + qoşulduğu yarışlar |
+| POST | `/api/admin/users` | admin | Yeni hesab `{ firstName, lastName, email, phone, password, role }` (role: USER / ADMIN) |
+| PATCH / DELETE | `/api/admin/users/:id` | admin | `{ blocked }` və/və ya `{ role }` — blokla, admin et / adminlikdən çıxar; sil (komandaları ilə). Admin öz hesabını dəyişə bilməz; admini bloklamaq/silmək üçün əvvəl adminlikdən çıxarmaq lazımdır |
+| GET / PUT | `/api/admin/pricing` | admin | Qiymətləri oxu / dəyiş |
+| GET / POST | `/api/admin/competitions` | admin | Yarışlar / yeni yarış (`title`, `description` — `{ az, en, ru }`) |
+| PATCH / DELETE | `/api/admin/competitions/:id` | admin | Dəyiş (vəziyyət, qeydiyyat, limit) / sil |
+| GET | `/api/admin/competitions/:id/teams` | admin | Komandalar və qeydiyyat edənin əlaqə məlumatı |
+| POST / GET | `/api/admin/teams/:id/points` | admin | `{ amount, reason }` — xal ver (+) / çıx (−) / tarixçə |
+| DELETE | `/api/admin/teams/:id` | admin | Komandanı yarışdan çıxar |
+| POST | `/api/admin/images` | admin | Slayd şəkli yüklə (faylın özü) → `{ image: { id, url } }` |
+| GET / POST | `/api/admin/slides` | admin | Bütün slaydlar / yeni slayd `{ imageId, title, desc, link?, fit, active }` |
+| PATCH / DELETE | `/api/admin/slides/:id` | admin | Dəyiş (şəkli əvəz etmək daxil) / sil |
+| PUT | `/api/admin/slides/order` | admin | `{ ids: [...] }` — yeni sıra |
+| GET/POST/PATCH/DELETE | `/api/admin/promo-codes` | admin | Promokodlar |
+| GET/POST/PATCH/DELETE | `/api/admin/games` (+ `PUT /games/order`) | admin | Oyunlar |
+| GET / PATCH / DELETE | `/api/admin/feedback` | admin | Rəylər (`?status=unread`), oxundu et, sil |
+| GET / PUT / DELETE | `/api/admin/site-images/:key` | admin | Giriş/qeydiyyat şəkli (`login`, `register`) |
+| GET / POST | `/api/admin/broadcasts` | admin | Abunəçilərə xəbər: `{ channel: email/whatsapp, subject, body, userIds? }` |
+
+Xətalarda `code` sahəsi də var (məs. `EMAIL_TAKEN`, `TEAM_NAME_TAKEN`) — sayt mesajı istifadəçinin dilində göstərir.
 
 Təhlükəsizlik: şifrələr bcrypt ilə saxlanır; giriş (15 dəqiqədə 10), qeydiyyat və promokod yoxlaması üçün sorğu limiti var;
 yalnız `CORS_ORIGINS`-dəki saytlar API-yə brauzerdən müraciət edə bilər.
+
+## Email göndərmək (könüllü)
+
+Admin paneldəki "Xəbər göndər" email ilə işləsin deyə serverə SMTP ayarları lazımdır (Render → dirdir-api → Environment):
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. Gmail: hesabda 2 addımlı doğrulamanı aç,
+myaccount.google.com/apppasswords-dan "App password" yarat — `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`.
+Ayarlar yoxdursa email kanalı söndürülür; WhatsApp kanalı həmişə işləyir (hər alıcı üçün hazır mesajlı link).
 
 ## Canlıya çıxarmaq (Render + Neon)
 

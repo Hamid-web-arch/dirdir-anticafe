@@ -2,9 +2,13 @@ import { useState } from 'react'
 import { PiEyeBold, PiEyeSlashBold, PiWarningCircleBold, PiSpinnerBold } from 'react-icons/pi'
 import Reveal from './Reveal.jsx'
 import hallImg from '../assets/upper-hal.jpeg'
+import { useI18n } from '../i18n/index.jsx'
+import { useSiteImage } from '../lib/site.js'
 
 // Giriş və qeydiyyat səhifələrinin ümumi çərçivəsi: solda foto paneli, sağda forma.
-export default function AuthLayout({ title, subtitle, panelTitle, panelText, children, footer }) {
+// imageKey: admin paneldə "Görünüş" bölməsindən dəyişən şəkil (login / register); yoxdursa standart foto.
+export default function AuthLayout({ title, subtitle, panelTitle, panelText, children, footer, imageKey }) {
+  const customImage = useSiteImage(imageKey)
   return (
     <section className="relative overflow-hidden py-12 sm:py-20">
       <div className="absolute w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] bg-brand-orange/20 rounded-full blur-3xl -top-28 -right-24 pointer-events-none" />
@@ -14,11 +18,11 @@ export default function AuthLayout({ title, subtitle, panelTitle, panelText, chi
         <Reveal>
           <div className="grid md:grid-cols-[0.9fr_1.1fr] bg-card border border-ink/10 rounded-[28px] overflow-hidden shadow-lift">
             <div className="relative hidden md:flex flex-col justify-end p-9 min-h-[560px] text-white">
-              <img src={hallImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/40 to-ink/10" />
+              <img src={customImage ?? hallImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-night/90 via-night/40 to-night/10" />
               <div className="relative">
-                <span className="font-display font-bold text-2xl">
-                  DırDır<span className="text-primary">.</span>
+                <span className="inline-block bg-white/95 rounded-2xl px-3 py-2">
+                  <img src="/logo.webp" alt="DırDır Anticafe" width="520" height="313" className="h-12 w-auto" />
                 </span>
                 <h2 className="font-display font-bold text-[1.8rem] leading-tight mt-4 mb-2">{panelTitle}</h2>
                 <p className="text-white/80 text-[0.95rem]">{panelText}</p>
@@ -69,13 +73,14 @@ export function Field({ label, error, id, prefix, children, ...inputProps }) {
 }
 
 export function PasswordField(props) {
+  const { t } = useI18n()
   const [visible, setVisible] = useState(false)
   return (
     <Field {...props} type={visible ? 'text' : 'password'}>
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
+        aria-label={visible ? t('auth.hidePassword') : t('auth.showPassword')}
         className="px-4 text-inkdim hover:text-primary transition-colors"
       >
         {visible ? <PiEyeSlashBold size={20} /> : <PiEyeBold size={20} />}
@@ -85,6 +90,7 @@ export function PasswordField(props) {
 }
 
 export function SubmitButton({ children, loading }) {
+  const { t } = useI18n()
   return (
     <button
       type="submit"
@@ -94,7 +100,7 @@ export function SubmitButton({ children, loading }) {
     >
       {loading ? (
         <>
-          <PiSpinnerBold size={18} className="animate-spin" /> Gözlə...
+          <PiSpinnerBold size={18} className="animate-spin" /> {t('auth.wait')}
         </>
       ) : (
         children

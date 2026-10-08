@@ -61,6 +61,8 @@ export function AuthProvider({ children }) {
       checking,
       login: async (credentials) => saveSession(await api('/auth/login', { method: 'POST', body: credentials })),
       register: async (data) => saveSession(await api('/auth/register', { method: 'POST', body: data })),
+      // Profil dəyişəndə (ad, şəkil) serverin qaytardığı yeni istifadəçi
+      updateUser: setUser,
       logout,
     }),
     [user, token, checking, saveSession, logout],

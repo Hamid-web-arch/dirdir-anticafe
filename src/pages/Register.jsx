@@ -1,62 +1,54 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { PiUserPlusBold } from 'react-icons/pi'
-import AuthLayout, {
-  Field,
-  PasswordField,
-  SubmitButton,
-  DemoNotice,
-  FormError,
-  isEmail,
-} from '../components/AuthLayout.jsx'
+import Switch from '../components/Switch.jsx'
+import AuthLayout, { Field, PasswordField, SubmitButton, DemoNotice, FormError } from '../components/AuthLayout.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { apiEnabled } from '../lib/api.js'
-
-// Azərbaycan mobil operator kodları (+994 XX ...)
-const OPERATOR_CODES = ['10', '50', '51', '55', '60', '70', '77', '99']
-const MIN_PASSWORD = 8
-
-// "501234567" → "50 123 45 67"
-const formatPhone = (digits) =>
-  [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)].filter(Boolean).join(' ')
+import { isEmail, isPhone, phoneDigits, formatPhone, MIN_PASSWORD, safeNext, fieldMessage } from '../lib/forms.js'
+import { useI18n } from '../i18n/index.jsx'
 
 export default function Register() {
   const { user, register } = useAuth()
+  const i18n = useI18n()
+  const { t, errorText } = i18n
   const navigate = useNavigate()
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', confirm: '' })
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next'))
+
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirm: '',
+    newsletter: true, // standart olaraq açıq — istəyən söndürür
+  })
   const [errors, setErrors] = useState({})
-  const [formError, setFormError] = useState(null)
+  const [serverError, setServerError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
   const set = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((er) => ({ ...er, [key]: null }))
-    setFormError(null)
+    setServerError(null)
     setSent(false)
   }
   const update = (key) => (e) => set(key, e.target.value)
 
-  // Yalnız rəqəmləri saxlayırıq; istifadəçi 0 və ya 994 ilə başlasa, onu atırıq.
-  const updatePhone = (e) => {
-    let digits = e.target.value.replace(/\D/g, '')
-    if (digits.startsWith('994')) digits = digits.slice(3)
-    if (digits.startsWith('0')) digits = digits.slice(1)
-    set('phone', digits.slice(0, 9))
-  }
-
   const submit = async (e) => {
     e.preventDefault()
-    const next = {}
-    if (!form.firstName.trim()) next.firstName = 'Adını yaz.'
-    if (!form.lastName.trim()) next.lastName = 'Soyadını yaz.'
-    if (!isEmail(form.email)) next.email = 'Düzgün email ünvanı yaz.'
-    if (form.phone.length !== 9 || !OPERATOR_CODES.includes(form.phone.slice(0, 2)))
-      next.phone = 'Nömrəni tam yaz, məs. 50 123 45 67.'
-    if (form.password.length < MIN_PASSWORD) next.password = `Şifrə ən azı ${MIN_PASSWORD} simvol olmalıdır.`
-    if (form.confirm !== form.password || !form.confirm) next.confirm = 'Şifrələr eyni deyil.'
-    setErrors(next)
-    if (Object.keys(next).length > 0) return
+    const found = {}
+    if (!form.firstName.trim()) found.firstName = { key: 'validation.firstName' }
+    if (!form.lastName.trim()) found.lastName = { key: 'validation.lastName' }
+    if (!isEmail(form.email)) found.email = { key: 'validation.email' }
+    if (!isPhone(form.phone)) found.phone = { key: 'validation.phone' }
+    if (form.password.length < MIN_PASSWORD) found.password = { key: 'validation.passwordMin', vars: { min: MIN_PASSWORD } }
+    if (form.confirm !== form.password || !form.confirm) found.confirm = { key: 'validation.confirm' }
+    setErrors(found)
+    if (Object.keys(found).length > 0) return
 
     if (!apiEnabled) return setSent(true)
 
@@ -64,29 +56,32 @@ export default function Register() {
     try {
       const { confirm, ...data } = form
       await register(data)
-      navigate('/hesabim')
+      navigate(next)
     } catch (err) {
       // Server sahə xətası qaytarırsa (məs. email artıq var), onu həmin sahənin altında göstəririk.
-      setErrors(err.fields)
-      setFormError(err.message)
+      setServerError(err)
     } finally {
       setLoading(false)
     }
   }
 
-  if (user) return <Navigate to="/hesabim" replace />
+  if (user) return <Navigate to={next} replace />
+
+  const message = (field) => fieldMessage(field, errors, serverError, i18n)
+  const loginHref = params.get('next') ? `/giris?next=${encodeURIComponent(next)}` : '/giris'
 
   return (
     <AuthLayout
-      title="Qeydiyyat"
-      subtitle="Hesab yarat, Arena-da xal topla və yeniliklərdən ilk sən xəbər tut."
-      panelTitle="DırDır ailəsinə qoşul"
-      panelText="Oyunlar, kino gecələri, turnirlər — hamısı bir hesabla."
+      imageKey="register"
+      title={t('auth.registerTitle')}
+      subtitle={t('auth.registerSubtitle')}
+      panelTitle={t('auth.registerPanelTitle')}
+      panelText={t('auth.registerPanelText')}
       footer={
         <>
-          Artıq hesabın var?{' '}
-          <Link to="/giris" className="font-bold text-primary hover:underline">
-            Daxil ol
+          {t('auth.haveAccount')}{' '}
+          <Link to={loginHref} className="font-bold text-primary hover:underline">
+            {t('auth.loginLink')}
           </Link>
         </>
       }
@@ -95,73 +90,78 @@ export default function Register() {
         <div className="grid sm:grid-cols-2 gap-5">
           <Field
             id="reg-first"
-            label="Ad"
+            label={t('auth.firstName')}
             autoComplete="given-name"
-            placeholder="Adın"
+            placeholder={t('auth.firstNamePlaceholder')}
             value={form.firstName}
             onChange={update('firstName')}
-            error={errors.firstName}
+            error={message('firstName')}
           />
           <Field
             id="reg-last"
-            label="Soyad"
+            label={t('auth.lastName')}
             autoComplete="family-name"
-            placeholder="Soyadın"
+            placeholder={t('auth.lastNamePlaceholder')}
             value={form.lastName}
             onChange={update('lastName')}
-            error={errors.lastName}
+            error={message('lastName')}
           />
         </div>
         <Field
           id="reg-email"
-          label="Email"
+          label={t('auth.email')}
           type="email"
           autoComplete="email"
           placeholder="ad@mail.com"
           value={form.email}
           onChange={update('email')}
-          error={errors.email}
+          error={message('email')}
         />
         <Field
           id="reg-phone"
-          label="Telefon"
+          label={t('auth.phone')}
           type="tel"
           inputMode="numeric"
           autoComplete="tel-national"
           prefix="+994"
           placeholder="50 123 45 67"
           value={formatPhone(form.phone)}
-          onChange={updatePhone}
-          error={errors.phone}
+          onChange={(e) => set('phone', phoneDigits(e.target.value))}
+          error={message('phone')}
         />
         <PasswordField
           id="reg-password"
-          label="Şifrə"
+          label={t('auth.password')}
           autoComplete="new-password"
-          placeholder={`Ən azı ${MIN_PASSWORD} simvol`}
+          placeholder={t('auth.passwordMin', { min: MIN_PASSWORD })}
           value={form.password}
           onChange={update('password')}
-          error={errors.password}
+          error={message('password')}
         />
         <PasswordField
           id="reg-confirm"
-          label="Şifrəni təkrarla"
+          label={t('auth.confirm')}
           autoComplete="new-password"
-          placeholder="Şifrəni yenidən yaz"
+          placeholder={t('auth.confirmPlaceholder')}
           value={form.confirm}
           onChange={update('confirm')}
-          error={errors.confirm}
+          error={message('confirm')}
         />
 
-        {formError && <FormError>{formError}</FormError>}
+        <div className="rounded-2xl bg-bg border border-ink/10 px-4 py-3.5">
+          <Switch checked={form.newsletter} onChange={(v) => set('newsletter', v)}>
+            {t('auth.newsletter')}
+          </Switch>
+          <p className="text-[0.8rem] text-inkdim mt-1.5 pl-14">{t('auth.newsletterNote')}</p>
+        </div>
+
+        {serverError && <FormError>{errorText(serverError)}</FormError>}
 
         <SubmitButton loading={loading}>
-          <PiUserPlusBold size={18} /> Qeydiyyatdan keç
+          <PiUserPlusBold size={18} /> {t('auth.registerSubmit')}
         </SubmitButton>
 
-        {sent && (
-          <DemoNotice>Forma düzgündür. Qeydiyyat sistemi tezliklə işə düşəcək — hələlik məlumat göndərilmir.</DemoNotice>
-        )}
+        {sent && <DemoNotice>{t('auth.demoRegister')}</DemoNotice>}
       </form>
     </AuthLayout>
   )

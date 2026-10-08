@@ -19,6 +19,8 @@ const medal = (name) => ({
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  // dark: variantı <html data-theme="dark"> olanda işləyir (src/theme/ThemeContext.jsx)
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
@@ -26,6 +28,7 @@ export default {
         card: token('--color-card'),
         ink: token('--color-ink'),
         inkdim: token('--color-inkdim'),
+        night: token('--color-night'),
         primary: token('--color-primary'),
         accent: token('--color-accent'),
         brand: {
