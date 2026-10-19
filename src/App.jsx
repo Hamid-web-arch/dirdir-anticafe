@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
+import FloatingWhatsApp from './components/FloatingWhatsApp.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
 import Home from './pages/Home.jsx'
 import Arena from './pages/Arena.jsx'
@@ -58,6 +59,7 @@ export default function App() {
         </Suspense>
       </main>
       <Footer />
+      <FloatingWhatsApp />
     </div>
   )
 }

@@ -62,3 +62,6 @@ export const reserveUrl = whatsappUrl(business.whatsappMessage)
 
 // Sponsorluq müraciəti üçün hazır mesaj
 export const sponsorUrl = whatsappUrl('Salam! DırDır Anticafe-yə sponsor olmaq istəyirəm. Şərtlər barədə danışa bilərikmi?')
+
+// Sağ aşağıdakı dairəvi "yaz bizə" düyməsi üçün ümumi sual mesajı
+export const supportUrl = whatsappUrl('Salam! DırDır Anticafe ilə bağlı sualım var.')

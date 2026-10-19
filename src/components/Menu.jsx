@@ -7,9 +7,9 @@ export default function Menu() {
   const { t } = useI18n()
 
   return (
-    <section id="menu" className="bg-card border-y border-ink/10 py-20">
-      <div className="max-w-[1120px] mx-auto px-7">
-        <Reveal className="max-w-[640px] mb-12">
+    <section id="menu" className="bg-card border-y border-ink/10 py-14 sm:py-20">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7">
+        <Reveal className="max-w-[640px] mb-8 sm:mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             {t('menu.chip')}
           </span>

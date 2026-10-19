@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   PiUsersThreeBold,
   PiClockBold,
@@ -95,6 +95,7 @@ export default function Calculator() {
   const [promo, setPromo] = useState(null) // { code, percent }
   const [promoError, setPromoError] = useState(null) // xəta obyekti — dil dəyişəndə mətni də dəyişir
   const [promoChecking, setPromoChecking] = useState(false)
+  const mobileBar = useMobileTotalBar()
 
   const limits = limitsFor(mode, pricing)
   // Admin otağın tutumunu azaldıbsa, seçilmiş nəfər sayı yeni həddi keçməsin.
@@ -193,9 +194,9 @@ export default function Calculator() {
         : t('calc.roomExtra', { included: group.includedPeople, extra: money(group.extraPerPerson), max: room.maxPeople })
 
   return (
-    <section id="hesabla" className="bg-card border-y border-ink/10 py-20">
-      <div className="max-w-[1120px] mx-auto px-7">
-        <Reveal className="max-w-[640px] mb-12">
+    <section id="hesabla" ref={mobileBar.sectionRef} className="bg-card border-y border-ink/10 py-14 sm:py-20">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7">
+        <Reveal className="max-w-[640px] mb-8 sm:mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             {t('calc.chip')}
           </span>
@@ -343,7 +344,7 @@ export default function Calculator() {
           </Reveal>
 
           <Reveal direction="right" delay={100} className="md:sticky md:top-24">
-            <div className="relative overflow-hidden bg-night text-white rounded-[24px] p-7 sm:p-8">
+            <div ref={mobileBar.totalRef} className="relative overflow-hidden bg-night text-white rounded-[24px] p-7 sm:p-8">
               <div className="absolute w-[220px] h-[220px] bg-primary/25 rounded-full blur-3xl -top-20 -right-16 pointer-events-none" />
               <div className="relative">
                 <div className="text-[0.8rem] tracking-wide uppercase font-bold text-white/60 mb-2">{t('calc.total')}</div>
@@ -384,8 +385,72 @@ export default function Calculator() {
           </Reveal>
         </div>
       </div>
+
+      {/* Telefonda: slayderləri dəyişəndə cəm ekranın altında görünsün (qiymət kartı görünəndə gizlənir) */}
+      <div
+        className={`md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-3 transition-transform duration-300 ${
+          mobileBar.visible ? 'translate-y-0' : 'translate-y-[120%]'
+        }`}
+        aria-hidden={!mobileBar.visible}
+        {...(!mobileBar.visible && { inert: '' })}
+      >
+        <div className="flex items-center gap-3 bg-night text-white rounded-2xl p-2.5 pl-4 shadow-lift">
+          <button type="button" onClick={mobileBar.showTotal} className="flex-1 min-w-0 text-left">
+            <span className="flex items-baseline gap-2">
+              <span className="font-display font-bold text-[1.5rem] leading-none">{money(total)}</span>
+              {discount > 0 && <span className="text-white/50 line-through text-[0.85rem]">{money(subtotal)}</span>}
+            </span>
+            <span className="block text-[0.75rem] text-white/70 font-semibold truncate mt-0.5">
+              {t('units.people', { count: people })} · {hoursText(hours)} · {t('calc.seeDetails')}
+            </span>
+          </button>
+          <a
+            href={reserveLink}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-3 rounded-full font-bold text-[0.88rem] bg-primary text-white"
+          >
+            <PiWhatsappLogoBold size={17} /> {t('nav.reserve')}
+          </a>
+        </div>
+      </div>
     </section>
   )
+}
+
+// Hesablayıcı ekrandadır, amma qiymət kartı görünmür → aşağıdakı zolaq çıxır
+function useMobileTotalBar() {
+  const sectionRef = useRef(null)
+  const totalRef = useRef(null)
+  const [state, setState] = useState({ section: false, total: false })
+
+  useEffect(() => {
+    const watch = (el, key, options) => {
+      const observer = new IntersectionObserver(([e]) => setState((s) => ({ ...s, [key]: e.isIntersecting })), options)
+      if (el) observer.observe(el)
+      return observer
+    }
+    const observers = [
+      // Hesablayıcı ekranın ortasına çatanda — kənarı təzə görünəndə yox
+      watch(sectionRef.current, 'section', { rootMargin: '-45% 0px -45% 0px' }),
+      watch(totalRef.current, 'total'),
+    ]
+    return () => observers.forEach((o) => o.disconnect())
+  }, [])
+
+  const visible = state.section && !state.total
+  // Sağ aşağıdakı WhatsApp düyməsi (FloatingWhatsApp) zolağın üstünə qalxsın
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('dirdir:bottom-bar', { detail: visible }))
+  }, [visible])
+  useEffect(() => () => window.dispatchEvent(new CustomEvent('dirdir:bottom-bar', { detail: false })), [])
+
+  return {
+    sectionRef,
+    totalRef,
+    visible,
+    showTotal: () => totalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+  }
 }
 
 function RangeControl({ icon: Icon, label, value, valueLabel, min, max, step, onChange, ticks, hint, stepper }) {
@@ -456,7 +521,7 @@ function StepButton({ onClick, disabled, label, children }) {
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="w-8 h-8 rounded-full border-2 border-ink/15 bg-card flex items-center justify-center hover:border-primary hover:text-primary disabled:opacity-40 disabled:pointer-events-none transition-colors"
+      className="w-10 h-10 sm:w-8 sm:h-8 rounded-full border-2 border-ink/15 bg-card flex items-center justify-center hover:border-primary hover:text-primary disabled:opacity-40 disabled:pointer-events-none transition-colors"
     >
       {children}
     </button>

@@ -48,7 +48,7 @@ export default function Feedback() {
   const messageError = tooShort ? t('feedback.tooShort') : fieldErrors(error)?.message
 
   return (
-    <section id="rey" className="py-20">
+    <section id="rey" className="py-14 sm:py-20">
       <div className="max-w-[760px] mx-auto px-5 sm:px-7">
         <Reveal className="text-center mb-8">
           <span className="inline-flex items-center gap-1.5 text-[0.8rem] tracking-wide uppercase text-brand-purple-deep font-bold mb-3 bg-brand-purple-soft px-3 py-1.5 rounded-full">
@@ -111,7 +111,7 @@ export default function Feedback() {
               <button
                 type="submit"
                 disabled={sending}
-                className="self-start inline-flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-[0.92rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover transition-all disabled:opacity-60"
+                className="w-full sm:w-auto sm:self-start inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full font-bold text-[0.92rem] bg-primary text-white shadow-cta hover:-translate-y-0.5 hover:shadow-cta-hover transition-all disabled:opacity-60"
               >
                 {sending ? <PiSpinnerBold size={17} className="animate-spin" /> : <PiPaperPlaneTiltBold size={17} />}
                 {t('feedback.send')}

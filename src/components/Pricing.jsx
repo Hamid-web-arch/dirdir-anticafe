@@ -29,9 +29,9 @@ export default function Pricing() {
   ]
 
   return (
-    <section id="pricing" className="py-24">
-      <div className="max-w-[1120px] mx-auto px-7">
-        <Reveal className="max-w-[640px] mb-12">
+    <section id="pricing" className="py-14 sm:py-24">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7">
+        <Reveal className="max-w-[640px] mb-8 sm:mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             {t('pricing.chip')}
           </span>
@@ -39,7 +39,7 @@ export default function Pricing() {
         </Reveal>
 
         <Reveal>
-          <div className="relative overflow-hidden rounded-[28px] p-8 md:p-12 text-white grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-9 items-center bg-gradient-to-br from-brand-purple to-brand-pink">
+          <div className="relative overflow-hidden rounded-[28px] p-6 sm:p-8 md:p-12 text-white grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-9 items-center bg-gradient-to-br from-brand-purple to-brand-pink">
             <div className="absolute w-[260px] h-[260px] bg-white/10 rounded-full -top-24 -right-16" />
             <div className="relative z-10">
               <h3 className="font-display font-bold text-[1.6rem] mb-3">

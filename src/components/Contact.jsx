@@ -7,15 +7,23 @@ export default function Contact() {
   const { t } = useI18n()
 
   return (
-    <section id="contact" className="bg-card border-t border-ink/10 py-24">
-      <div className="max-w-[1120px] mx-auto px-7 grid grid-cols-1 md:grid-cols-2 gap-12">
+    <section id="contact" className="bg-card border-t border-ink/10 py-14 sm:py-24">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7 grid grid-cols-1 md:grid-cols-2 gap-12">
         <Reveal>
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             {t('contact.chip')}
           </span>
-          <h2 className="font-display font-bold text-[2rem] mt-2 mb-7">{t('contact.title')}</h2>
+          <h2 className="font-display font-bold text-[1.7rem] sm:text-[2rem] leading-tight mt-2 mb-7">{t('contact.title')}</h2>
 
-          <InfoBlock label={t('contact.address')} value={t('contact.addressValue')} />
+          <InfoBlock
+            label={t('contact.address')}
+            value={
+              // Ünvana basanda xəritə açılır (telefonda Google Maps tətbiqi)
+              <a href={business.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1.5 hover:text-primary underline decoration-ink/20 underline-offset-4">
+                <PiMapPin size={18} className="shrink-0 mt-0.5 text-primary" /> {t('contact.addressValue')}
+              </a>
+            }
+          />
           <InfoBlock label={t('contact.hours')} value={business.hours} />
 
           {/* Əlaqə kartları: WhatsApp (rezervasiya) və Instagram (yeniliklər) — eyni görünüşdə */}

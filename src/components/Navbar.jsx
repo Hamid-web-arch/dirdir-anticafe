@@ -112,7 +112,7 @@ export default function Navbar() {
           </ReserveButton>
 
           <button
-            className="lg:hidden text-2xl text-ink shrink-0"
+            className="lg:hidden w-10 h-10 -mr-2 flex items-center justify-center text-2xl text-ink shrink-0 rounded-full active:bg-ink/5"
             aria-label={t('nav.menu')}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}

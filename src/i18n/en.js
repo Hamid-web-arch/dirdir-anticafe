@@ -45,6 +45,36 @@ export default {
       drinks: 'DRINKS',
       firstHour: 'FIRST HOUR',
     },
+    wheelSpin: 'Spin the wheel',
+    wheelHint: 'Tap to spin!',
+    wheelAgain: 'Spin again',
+    wheelClose: 'Close',
+    wheelPrizes: {
+      tea: {
+        title: '🍵 You got tea!',
+        text: 'Tea is unlimited — not one cup, as much as you like.',
+      },
+      coffee: {
+        title: '☕ You got coffee!',
+        text: 'Start your game full of energy with unlimited coffee.',
+      },
+      cinema: {
+        title: '🎬 You got cinema!',
+        text: 'Have a movie night with friends in our own cinema room.',
+      },
+      games: {
+        title: '🎲 You got games!',
+        text: 'Dozens of board games — all included in the hourly price.',
+      },
+      sweets: {
+        title: '🍪 You got sweets!',
+        text: 'Sweets are unlimited — go ahead, help yourself.',
+      },
+      drinks: {
+        title: '🥤 You got cold drinks!',
+        text: 'Soft drinks are included in the hourly price too.',
+      },
+    },
   },
 
   highlights: {
@@ -56,6 +86,7 @@ export default {
   },
 
   calc: {
+    seeDetails: 'details',
     chip: 'Calculator',
     title: 'How much will it cost?',
     intro: 'Choose where you will sit, how many of you are coming and how long you will stay — the total updates instantly.',
@@ -347,5 +378,12 @@ export default {
     thanks: 'Thank you!',
     thanksText: 'We got your message.',
     another: 'Write another message',
+  },
+
+  support: {
+    label: "Message us on WhatsApp",
+    title: "Got a question? 👋",
+    text: "Message us on WhatsApp — we reply fast.",
+    close: "Close",
   },
 }

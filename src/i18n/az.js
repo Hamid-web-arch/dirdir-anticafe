@@ -46,6 +46,36 @@ export default {
       drinks: 'SƏRİN İÇKİ',
       firstHour: 'İLK SAAT',
     },
+    wheelSpin: 'Çarxı fırlat',
+    wheelHint: 'Bas, fırlat!',
+    wheelAgain: 'Yenidən fırlat',
+    wheelClose: 'Bağla',
+    wheelPrizes: {
+      tea: {
+        title: '🍵 Çay düşdü!',
+        text: 'Çay limitsizdir — bir fincan yox, nə qədər istəsən.',
+      },
+      coffee: {
+        title: '☕ Kofe düşdü!',
+        text: 'Limitsiz kofe ilə oyuna enerjili başla.',
+      },
+      cinema: {
+        title: '🎬 Kino düşdü!',
+        text: 'Öz kino otağımızda dostlarınla film gecəsi et.',
+      },
+      games: {
+        title: '🎲 Oyun düşdü!',
+        text: 'Onlarla stolüstü oyun — hamısı saat haqqına daxildir.',
+      },
+      sweets: {
+        title: '🍪 Şirni düşdü!',
+        text: 'Şirniyyat limitsizdir — çəkinmə, götür.',
+      },
+      drinks: {
+        title: '🥤 Sərin içki düşdü!',
+        text: 'Sərin içkilər də saat haqqına daxildir.',
+      },
+    },
   },
 
   highlights: {
@@ -57,6 +87,7 @@ export default {
   },
 
   calc: {
+    seeDetails: 'ətraflı',
     chip: 'Hesablayıcı',
     title: 'Nə qədər ödəyəcəksən?',
     intro: 'Harada oturacağını, neçə nəfər gəldiyinizi və nə qədər qalacağınızı seç — məbləğ dərhal hesablanır.',
@@ -348,5 +379,12 @@ export default {
     thanks: 'Təşəkkür edirik!',
     thanksText: 'Mesajın bizə çatdı.',
     another: 'Daha bir mesaj yaz',
+  },
+
+  support: {
+    label: "WhatsApp-da bizə yaz",
+    title: "Sualın var? 👋",
+    text: "WhatsApp-da yaz, tez cavab verək.",
+    close: "Bağla",
   },
 }

@@ -90,7 +90,22 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 72px; /* bölməyə keçəndə başlıq yapışqan navbar-ın altında qalmasın */
+  scroll-padding-top: 84px; /* bölməyə keçəndə başlıq yapışqan navbar-ın altında qalmasın */
+}
+
+/* iPhone 16px-dən kiçik yazılı sahəyə basanda səhifəni avtomatik böyüdür — telefonda bütün sahələr ən azı 16px */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* Telefonda düyməyə basanda boz/mavi "işıqlanma" olmasın; düymələr toxunuşa dərhal cavab versin */
+html {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 body {
@@ -343,6 +358,88 @@ body {
   @media (prefers-reduced-motion: reduce) {
     .reserve-wrap,
     .reserve-wrap * {
+      animation: none;
+    }
+  }
+}
+
+/* Sağ aşağıdakı WhatsApp düyməsi (FloatingWhatsApp): ətrafdan yaşıl dalğalar, ikon ara-sıra yırğalanır,
+   "Sualın var?" baloncuğu atılaraq çıxır. Hərəkəti azaldılmış cihazlarda animasiya yoxdur. */
+@layer components {
+  .wa-float {
+    animation: wa-pulse 2.4s ease-out infinite;
+  }
+  .wa-float-icon {
+    animation: wa-wiggle 5s ease-in-out infinite;
+  }
+  .wa-bubble {
+    animation: wheel-prize-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  @keyframes wa-pulse {
+    0% {
+      box-shadow:
+        0 0 0 0 rgb(37 211 102 / 0.55),
+        0 0 0 0 rgb(37 211 102 / 0.35),
+        0 10px 24px rgb(0 0 0 / 0.18);
+    }
+    70% {
+      box-shadow:
+        0 0 0 16px rgb(37 211 102 / 0),
+        0 0 0 8px rgb(37 211 102 / 0.15),
+        0 10px 24px rgb(0 0 0 / 0.18);
+    }
+    100% {
+      box-shadow:
+        0 0 0 18px rgb(37 211 102 / 0),
+        0 0 0 20px rgb(37 211 102 / 0),
+        0 10px 24px rgb(0 0 0 / 0.18);
+    }
+  }
+  @keyframes wa-wiggle {
+    0%,
+    80%,
+    100% {
+      transform: rotate(0) scale(1);
+    }
+    84% {
+      transform: rotate(-14deg) scale(1.1);
+    }
+    88% {
+      transform: rotate(12deg) scale(1.1);
+    }
+    92% {
+      transform: rotate(-8deg) scale(1.05);
+    }
+    96% {
+      transform: rotate(4deg) scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wa-float,
+    .wa-float-icon,
+    .wa-bubble {
+      animation: none;
+    }
+  }
+}
+
+/* Çarx dayananda çıxan mesaj: yumşaq "atılıb düşmə" */
+@layer components {
+  .wheel-prize {
+    animation: wheel-prize-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  @keyframes wheel-prize-pop {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wheel-prize {
       animation: none;
     }
   }

@@ -26,15 +26,15 @@ export default function Highlights() {
   if (slides && slides.length === 0) return null
 
   return (
-    <section id="neler-var" className="py-20">
-      <div className="max-w-[1120px] mx-auto px-7">
+    <section id="neler-var" className="py-14 sm:py-20">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7">
         <Reveal className="mb-10">
           <h2 className="font-display font-bold text-[1.9rem] md:text-[2.5rem]">{t('highlights.title')}</h2>
         </Reveal>
         {slides ? (
           <Carousel slides={slides} />
         ) : (
-          <div className="rounded-[28px] border border-ink/10 bg-card animate-pulse aspect-[4/5] sm:aspect-auto sm:h-[460px] lg:h-[520px]" />
+          <div className="rounded-[28px] border border-ink/10 bg-card animate-pulse aspect-[4/3] sm:aspect-auto sm:h-[460px] lg:h-[520px]" />
         )}
       </div>
     </section>
@@ -97,7 +97,7 @@ function Carousel({ slides }) {
 
         {count > 1 && (
           // Oxlar slaydın üzərində: telefonda şəklin ortasında, böyük ekranda bütün slaydın ortasında
-          <div className="pointer-events-none absolute inset-x-0 top-0 aspect-[4/5] sm:aspect-auto sm:bottom-0 flex items-center justify-between px-3 sm:px-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 aspect-[4/3] sm:aspect-auto sm:bottom-0 flex items-center justify-between px-3 sm:px-5">
             <ArrowButton onClick={() => goTo(index - 1)} label={t('highlights.prev')}>
               <PiCaretLeftBold size={18} />
             </ArrowButton>
@@ -146,7 +146,7 @@ function Slide({ slide, title, desc, active, position, number }) {
       aria-label={position}
       aria-hidden={!active}
     >
-      <div className="relative aspect-[4/5] sm:aspect-auto sm:h-full overflow-hidden bg-night">
+      <div className="relative aspect-[4/3] sm:aspect-auto sm:h-full overflow-hidden bg-night">
         <SlideMedia src={assetUrl(slide.imageUrl)} fit={slide.fit} alt={title} />
       </div>
 

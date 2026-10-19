@@ -8,9 +8,9 @@ export default function Events() {
   const { t } = useI18n()
 
   return (
-    <section id="events" className="py-24">
-      <div className="max-w-[1120px] mx-auto px-7">
-        <Reveal className="max-w-[640px] mb-12">
+    <section id="events" className="py-14 sm:py-24">
+      <div className="max-w-[1120px] mx-auto px-5 sm:px-7">
+        <Reveal className="max-w-[640px] mb-8 sm:mb-12">
           <span className="inline-block text-[0.8rem] tracking-wide uppercase text-brand-teal-deep font-bold mb-3 bg-brand-teal-soft px-3 py-1.5 rounded-full">
             {t('events.chip')}
           </span>
@@ -22,7 +22,7 @@ export default function Events() {
             const Icon = business.amenityIcons[i]
             return (
               <Reveal key={i} delay={i * 70}>
-                <div className="bg-card border border-ink/10 rounded-2xl p-7 flex gap-4 items-start h-full">
+                <div className="bg-card border border-ink/10 rounded-2xl p-5 sm:p-7 flex gap-4 items-start h-full">
                   <span className="w-12 h-12 shrink-0 rounded-xl bg-brand-pink-soft text-brand-pink flex items-center justify-center">
                     <Icon size={22} />
                   </span>
