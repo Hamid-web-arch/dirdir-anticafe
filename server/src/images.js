@@ -13,13 +13,29 @@ const PRESETS = {
   avatar: (img) => img.resize({ width: 256, height: 256, fit: 'cover', position: 'attention' }),
 }
 
+// Yalnız adi foto formatları (HEIC/AVIF sharp-da "heif" adlanır). SVG, PDF, TIFF və s. qəbul olunmur.
+const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'gif', 'heif'])
+// "Şəkil bombası"na qarşı: kiçik fayl, amma nəhəng ölçü (məs. 50000×50000) serveri yükləməsin. 50 MP kifayətdir.
+const MAX_PIXELS = 50_000_000
+
 export async function processImage(buffer, preset) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new HttpError(400, 'IMAGE_INVALID', 'Şəkil faylı göndərilməyib.')
   }
+  const input = () => sharp(buffer, { limitInputPixels: MAX_PIXELS, failOn: 'error' })
+  let format
   try {
-    // rotate(): telefon şəkillərindəki EXIF istiqamətini tətbiq edir (yan düşməsin)
-    const { data, info } = await PRESETS[preset](sharp(buffer).rotate())
+    format = (await input().metadata()).format
+  } catch {
+    throw new HttpError(400, 'IMAGE_INVALID', 'Bu fayl şəkil deyil və ya zədəlidir.')
+  }
+  if (!ALLOWED_FORMATS.has(format)) {
+    throw new HttpError(400, 'IMAGE_INVALID', 'Yalnız JPG, PNG, WebP, GIF və ya HEIC şəkil yüklə.')
+  }
+  try {
+    // rotate(): telefon şəkillərindəki EXIF istiqamətini tətbiq edir (yan düşməsin).
+    // WebP-yə çevirəndə EXIF (o cümlədən GPS koordinatları) silinir — şəkildən yer məlumatı sızmır.
+    const { data, info } = await PRESETS[preset](input().rotate())
       .webp({ quality: 80 })
       .toBuffer({ resolveWithObject: true })
     return { mime: 'image/webp', data, width: info.width, height: info.height, size: data.length }

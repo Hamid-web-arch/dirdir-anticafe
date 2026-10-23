@@ -12,7 +12,9 @@ import Register from './pages/Register.jsx'
 import Account from './pages/Account.jsx'
 import Games, { GameDetails } from './pages/Games.jsx'
 import SlideDetails from './pages/SlideDetails.jsx'
+import NotFound from './pages/NotFound.jsx'
 import { Spinner } from './pages/admin/ui.jsx'
+import { useI18n } from './i18n/index.jsx'
 
 // Admin panel ayrıca yüklənir — adi ziyarətçilər onun kodunu endirmir.
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout.jsx'))
@@ -27,11 +29,19 @@ const AdminAppearance = lazy(() => import('./pages/admin/Appearance.jsx'))
 const AdminBroadcasts = lazy(() => import('./pages/admin/Broadcasts.jsx'))
 
 export default function App() {
+  const { t } = useI18n()
   return (
     <div className="font-body text-ink">
       <ScrollToTop />
+      {/* Klaviatura və ekran oxuyucusu ilə gələnlər menyunu keçib birbaşa məzmuna gedə bilsin */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:bg-primary focus:text-white focus:px-4 focus:py-2.5 focus:rounded-full focus:font-bold"
+      >
+        {t('nav.skip')}
+      </a>
       <Navbar />
-      <main>
+      <main id="main" tabIndex={-1} className="outline-none">
         <Suspense fallback={<Spinner />}>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -55,6 +65,7 @@ export default function App() {
               <Route path="gorunus" element={<AdminAppearance />} />
               <Route path="xeberler" element={<AdminBroadcasts />} />
             </Route>
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>

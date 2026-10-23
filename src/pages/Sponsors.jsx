@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import Reveal from '../components/Reveal.jsx'
 import { sponsorUrl } from '../data/business.js'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo } from '../lib/seo.js'
 
 const slotCount = 6
 
 export default function Sponsors() {
   const { t } = useI18n()
+  useSeo({ title: t('seo.sponsors.title'), description: t('seo.sponsors.description') })
 
   return (
     <section className="relative overflow-hidden py-16 sm:py-24">

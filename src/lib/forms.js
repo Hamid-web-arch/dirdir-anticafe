@@ -21,7 +21,7 @@ export const formatPhone = (digits) =>
 
 // ?next=/arena — girişdən sonra qayıdılacaq səhifə. Yalnız saytın öz yolları ("//başqa.sayt" yox).
 export const safeNext = (value, fallback = '/hesabim') =>
-  value && value.startsWith('/') && !value.startsWith('//') ? value : fallback
+  value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback
 
 // Formanın xətaları dil dəyişəndə də düzgün göstərilsin deyə mətn yox, açar saxlanır:
 // client: { email: { key: 'validation.email' } }; server xətası isə ApiError obyektidir.

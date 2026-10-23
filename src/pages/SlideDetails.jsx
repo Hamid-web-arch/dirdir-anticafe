@@ -1,12 +1,24 @@
 import { useParams } from 'react-router-dom'
 import DetailPage, { useApiItem, DetailImage, RichText } from '../components/DetailPage.jsx'
 import { useI18n } from '../i18n/index.jsx'
+import { assetUrl } from '../lib/api.js'
+import { useSeo, pageTitle, excerpt } from '../lib/seo.js'
 
 // "Nələr var?" slayderindəki "Ətraflı" — mətni admin paneldən yazılır.
 export default function SlideDetails() {
   const { id } = useParams()
   const { t, pick } = useI18n()
   const state = useApiItem(`/slides/${id}`, (res) => res.slide)
+  const slide = state.data
+  useSeo(
+    state.failed
+      ? { title: t('seo.notFound.title'), noindex: true }
+      : {
+          title: slide && pageTitle(pick(slide.title)),
+          description: slide && excerpt(pick(slide.desc) || pick(slide.body)),
+          image: slide?.imageUrl && assetUrl(slide.imageUrl),
+        },
+  )
 
   return (
     <DetailPage

@@ -22,7 +22,7 @@ npm run preview
 
 | Hissə | Harada | Yenilənmə |
 |---|---|---|
-| Sayt | Vercel — https://dirdir-anticafe.vercel.app | `main`-ə push → avtomatik |
+| Sayt | Vercel — https://www.dirdir.az (dirdir.az və köhnə dirdir-anticafe.vercel.app ora yönləndirir) | `main`-ə push → avtomatik |
 | Server (`server/`) | Render — https://dirdir-api.onrender.com | `server/` dəyişəndə avtomatik |
 | Baza | Neon (PostgreSQL, Frankfurt) | — |
 

@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { api, apiEnabled } from '../lib/api.js'
 import { business } from '../data/business.js'
-import { useI18n } from '../i18n/index.jsx'
 
 // Qiymətlər admin paneldən dəyişir və serverdən gəlir (/api/pricing).
 // Server cavab verənə qədər son görülən qiymətlər (brauzerdə saxlanmış), o da yoxdursa business.js-dəki standart cədvəl.
@@ -43,13 +42,6 @@ export function PricingProvider({ children }) {
       cancelled = true
     }
   }, [])
-
-  // Brauzer tabındakı başlıqda ilk saatın qiyməti var
-  const { t } = useI18n()
-  const titlePrice = `${pricing.hall.firstHour}${business.currency}`
-  useEffect(() => {
-    document.title = t('pageTitle', { price: titlePrice })
-  }, [t, titlePrice])
 
   // Admin qiymətləri saxlayanda sayt dərhal yeni qiymətləri göstərsin
   const update = useCallback((p) => {

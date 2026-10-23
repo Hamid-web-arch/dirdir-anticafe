@@ -63,6 +63,11 @@ export function AuthProvider({ children }) {
       register: async (data) => saveSession(await api('/auth/register', { method: 'POST', body: data })),
       // Profil dəyişəndə (ad, şəkil) serverin qaytardığı yeni istifadəçi
       updateUser: setUser,
+      // Şifrə dəyişəndə server yeni token verir (köhnə tokenlər etibarsız olur)
+      replaceToken: (t) => {
+        storage.set(t)
+        setToken(t)
+      },
       logout,
     }),
     [user, token, checking, saveSession, logout],

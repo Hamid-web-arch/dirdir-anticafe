@@ -3,22 +3,102 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      // Qaranlıq rejim: React yüklənməmiş tətbiq olunur ki, ekran yanıb-sönməsin (src/theme/ThemeContext.jsx)
-      try {
-        var t = localStorage.getItem('dirdir.theme')
-        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        document.documentElement.dataset.theme = t
-      } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>DırDır Anticafe — ilk saat 4₼, çay, kofe və oyunlar limitsiz</title>
+    <meta name="theme-color" content="#f16623" />
+
+    <!-- Axtarış və sosial şəbəkələr. Hər səhifə bunları özü yeniləyir (src/lib/seo.js);
+         __SITE_URL__ build zamanı saytın ünvanı ilə əvəz olunur (vite.config.js). -->
+    <title>DırDır Anticafe Bakı — antikafe, ilk saat 4₼</title>
+    <meta
+      name="description"
+      content="DırDır Anticafe (antikafe) Sahil metrosunun yanında: ilk saat 4₼, çay, kofe və şirniyyat limitsiz, stolüstü oyunlar və kino otağı. Hər gün 11:00–23:00."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="__SITE_URL__/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="DırDır Anticafe" />
+    <meta property="og:locale" content="az_AZ" />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:title" content="DırDır Anticafe Bakı — antikafe, ilk saat 4₼" />
+    <meta
+      property="og:description"
+      content="Çay, kofe və şirniyyat limitsiz, stolüstü oyunlar və kino otağı. Sahil metrosunun yanında, hər gün 11:00–23:00."
+    />
+    <meta property="og:image" content="__SITE_URL__/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DırDır Anticafe-nin zalı" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DırDır Anticafe Bakı — antikafe, ilk saat 4₼" />
+    <meta name="twitter:description" content="Çay, kofe və şirniyyat limitsiz, stolüstü oyunlar və kino otağı." />
+
+    <!-- Google üçün biznes məlumatı: ad, ünvan, telefon, iş saatları, xəritə nöqtəsi.
+         Bu məlumat src/data/business.js və Google Business profili ilə eyni olmalıdır. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "__SITE_URL__/#website",
+            "url": "__SITE_URL__/",
+            "name": "DırDır Anticafe",
+            "alternateName": ["DirDir Anticafe", "DırDır Antikafe", "Dirdir antikafe", "ДырДыр Антикафе"],
+            "inLanguage": ["az", "en", "ru"],
+            "publisher": { "@id": "__SITE_URL__/#business" }
+          },
+          {
+            "@type": ["CafeOrCoffeeShop", "EntertainmentBusiness"],
+            "@id": "__SITE_URL__/#business",
+            "name": "DırDır Anticafe",
+            "alternateName": ["DirDir Anticafe", "DırDır Antikafe", "Dirdir antikafe", "ДырДыр Антикафе"],
+            "description": "Antikafe: vaxtına görə ödəyirsən, çay, kofe, şirniyyat və sərin içkilər limitsiz; stolüstü oyunlar və kino otağı.",
+            "url": "__SITE_URL__/",
+            "logo": "__SITE_URL__/logo.jpeg",
+            "image": ["__SITE_URL__/og-image.jpg", "__SITE_URL__/logo.jpeg"],
+            "telephone": "+994775530305",
+            "priceRange": "4–13 ₼",
+            "currenciesAccepted": "AZN",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "Zərifə Əliyeva prospekti 21/9",
+              "addressLocality": "Bakı",
+              "addressCountry": "AZ"
+            },
+            "geo": { "@type": "GeoCoordinates", "latitude": 40.3705961, "longitude": 49.8420727 },
+            "hasMap": "https://maps.app.goo.gl/ELRPJtAMzjBzA2yH9",
+            "openingHoursSpecification": [
+              {
+                "@type": "OpeningHoursSpecification",
+                "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                "opens": "11:00",
+                "closes": "23:00"
+              }
+            ],
+            "amenityFeature": [
+              { "@type": "LocationFeatureSpecification", "name": "Stolüstü oyunlar", "value": true },
+              { "@type": "LocationFeatureSpecification", "name": "Kino otağı", "value": true },
+              { "@type": "LocationFeatureSpecification", "name": "Limitsiz çay və kofe", "value": true }
+            ],
+            "sameAs": ["https://www.instagram.com/dirdiranticafe/", "https://wa.me/994775530305"]
+          }
+        ]
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>
+    <!-- JavaScript-siz açanlar (və bəzi botlar) üçün əsas məlumat -->
+    <noscript>
+      <h1>DırDır Anticafe — Bakıda antikafe</h1>
+      <p>İlk saat 4₼, sonrakı hər saat 3₼. Çay, kofe, şirniyyat və sərin içkilər limitsiz; stolüstü oyunlar və kino otağı.</p>
+      <p>Ünvan: Zərifə Əliyeva prospekti 21/9, Bakı (Sahil metrosu). Hər gün 11:00–23:00. WhatsApp: +994 77 553 03 05.</p>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -59,7 +59,8 @@ export default function Navbar() {
           <img src="/logo.webp" alt="DırDır Anticafe" width="520" height="313" className="h-11 sm:h-14 w-auto dark:bg-white/90 dark:rounded-xl dark:px-1.5 dark:py-0.5" />
         </Link>
 
-        <ul className="hidden lg:flex items-center gap-5 xl:gap-7">
+        <nav aria-label={t('nav.main')} className="hidden lg:block">
+        <ul className="flex items-center gap-5 xl:gap-7">
           {links.map((l) => (
             <li key={l.href}>
               <Link
@@ -87,6 +88,7 @@ export default function Navbar() {
             </li>
           ))}
         </ul>
+        </nav>
 
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Ən dar telefonlarda yer çatsın deyə açar menyunun içindədir */}
@@ -115,6 +117,7 @@ export default function Navbar() {
             className="lg:hidden w-10 h-10 -mr-2 flex items-center justify-center text-2xl text-ink shrink-0 rounded-full active:bg-ink/5"
             aria-label={t('nav.menu')}
             aria-expanded={open}
+            aria-controls="mobile-menu"
             onClick={() => setOpen((o) => !o)}
           >
             {open ? <PiXBold /> : <PiListBold />}
@@ -123,10 +126,11 @@ export default function Navbar() {
       </div>
 
       <div
+        id="mobile-menu"
         className="lg:hidden grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out"
         style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
       >
-        <div className="min-h-0 overflow-hidden bg-card border-b border-ink/10">
+        <nav aria-label={t('nav.main')} className="min-h-0 overflow-hidden bg-card border-b border-ink/10">
           <ul className="flex flex-col px-5 sm:px-7 py-2">
             {links.map((l) => (
               <li key={l.href} className="border-b border-ink/10 last:border-none">
@@ -171,7 +175,7 @@ export default function Navbar() {
               </Link>
             </li>
           </ul>
-        </div>
+        </nav>
       </div>
     </header>
   )

@@ -79,7 +79,17 @@ Daxil olmaq tələb edən ünvanlara `Authorization: Bearer <token>` başlığı
 
 Xətalarda `code` sahəsi də var (məs. `EMAIL_TAKEN`, `TEAM_NAME_TAKEN`) — sayt mesajı istifadəçinin dilində göstərir.
 
-Təhlükəsizlik: şifrələr bcrypt ilə saxlanır; giriş (15 dəqiqədə 10), qeydiyyat və promokod yoxlaması üçün sorğu limiti var;
+### Təhlükəsizlik
+
+- **Tokenlər:** JWT yalnız HS256 ilə qəbul olunur; şifrə dəyişəndə bütün köhnə sessiyalar (`User.passwordChangedAt`) etibarsız olur,
+  bloklanan istifadəçinin tokeni dərhal işləməz olur. Rol hər sorğuda bazadan oxunur.
+- **Giriş:** IP üzrə (15 dəqiqədə 10) və hesab üzrə (saatda 30) limit; olmayan hesabda da eyni vaxt sərf olunur (email sızmasın).
+- **Şəkillər:** yalnız JPG/PNG/WebP/GIF/HEIC, ən çox 50 MP; WebP-yə çevrilir, EXIF (GPS) silinir.
+- **Rəy forması:** limit + gizli bot tələsi (`website` sahəsi).
+- **Saytın başlıqları** (`../vercel.json`): CSP, clickjacking qadağası və s. API ünvanı dəyişsə (məs. öz domen),
+  CSP-dəki `https://dirdir-api.onrender.com` (img-src, connect-src) də dəyişdirilməlidir.
+
+Şifrələr bcrypt ilə saxlanır; giriş (15 dəqiqədə 10), qeydiyyat və promokod yoxlaması üçün sorğu limiti var;
 yalnız `CORS_ORIGINS`-dəki saytlar API-yə brauzerdən müraciət edə bilər.
 
 ## Email göndərmək (könüllü)

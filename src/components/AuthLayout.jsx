@@ -24,7 +24,8 @@ export default function AuthLayout({ title, subtitle, panelTitle, panelText, chi
                 <span className="inline-block bg-white/95 rounded-2xl px-3 py-2">
                   <img src="/logo.webp" alt="DırDır Anticafe" width="520" height="313" className="h-12 w-auto" />
                 </span>
-                <h2 className="font-display font-bold text-[1.8rem] leading-tight mt-4 mb-2">{panelTitle}</h2>
+                {/* Başlıq deyil, şəkil üstündəki şüar — səhifənin yeganə əsas başlığı sağdakı h1-dir */}
+                <p className="font-display font-bold text-[1.8rem] leading-tight mt-4 mb-2">{panelTitle}</p>
                 <p className="text-white/80 text-[0.95rem]">{panelText}</p>
               </div>
             </div>

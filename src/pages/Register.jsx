@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { apiEnabled } from '../lib/api.js'
 import { isEmail, isPhone, phoneDigits, formatPhone, MIN_PASSWORD, safeNext, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo } from '../lib/seo.js'
 
 export default function Register() {
   const { user, register } = useAuth()
@@ -15,6 +16,7 @@ export default function Register() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
+  useSeo({ title: t('seo.register.title'), noindex: true })
 
   const [form, setForm] = useState({
     firstName: '',

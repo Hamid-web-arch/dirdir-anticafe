@@ -32,9 +32,11 @@ export default function Feedback() {
     setSending(true)
     try {
       // Daxil olubsa, adı və əlaqəsi hesabdan götürülür
-      const body = user
+      const base = user
         ? { name: `${user.firstName} ${user.lastName}`, contact: user.email, message: form.message }
         : form
+      // Gizli bot tələsi: insan bu sahəni görmür; doludursa server mesajı saxlamır
+      const body = { ...base, website: e.currentTarget.elements.website?.value || undefined }
       await api('/feedback', { method: 'POST', body, token })
       setSent(true)
       setForm({ name: '', contact: '', message: '' })
@@ -92,6 +94,15 @@ export default function Feedback() {
                   />
                 </div>
               )}
+              {/* Bot tələsi — ekrandan kənarda, klaviatura ilə də keçilmir */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute -left-[9999px] w-px h-px opacity-0"
+              />
               <div>
                 <textarea
                   value={form.message}

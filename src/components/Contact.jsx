@@ -15,6 +15,8 @@ export default function Contact() {
           </span>
           <h2 className="font-display font-bold text-[1.7rem] sm:text-[2rem] leading-tight mt-2 mb-7">{t('contact.title')}</h2>
 
+          {/* <address> — saytın sahibinin əlaqə məlumatı (ekran oxuyucuları və axtarış sistemləri üçün) */}
+          <address className="not-italic">
           <InfoBlock
             label={t('contact.address')}
             value={
@@ -45,6 +47,7 @@ export default function Contact() {
               note={t('contact.instagramNote')}
             />
           </div>
+          </address>
         </Reveal>
 
         <Reveal>

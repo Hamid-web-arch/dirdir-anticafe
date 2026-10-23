@@ -2,7 +2,30 @@
 // {ad} — yerinə dəyər qoyulur. { one, other } — saya görə forma (units).
 export default {
   langName: 'Azərbaycanca',
-  pageTitle: 'DırDır Anticafe — ilk saat {price}, çay, kofe və oyunlar limitsiz',
+  // Google-da və brauzer tabında görünən başlıq/təsvir (src/lib/seo.js). Başlıq ~60, təsvir ~155 simvol.
+  seo: {
+    home: {
+      title: 'DırDır Anticafe Bakı — antikafe, ilk saat {price}',
+      description:
+        'DırDır Anticafe (antikafe) Sahil metrosunun yanında: ilk saat {price}, çay, kofe və şirniyyat limitsiz, stolüstü oyunlar və kino otağı. Hər gün 11:00–23:00.',
+    },
+    games: {
+      title: 'Stolüstü oyunlar — DırDır Anticafe',
+      description: 'DırDır Anticafe-dəki stolüstü oyunlar: neçə nəfərlik, nə qədər çəkir və necə oynanılır. Oyunlar saat haqqına daxildir.',
+    },
+    arena: {
+      title: 'Yarışlar və liderlər lövhəsi — DırDır Anticafe',
+      description: 'DırDır Anticafe Arena: komandanla yarışlara qoşul, xal topla, həftəlik və aylıq liderlər lövhəsində zirvəyə qalx.',
+    },
+    sponsors: {
+      title: 'Sponsorlar — DırDır Anticafe',
+      description: 'DırDır Anticafe-nin tərəfdaşları. Yarışlarımıza sponsor olmaq istəyirsənsə, WhatsApp-a yaz.',
+    },
+    login: { title: 'Daxil ol — DırDır Anticafe' },
+    register: { title: 'Qeydiyyat — DırDır Anticafe' },
+    account: { title: 'Hesabım — DırDır Anticafe' },
+    notFound: { title: 'Səhifə tapılmadı — DırDır Anticafe' },
+  },
 
   units: {
     hours: { one: '{count} saat', other: '{count} saat' },
@@ -12,7 +35,11 @@ export default {
     spotsLeft: { one: '{count} yer qalıb', other: '{count} yer qalıb' },
   },
 
+  footer: { nav: 'Səhifələr', hours: 'Hər gün', rights: 'Bütün hüquqlar qorunur.' },
+
   nav: {
+    main: 'Əsas menyu',
+    skip: 'Məzmuna keç',
     darkMode: 'Qaranlıq rejim',
     highlights: 'Nələr var?',
     pricing: 'Qiymət',

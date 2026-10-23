@@ -156,7 +156,11 @@ const slideLink = z
   .nullable()
   .optional()
   .transform((v) => (v ? v : null))
-  .refine((v) => v === null || v.startsWith('/') || /^https:\/\/\S+$/.test(v), 'Link "/" və ya "https://" ilə başlamalıdır.')
+  // "//başqa-sayt" və "/\başqa-sayt" brauzerdə başqa sayta aparır — saytın öz yolu sayılmır
+  .refine(
+    (v) => v === null || (v.startsWith('/') && !v.startsWith('//') && !v.includes('\\')) || /^https:\/\/[^\s\\]+$/.test(v),
+    'Link "/" (saytın öz səhifəsi) və ya "https://" ilə başlamalıdır.',
+  )
 
 export const slideCreateSchema = z.object({
   imageId: z.string({ error: 'Şəkil yüklə.' }).min(1, 'Şəkil yüklə.'),
@@ -280,6 +284,8 @@ export const orderSchema = z.object({ ids: z.array(z.string().min(1)).min(1) })
 
 // ---------- Rəy və təkliflər ----------
 export const feedbackSchema = z.object({
+  // Bot tələsi: formada gizli sahədir, insan onu görmür və doldurmur
+  website: z.string().max(200).optional(),
   name: z
     .string()
     .trim()

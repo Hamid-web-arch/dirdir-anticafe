@@ -18,10 +18,11 @@ import { feedbackSchema } from './validation.js'
 import { adminRouter } from './routes/admin.js'
 import { errorHandler, notFound } from './middleware/error.js'
 
-const limiter = (limit, windowMinutes) =>
+const limiter = (limit, windowMinutes, options = {}) =>
   rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     limit,
+    ...options,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     skip: () => !config.RATE_LIMIT_ENABLED,
@@ -54,11 +55,28 @@ export function createApp() {
 
   // Şifrə təxmin etməyə və kod axtarmağa qarşı daha sərt limit
   app.use('/api/auth/login', limiter(10, 15))
+  // Bir hesaba müxtəlif IP-lərdən təxmin: hesab (email/telefon) üzrə ayrıca limit
+  app.use(
+    '/api/auth/login',
+    limiter(30, 60, {
+      keyGenerator: (req) => {
+        const login = String(req.body?.login ?? req.body?.email ?? '').trim().toLowerCase()
+        return `login:${login.includes('@') ? login : login.replace(/\D/g, '').slice(-9)}`
+      },
+    }),
+  )
   app.use('/api/auth/register', limiter(10, 60))
   app.use('/api/auth/me/password', limiter(10, 15))
+  app.use('/api/auth/me/avatar', limiter(20, 60)) // hər yükləmə serverdə emal olunur
   app.use('/api/promo', limiter(20, 1))
   app.use('/api/feedback', limiter(5, 15)) // spam olmasın
   app.use('/api', limiter(300, 15))
+
+  // Şəxsi məlumatlı cavablar brauzerdə və aralıq keşlərdə saxlanmasın (şəkillər yuxarıda, ayrıca keşlənir)
+  app.use('/api', (req, res, next) => {
+    res.set('Cache-Control', 'no-store')
+    next()
+  })
 
   // Saytdakı qiymət cədvəli və hesablayıcı (admin paneldən dəyişir)
   app.get('/api/pricing', async (req, res) => {
@@ -72,8 +90,9 @@ export function createApp() {
 
   // Rəy və təkliflər — hər kəs yaza bilər; daxil olubsa, kimin yazdığı da saxlanır
   app.post('/api/feedback', optionalAuth, async (req, res) => {
-    const data = feedbackSchema.parse(req.body)
-    await prisma.feedback.create({ data: { ...data, userId: req.user?.id ?? null } })
+    const { website, ...data } = feedbackSchema.parse(req.body)
+    // Gizli "website" sahəsini yalnız botlar doldurur — uğurlu kimi cavab veririk, amma saxlamırıq
+    if (!website) await prisma.feedback.create({ data: { ...data, userId: req.user?.id ?? null } })
     res.status(201).json({ ok: true })
   })
 

@@ -21,12 +21,14 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { api, assetUrl } from '../lib/api.js'
 import { formatPhone, phoneDigits, isPhone, MIN_PASSWORD, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo } from '../lib/seo.js'
 
 const MAX_UPLOAD = 10 * 1024 * 1024
 
 export default function Account() {
   const { t } = useI18n()
   const { user, checking, logout } = useAuth()
+  useSeo({ title: t('seo.account.title'), noindex: true })
 
   if (checking) {
     return (
@@ -310,7 +312,7 @@ function NewsletterCard() {
 function PasswordCard() {
   const i18n = useI18n()
   const { t, errorText } = i18n
-  const { token } = useAuth()
+  const { token, replaceToken } = useAuth()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ currentPassword: '', newPassword: '' })
   const [errors, setErrors] = useState({})
@@ -335,7 +337,9 @@ function PasswordCard() {
 
     setSaving(true)
     try {
-      await api('/auth/me/password', { method: 'POST', body: form, token })
+      // Digər cihazlardakı sessiyalar bağlanır; bu cihaz yeni tokenlə daxil olmuş qalır
+      const { token: fresh } = await api('/auth/me/password', { method: 'POST', body: form, token })
+      replaceToken(fresh)
       setForm({ currentPassword: '', newPassword: '' })
       setDone(true)
       setOpen(false)

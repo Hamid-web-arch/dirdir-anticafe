@@ -1,6 +1,14 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
-import { hashPassword, verifyPassword, signToken, publicUser, requireAuth } from '../auth.js'
+import {
+  hashPassword,
+  verifyPassword,
+  burnPasswordCheck,
+  signToken,
+  passwordChangeMoment,
+  publicUser,
+  requireAuth,
+} from '../auth.js'
 import { HttpError } from '../middleware/error.js'
 import { registerSchema, loginSchema, profileUpdateSchema, passwordChangeSchema } from '../validation.js'
 import { processImage, rawImage } from '../images.js'
@@ -46,7 +54,8 @@ authRouter.post('/login', async (req, res) => {
   // login — { email } və ya { phone }; boş telefon heç kimə uyğun gəlmir
   const user = login.email || login.phone ? await prisma.user.findUnique({ where: login }) : null
 
-  // Hesabın olub-olmamasını bildirmirik — hər iki halda eyni cavab.
+  // Hesabın olub-olmamasını bildirmirik — hər iki halda eyni cavab və eyni vaxt.
+  if (!user) await burnPasswordCheck(password)
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email/telefon və ya şifrə yanlışdır.')
   }
@@ -76,8 +85,12 @@ authRouter.post('/me/password', requireAuth, async (req, res) => {
       fieldCodes: { currentPassword: 'WRONG_PASSWORD' },
     })
   }
-  await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: await hashPassword(newPassword) } })
-  res.status(204).end()
+  // Digər cihazlardakı sessiyalar bağlanır; bu cihaz yeni token alır və daxil olmuş qalır.
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { passwordHash: await hashPassword(newPassword), passwordChangedAt: passwordChangeMoment() },
+  })
+  res.json({ token: signToken(user) })
 })
 
 // Şəkil faylın özü göndərilir (Content-Type: image/*), JSON yox.

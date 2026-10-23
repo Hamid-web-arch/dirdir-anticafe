@@ -177,10 +177,36 @@ describe('profil', () => {
     assert.equal(wrong.status, 400)
     assert.deepEqual(wrong.body.error.fieldCodes, { currentPassword: 'WRONG_PASSWORD' })
 
+    // Başqa cihazdakı sessiya: şifrə dəyişməzdən əvvəl daxil olub
+    await new Promise((r) => setTimeout(r, 1100)) // tokenlərin "iat" vaxtı saniyə ilədir
     const ok = await api.post('/api/auth/me/password').set(bearer(token)).send({ currentPassword: aysel.password, newPassword: 'yeni-sifre-1' })
-    assert.equal(ok.status, 204)
+    assert.equal(ok.status, 200)
+    assert.ok(ok.body.token)
     assert.equal((await api.post('/api/auth/login').send({ email: aysel.email, password: aysel.password })).status, 401)
     assert.equal((await api.post('/api/auth/login').send({ email: aysel.email, password: 'yeni-sifre-1' })).status, 200)
+
+    // Köhnə token (o cümlədən başqa cihazlardakı) artıq işləmir, yeni token işləyir
+    const old = await api.get('/api/auth/me').set(bearer(token))
+    assert.equal(old.status, 401)
+    assert.equal(old.body.error.code, 'SESSION_EXPIRED')
+    assert.equal((await api.get('/api/auth/me').set(bearer(ok.body.token))).status, 200)
+  })
+
+  it('saxta tokenlər: "alg: none" və başqa açarla imzalanmış token qəbul olunmur', async () => {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+    const user = await ctx.prisma.user.findFirst()
+    const none = `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: user.id, role: 'ADMIN', iat: Math.floor(Date.now() / 1000) })}.`
+    assert.equal((await api.get('/api/auth/me').set(bearer(none))).status, 401)
+    const jwt = (await import('jsonwebtoken')).default
+    const forged = jwt.sign({ sub: user.id, role: 'ADMIN' }, 'başqa-açar-başqa-açar-başqa-açar-123456')
+    assert.equal((await api.get('/api/admin/users').set(bearer(forged))).status, 401)
+  })
+
+  it('SVG və başqa qeyri-foto fayllar rədd olunur', async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>')
+    const res = await api.put('/api/auth/me/avatar').set(bearer(token)).set('Content-Type', 'image/svg+xml').send(svg)
+    assert.equal(res.status, 400)
+    assert.equal(res.body.error.code, 'IMAGE_INVALID')
   })
 
   it('profil şəkli: 256×256 WebP-yə çevrilir, əvəz olunanda köhnəsi silinir, silinə bilir', async () => {
@@ -443,6 +469,10 @@ describe('slider', () => {
   it('link yoxlanır: "/" və ya https', async () => {
     assert.equal((await createSlide('X', { link: 'javascript:alert(1)' })).status, 400)
     assert.equal((await createSlide('X', { link: 'http://insecure.az' })).status, 400)
+    // Saytın öz yolu kimi görünən, amma başqa sayta aparan linklər
+    assert.equal((await createSlide('X', { link: '//evil.example' })).status, 400)
+    assert.equal((await createSlide('X', { link: '/\\evil.example' })).status, 400)
+    assert.equal((await createSlide('X', { link: '/arena' })).status, 201)
     assert.equal((await createSlide('X', { link: 'https://instagram.com/dirdiranticafe' })).status, 201)
   })
 
@@ -830,6 +860,12 @@ describe('slayd: ətraflı səhifə', () => {
 })
 
 describe('rəy və təkliflər', () => {
+  it('bot tələsi: gizli sahəni dolduran mesaj saxlanmır, amma bot bunu bilmir', async () => {
+    const bot = await api.post('/api/feedback').send({ message: 'Ucuz kredit! Buraya bas...', website: 'https://spam.example' })
+    assert.equal(bot.status, 201)
+    assert.equal(await ctx.prisma.feedback.count(), 0)
+  })
+
   it('hər kəs yaza bilər; admin görür, oxundu edir, silir', async () => {
     const anon = await api.post('/api/feedback').send({ name: 'Leyla', message: 'Daha çox stolüstü oyun olsun!' })
     assert.equal(anon.status, 201)

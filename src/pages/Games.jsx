@@ -5,6 +5,7 @@ import Reveal from '../components/Reveal.jsx'
 import DetailPage, { useApiItem, DetailImage, RichText } from '../components/DetailPage.jsx'
 import { api, apiEnabled, assetUrl } from '../lib/api.js'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo, pageTitle, excerpt } from '../lib/seo.js'
 
 // Oyunun qısa məlumatı: neçə nəfər, nə qədər vaxt, yaş həddi
 function GameFacts({ game, large }) {
@@ -39,6 +40,7 @@ function GameFacts({ game, large }) {
 export default function Games() {
   const { t, pick } = useI18n()
   const [games, setGames] = useState(null)
+  useSeo({ title: t('seo.games.title'), description: t('seo.games.description') })
 
   useEffect(() => {
     if (!apiEnabled) return setGames([])
@@ -109,6 +111,16 @@ export function GameDetails() {
   const { id } = useParams()
   const { t, pick } = useI18n()
   const state = useApiItem(`/games/${id}`, (res) => res.game)
+  const game = state.data
+  useSeo(
+    state.failed
+      ? { title: t('seo.notFound.title'), noindex: true }
+      : {
+          title: game && pageTitle(pick(game.title)),
+          description: game && excerpt(pick(game.summary) || pick(game.howTo)),
+          image: game?.imageUrl && assetUrl(game.imageUrl),
+        },
+  )
 
   return (
     <DetailPage

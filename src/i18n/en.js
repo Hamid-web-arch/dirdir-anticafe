@@ -1,7 +1,29 @@
 // English. Keys mirror az.js.
 export default {
   langName: 'English',
-  pageTitle: 'DırDır Anticafe — first hour {price}, unlimited tea, coffee and games',
+  seo: {
+    home: {
+      title: 'DırDır Anticafe Baku — anticafe, first hour {price}',
+      description:
+        'DırDır Anticafe near Sahil metro in Baku: first hour {price}, unlimited tea, coffee and sweets, board games and a private cinema room. Daily 11:00–23:00.',
+    },
+    games: {
+      title: 'Board games — DırDır Anticafe',
+      description: 'Board games at DırDır Anticafe: player count, play time and how to play. All games are included in the hourly price.',
+    },
+    arena: {
+      title: 'Competitions and leaderboard — DırDır Anticafe',
+      description: 'DırDır Anticafe Arena: join competitions with your team, earn points and climb the weekly and monthly leaderboard.',
+    },
+    sponsors: {
+      title: 'Sponsors — DırDır Anticafe',
+      description: 'Partners of DırDır Anticafe. Want to sponsor our competitions? Message us on WhatsApp.',
+    },
+    login: { title: 'Log in — DırDır Anticafe' },
+    register: { title: 'Sign up — DırDır Anticafe' },
+    account: { title: 'My account — DırDır Anticafe' },
+    notFound: { title: 'Page not found — DırDır Anticafe' },
+  },
 
   units: {
     hours: { one: '{count} hour', other: '{count} hours' },
@@ -11,7 +33,11 @@ export default {
     spotsLeft: { one: '{count} spot left', other: '{count} spots left' },
   },
 
+  footer: { nav: 'Pages', hours: 'Daily', rights: 'All rights reserved.' },
+
   nav: {
+    main: 'Main menu',
+    skip: 'Skip to content',
     darkMode: 'Dark mode',
     highlights: "What's here?",
     pricing: 'Prices',

@@ -23,6 +23,7 @@ import { api, apiEnabled } from '../lib/api.js'
 import { fieldMessage } from '../lib/forms.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo } from '../lib/seo.js'
 
 // Pyedestal üslubu yerə görə (1-ci ortada və hündür)
 const MEDALS = [
@@ -43,6 +44,7 @@ export default function Arena() {
   const [list, setList] = useState(null) // null = yüklənir
   const [failed, setFailed] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
+  useSeo({ title: t('seo.arena.title'), description: t('seo.arena.description') })
 
   const loadList = useCallback(() => {
     if (!apiEnabled) return setList([])

@@ -25,6 +25,7 @@ model User {
   email        String   @unique // həmişə kiçik hərflə saxlanır
   phone        String   @unique // 9 rəqəm, +994-süz (məs. 501234567)
   passwordHash String
+  passwordChangedAt DateTime? // bu andan əvvəl verilmiş tokenlər etibarsızdır (şifrə dəyişəndə)
   role         Role     @default(USER)
   blockedAt    DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
   newsletter   Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)

@@ -8,8 +8,25 @@ import { imageUrl } from './images.js'
 export const hashPassword = (password) => bcrypt.hash(password, config.BCRYPT_ROUNDS)
 export const verifyPassword = (password, hash) => bcrypt.compare(password, hash)
 
+// Hesab tapılmayanda da eyni vaxt sərf edək ki, cavabın sürətindən "bu email var/yox" bilinməsin.
+let dummyHash
+export async function burnPasswordCheck(password) {
+  dummyHash ??= await bcrypt.hash('dirdir-timing-guard', config.BCRYPT_ROUNDS)
+  await bcrypt.compare(password, dummyHash)
+}
+
+// Alqoritm açıq yazılır: yoxlamada da yalnız HS256 qəbul olunur (başqa alqoritmli saxta token keçməsin).
+const JWT_ALGORITHM = 'HS256'
+
 export const signToken = (user) =>
-  jwt.sign({ sub: user.id, role: user.role }, config.JWT_SECRET, { expiresIn: config.JWT_EXPIRES_IN })
+  jwt.sign({ sub: user.id, role: user.role }, config.JWT_SECRET, {
+    algorithm: JWT_ALGORITHM,
+    expiresIn: config.JWT_EXPIRES_IN,
+  })
+
+// Şifrə dəyişmə anı — saniyəyə yuvarlaqlaşdırılır, çünki tokenin "iat" vaxtı da saniyə ilədir:
+// bu andan əvvəl verilmiş bütün tokenlər (başqa cihazlardakı sessiyalar) etibarsız olur.
+export const passwordChangeMoment = () => new Date(Math.floor(Date.now() / 1000) * 1000)
 
 // Klientə qaytarılan istifadəçi — şifrə hash-i heç vaxt çıxmır.
 export const publicUser = (u) => ({
@@ -34,12 +51,17 @@ async function userFromRequest(req) {
 
   let payload
   try {
-    payload = jwt.verify(token, config.JWT_SECRET)
+    payload = jwt.verify(token, config.JWT_SECRET, { algorithms: [JWT_ALGORITHM] })
   } catch {
     throw new HttpError(401, 'SESSION_EXPIRED', 'Sessiyanın vaxtı bitib, yenidən daxil ol.')
   }
+  if (typeof payload.sub !== 'string') throw new HttpError(401, 'SESSION_EXPIRED', 'Sessiyanın vaxtı bitib, yenidən daxil ol.')
   const user = await prisma.user.findUnique({ where: { id: payload.sub } })
   if (!user) throw new HttpError(401, 'SESSION_EXPIRED', 'Hesab tapılmadı.')
+  // Şifrə dəyişəndən əvvəlki tokenlər işləmir
+  if (user.passwordChangedAt && payload.iat * 1000 < user.passwordChangedAt.getTime()) {
+    throw new HttpError(401, 'SESSION_EXPIRED', 'Şifrə dəyişdirilib, yenidən daxil ol.')
+  }
   // Bloklanmış hesabın köhnə tokeni də dərhal işləməz olur.
   if (user.blockedAt) throw new HttpError(401, 'ACCOUNT_BLOCKED', 'Hesabın bloklanıb. Ətraflı məlumat üçün bizə yaz.')
   return user

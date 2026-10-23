@@ -1,7 +1,29 @@
 // Русский. Ключи совпадают с az.js. Формы множественного числа: one / few / many / other.
 export default {
   langName: 'Русский',
-  pageTitle: 'DırDır Anticafe — первый час {price}, безлимитные чай, кофе и игры',
+  seo: {
+    home: {
+      title: 'DırDır Anticafe Баку — антикафе, первый час {price}',
+      description:
+        'Антикафе DırDır у метро Сахил: первый час {price}, безлимитные чай, кофе и сладости, настольные игры и кинозал. Ежедневно 11:00–23:00.',
+    },
+    games: {
+      title: 'Настольные игры — DırDır Anticafe',
+      description: 'Настольные игры в DırDır Anticafe: сколько игроков, сколько длится и как играть. Все игры входят в почасовую оплату.',
+    },
+    arena: {
+      title: 'Турниры и таблица лидеров — DırDır Anticafe',
+      description: 'Арена DırDır Anticafe: участвуй в турнирах командой, набирай очки и поднимайся в недельной и месячной таблице лидеров.',
+    },
+    sponsors: {
+      title: 'Спонсоры — DırDır Anticafe',
+      description: 'Партнёры DırDır Anticafe. Хочешь стать спонсором наших турниров? Напиши нам в WhatsApp.',
+    },
+    login: { title: 'Вход — DırDır Anticafe' },
+    register: { title: 'Регистрация — DırDır Anticafe' },
+    account: { title: 'Мой аккаунт — DırDır Anticafe' },
+    notFound: { title: 'Страница не найдена — DırDır Anticafe' },
+  },
 
   units: {
     hours: { one: '{count} час', few: '{count} часа', many: '{count} часов', other: '{count} часа' },
@@ -16,7 +38,11 @@ export default {
     },
   },
 
+  footer: { nav: 'Страницы', hours: 'Ежедневно', rights: 'Все права защищены.' },
+
   nav: {
+    main: 'Главное меню',
+    skip: 'Перейти к содержимому',
     darkMode: 'Тёмная тема',
     highlights: 'Что у нас есть?',
     pricing: 'Цены',

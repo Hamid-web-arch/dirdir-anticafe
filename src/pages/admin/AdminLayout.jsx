@@ -3,6 +3,7 @@ import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { PiTrophyBold, PiImagesBold, PiUsersThreeBold, PiTicketBold, PiShieldCheckBold, PiLockKeyBold, PiCurrencyCircleDollarBold, PiDiceFiveBold, PiChatCircleTextBold, PiMegaphoneBold, PiPaintBrushBold } from 'react-icons/pi'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { Spinner, useAdminApi } from './ui.jsx'
+import { useSeo } from '../../lib/seo.js'
 
 const TABS = [
   { to: 'yarislar', label: 'Yarışlar', icon: PiTrophyBold },
@@ -20,6 +21,7 @@ const TABS = [
 export default function AdminLayout() {
   const { user, checking } = useAuth()
   const unread = useUnreadFeedback(user?.role === 'ADMIN')
+  useSeo({ title: 'Admin panel — DırDır Anticafe', noindex: true })
 
   if (checking) return <Spinner />
   if (!user) return <Navigate to={`/giris?next=${encodeURIComponent('/admin')}`} replace />

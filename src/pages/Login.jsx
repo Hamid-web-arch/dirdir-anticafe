@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { apiEnabled } from '../lib/api.js'
 import { isEmail, isPhone, phoneDigits, safeNext, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
+import { useSeo } from '../lib/seo.js'
 
 export default function Login() {
   const { user, login } = useAuth()
@@ -14,6 +15,7 @@ export default function Login() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
+  useSeo({ title: t('seo.login.title'), noindex: true })
 
   const [form, setForm] = useState({ login: '', password: '' })
   const [errors, setErrors] = useState({})
