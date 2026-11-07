@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { HttpError } from '../middleware/error.js'
+import { requirePermission } from '../permissions.js'
 import { processImage, rawImage } from '../images.js'
 import { publicGame } from './games.js'
 import { getSiteImages, siteImageSettingKey } from '../site.js'
@@ -18,6 +19,11 @@ import {
 // Admin paneldəki məzmun: oyunlar, rəylər, saytın şəkilləri, xəbər göndərmək.
 export const adminContentRouter = Router()
 adminContentRouter.use(requireAuth, requireAdmin)
+// Bölmə icazələri (server/src/permissions.js)
+adminContentRouter.use('/games', requirePermission('oyunlar'))
+adminContentRouter.use('/feedback', requirePermission('reyler'))
+adminContentRouter.use('/site-images', requirePermission('gorunus'))
+adminContentRouter.use('/broadcasts', requirePermission('xeberler'))
 
 // ---------- Oyunlar ----------
 

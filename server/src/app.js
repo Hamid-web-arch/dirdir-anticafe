@@ -17,6 +17,7 @@ import { optionalAuth } from './auth.js'
 import { feedbackSchema } from './validation.js'
 import { adminRouter } from './routes/admin.js'
 import { adminVisitsRouter } from './routes/admin-visits.js'
+import { adminAdminsRouter } from './routes/admin-admins.js'
 import { errorHandler, notFound } from './middleware/error.js'
 
 const limiter = (limit, windowMinutes, options = {}) =>
@@ -105,6 +106,7 @@ export function createApp() {
   app.use('/api/admin', adminRouter)
   app.use('/api/admin', adminContentRouter)
   app.use('/api/admin', adminVisitsRouter)
+  app.use('/api/admin', adminAdminsRouter)
 
   app.use(notFound)
   app.use(errorHandler)

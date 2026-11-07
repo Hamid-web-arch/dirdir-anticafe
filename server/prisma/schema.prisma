@@ -27,6 +27,8 @@ model User {
   passwordHash      String
   passwordChangedAt DateTime? // bu andan əvvəl verilmiş tokenlər etibarsızdır (şifrə dəyişəndə)
   role              Role      @default(USER)
+  isSuperAdmin      Boolean   @default(false) // baş admin: bütün bölmələr + digər adminləri idarə edir
+  permissions       String[]  @default([]) // adi admin: açıq bölmələr (server/src/permissions.js)
   blockedAt         DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
   newsletter        Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)
   avatarId          String?   @unique

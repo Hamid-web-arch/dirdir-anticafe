@@ -32,6 +32,7 @@ async function createAdmin() {
       email: 'admin@dirdir.az',
       phone: '559999999',
       role: 'ADMIN',
+      isSuperAdmin: true, // baş admin — bütün bölmələr
       passwordHash: await ctx.hashPassword('admin-password'),
     },
   })
@@ -629,7 +630,7 @@ describe('admin: istifadəçiləri idarə etmək', () => {
     assert.equal((await api.delete('/api/admin/users/yoxdur').set(bearer(adminToken))).status, 404)
   })
 
-  it('admin yeni hesab açır (istifadəçi və ya admin); təkrar email/telefon rədd olunur', async () => {
+  it('İstifadəçilər bölməsindən yalnız adi hesab açılır (rol göndərilsə də); təkrar email/telefon rədd olunur', async () => {
     const created = await api.post('/api/admin/users').set(bearer(adminToken)).send({
       firstName: 'Nərmin',
       lastName: 'Əliyeva',
@@ -639,63 +640,146 @@ describe('admin: istifadəçiləri idarə etmək', () => {
       role: 'ADMIN',
     })
     assert.equal(created.status, 201)
-    assert.equal(created.body.user.role, 'ADMIN')
+    assert.equal(created.body.user.role, 'USER')
     assert.equal(created.body.user.email, 'narmin@dirdir.az')
     assert.equal(created.body.user.passwordHash, undefined)
 
-    // Yeni admin daxil olub paneldən istifadə edə bilir
     const login = await api.post('/api/auth/login').send({ email: 'narmin@dirdir.az', password: 'isci-sifre-2026' })
-    assert.equal((await api.get('/api/admin/users').set(bearer(login.body.token))).status, 200)
-
-    const plain = await api.post('/api/admin/users').set(bearer(adminToken)).send({
-      firstName: 'Kamran',
-      lastName: 'Həsənov',
-      email: 'kamran@mail.com',
-      phone: '+994 77 111 22 33',
-      password: 'kamran-2026',
-    })
-    assert.equal(plain.body.user.role, 'USER')
+    assert.equal((await api.get('/api/admin/users').set(bearer(login.body.token))).status, 403)
 
     const dup = await api.post('/api/admin/users').set(bearer(adminToken)).send({
       firstName: 'X',
       lastName: 'Y',
-      email: 'kamran@mail.com',
-      phone: '+994 77 111 22 33',
+      email: 'narmin@dirdir.az',
+      phone: '070 555 44 33',
       password: 'whatever-123',
     })
     assert.equal(dup.status, 409)
     assert.deepEqual(dup.body.error.fieldCodes, { email: 'EMAIL_TAKEN', phone: 'PHONE_TAKEN' })
 
-    const bad = await api.post('/api/admin/users').set(bearer(adminToken)).send({ email: 'yox', role: 'BOSS' })
+    const bad = await api.post('/api/admin/users').set(bearer(adminToken)).send({ email: 'yox' })
     assert.equal(bad.status, 400)
-    assert.ok(bad.body.error.fields.firstName && bad.body.error.fields.password && bad.body.error.fields.role)
+    assert.ok(bad.body.error.fields.firstName && bad.body.error.fields.password)
   })
 
-  it('admin etmək / adminlikdən çıxarmaq; öz rolunu dəyişmək olmur; admini əvvəl çıxarmadan silmək olmur', async () => {
+  it('İstifadəçilər bölməsindən admin hesabına toxunmaq olmur; rol dəyişmir', async () => {
     const target = users[0]
     const patch = (id, body) => api.patch(`/api/admin/users/${id}`).set(bearer(adminToken)).send(body)
-
-    // Bloklu istifadəçi admin olanda blok açılır
-    await patch(target.user.id, { blocked: true })
-    const promoted = await patch(target.user.id, { role: 'ADMIN' })
-    assert.equal(promoted.body.user.role, 'ADMIN')
-    assert.equal(promoted.body.user.blocked, false)
-    assert.equal((await api.get('/api/admin/users').set(bearer(target.token))).status, 200)
+    await ctx.prisma.user.update({ where: { id: target.user.id }, data: { role: 'ADMIN' } })
 
     assert.equal((await patch(target.user.id, { blocked: true })).body.error.code, 'CANNOT_MODIFY_ADMIN')
     assert.equal((await api.delete(`/api/admin/users/${target.user.id}`).set(bearer(adminToken))).body.error.code, 'CANNOT_MODIFY_ADMIN')
-
-    // Admin öz rolunu dəyişə bilməz
-    const self = await api.patch(`/api/admin/users/${target.user.id}`).set(bearer(target.token)).send({ role: 'USER' })
-    assert.equal(self.body.error.code, 'CANNOT_MODIFY_SELF')
-
-    const demoted = await patch(target.user.id, { role: 'USER' })
-    assert.equal(demoted.body.user.role, 'USER')
-    // Köhnə tokenlə panel dərhal bağlanır
-    assert.equal((await api.get('/api/admin/users').set(bearer(target.token))).status, 403)
-    assert.equal((await api.delete(`/api/admin/users/${target.user.id}`).set(bearer(adminToken))).status, 204)
-
+    // "role" sahəsi artıq qəbul olunmur — yalnız blok
+    assert.equal((await patch(users[1].user.id, { role: 'ADMIN' })).status, 400)
     assert.equal((await patch(users[1].user.id, {})).status, 400)
+  })
+})
+
+describe('adminlər və icazələr', () => {
+  let superToken
+  const newAdmin = (overrides = {}) => ({
+    firstName: 'Leyla',
+    lastName: 'Kərimova',
+    email: 'leyla@dirdir.az',
+    phone: '+994 55 444 33 22',
+    password: 'leyla-2026-sifre',
+    permissions: ['hesabat', 'qiymetler'],
+    ...overrides,
+  })
+  const loginAs = async (email, password) => (await api.post('/api/auth/login').send({ email, password })).body.token
+
+  beforeEach(async () => {
+    superToken = await createAdmin()
+  })
+
+  it('baş admin admin yaradır; admin yalnız icazəli bölmələrə girir', async () => {
+    const created = await api.post('/api/admin/admins').set(bearer(superToken)).send(newAdmin())
+    assert.equal(created.status, 201)
+    assert.equal(created.body.admin.role, 'ADMIN')
+    assert.equal(created.body.admin.isSuperAdmin, false)
+    assert.deepEqual(created.body.admin.permissions, ['hesabat', 'qiymetler'])
+
+    const token = await loginAs('leyla@dirdir.az', 'leyla-2026-sifre')
+    const me = await api.get('/api/auth/me').set(bearer(token))
+    assert.deepEqual(me.body.user.permissions, ['hesabat', 'qiymetler'])
+
+    // İcazəli bölmələr
+    assert.equal((await api.get('/api/admin/visits').set(bearer(token))).status, 200)
+    assert.equal((await api.get('/api/admin/pricing').set(bearer(token))).status, 200)
+    // Günün hesabatında müştəri axtarışı üçün istifadəçi siyahısı açıqdır, amma idarəsi yox
+    assert.equal((await api.get('/api/admin/users?q=a').set(bearer(token))).status, 200)
+    assert.equal((await api.get(`/api/admin/users/${created.body.admin.id}`).set(bearer(token))).status, 403)
+    // İcazəsiz bölmələr
+    for (const path of ['/api/admin/slides', '/api/admin/promo-codes', '/api/admin/games', '/api/admin/feedback', '/api/admin/broadcasts', '/api/admin/site-images', '/api/admin/competitions']) {
+      assert.equal((await api.get(path).set(bearer(token))).status, 403, path)
+    }
+    assert.equal((await api.put('/api/admin/slides/order').set(bearer(token)).send({ ids: [] })).status, 403)
+    // Adminləri yalnız baş admin idarə edir
+    assert.equal((await api.get('/api/admin/admins').set(bearer(token))).status, 403)
+    assert.equal((await api.post('/api/admin/admins').set(bearer(token)).send(newAdmin({ email: 'x@x.az', phone: '501112233' }))).status, 403)
+
+    // Baş admin hər yerə girir
+    assert.equal((await api.get('/api/admin/slides').set(bearer(superToken))).status, 200)
+    const list = await api.get('/api/admin/admins').set(bearer(superToken))
+    assert.deepEqual(list.body.admins.map((a) => [a.email, a.isSuperAdmin]), [['admin@dirdir.az', true], ['leyla@dirdir.az', false]])
+  })
+
+  it('icazələri dəyişmək, bloklamaq, şifrəni yeniləmək; baş adminə toxunmaq olmur', async () => {
+    const { body } = await api.post('/api/admin/admins').set(bearer(superToken)).send(newAdmin())
+    const id = body.admin.id
+    const token = await loginAs('leyla@dirdir.az', 'leyla-2026-sifre')
+
+    const changed = await api.patch(`/api/admin/admins/${id}`).set(bearer(superToken)).send({ permissions: ['slider', 'slider'] })
+    assert.deepEqual(changed.body.admin.permissions, ['slider'])
+    // İcazə dərhal tətbiq olunur (hər sorğuda bazadan oxunur)
+    assert.equal((await api.get('/api/admin/visits').set(bearer(token))).status, 403)
+    assert.equal((await api.get('/api/admin/slides').set(bearer(token))).status, 200)
+
+    const bad = await api.patch(`/api/admin/admins/${id}`).set(bearer(superToken)).send({ permissions: ['adminler'] })
+    assert.equal(bad.status, 400)
+
+    // Yeni şifrə — köhnə sessiya bağlanır
+    await new Promise((r) => setTimeout(r, 1100)) // tokenlərin "iat" vaxtı saniyə ilədir
+    await api.patch(`/api/admin/admins/${id}`).set(bearer(superToken)).send({ password: 'yeni-sifre-2026' })
+    assert.equal((await api.get('/api/auth/me').set(bearer(token))).status, 401)
+    const token2 = await loginAs('leyla@dirdir.az', 'yeni-sifre-2026')
+    assert.ok(token2)
+
+    // Blok
+    await api.patch(`/api/admin/admins/${id}`).set(bearer(superToken)).send({ blocked: true })
+    assert.equal((await api.get('/api/admin/slides').set(bearer(token2))).status, 401)
+    const unblocked = await api.patch(`/api/admin/admins/${id}`).set(bearer(superToken)).send({ blocked: false })
+    assert.equal(unblocked.body.admin.blocked, false)
+
+    // Baş adminin özünə buradan toxunmaq olmur
+    const superAdmin = await ctx.prisma.user.findUnique({ where: { email: 'admin@dirdir.az' } })
+    const touchSuper = await api.patch(`/api/admin/admins/${superAdmin.id}`).set(bearer(superToken)).send({ blocked: true })
+    assert.equal(touchSuper.body.error.code, 'CANNOT_MODIFY_SUPER_ADMIN')
+    assert.equal((await api.post(`/api/admin/admins/${superAdmin.id}/demote`).set(bearer(superToken))).status, 400)
+  })
+
+  it('mövcud istifadəçini admin etmək, adminlikdən çıxarmaq və silmək', async () => {
+    const user = (await register()).body
+    const promoted = await api
+      .post('/api/admin/admins/promote')
+      .set(bearer(superToken))
+      .send({ userId: user.user.id, permissions: ['reyler'] })
+    assert.equal(promoted.body.admin.role, 'ADMIN')
+    assert.equal((await api.get('/api/admin/feedback').set(bearer(user.token))).status, 200)
+    assert.equal(
+      (await api.post('/api/admin/admins/promote').set(bearer(superToken)).send({ userId: user.user.id })).body.error.code,
+      'ALREADY_ADMIN',
+    )
+
+    const demoted = await api.post(`/api/admin/admins/${user.user.id}/demote`).set(bearer(superToken))
+    assert.equal(demoted.body.user.role, 'USER')
+    assert.deepEqual(demoted.body.user.permissions, [])
+    assert.equal((await api.get('/api/admin/feedback').set(bearer(user.token))).status, 403)
+
+    // Yenidən admin edib silmək
+    await api.post('/api/admin/admins/promote').set(bearer(superToken)).send({ userId: user.user.id })
+    assert.equal((await api.delete(`/api/admin/admins/${user.user.id}`).set(bearer(superToken))).status, 204)
+    assert.equal(await ctx.prisma.user.count({ where: { id: user.user.id } }), 0)
   })
 })
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
 import FloatingWhatsApp from './components/FloatingWhatsApp.jsx'
@@ -27,6 +27,7 @@ const AdminGames = lazy(() => import('./pages/admin/Games.jsx'))
 const AdminFeedback = lazy(() => import('./pages/admin/Feedback.jsx'))
 const AdminAppearance = lazy(() => import('./pages/admin/Appearance.jsx'))
 const AdminBroadcasts = lazy(() => import('./pages/admin/Broadcasts.jsx'))
+const AdminAdmins = lazy(() => import('./pages/admin/Admins.jsx'))
 const AdminDailyReport = lazy(() => import('./pages/admin/DailyReport.jsx'))
 
 export default function App() {
@@ -57,7 +58,8 @@ export default function App() {
             <Route path="/oyunlar/:id" element={<GameDetails />} />
             <Route path="/neler-var/:id" element={<SlideDetails />} />
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="hesabat" replace />} />
+              {/* /admin — AdminLayout icazəli ilk bölməyə yönləndirir */}
+              <Route index element={null} />
               <Route path="hesabat" element={<AdminDailyReport />} />
               <Route path="yarislar" element={<AdminCompetitions />} />
               <Route path="slider" element={<AdminSlides />} />
@@ -68,6 +70,7 @@ export default function App() {
               <Route path="reyler" element={<AdminFeedback />} />
               <Route path="gorunus" element={<AdminAppearance />} />
               <Route path="xeberler" element={<AdminBroadcasts />} />
+              <Route path="adminler" element={<AdminAdmins />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

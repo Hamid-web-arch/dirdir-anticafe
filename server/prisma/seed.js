@@ -1,6 +1,6 @@
 // Bazanın ilkin məlumatları. Canlıda hər server başlanğıcında işləyir (`npm run start:prod`).
 //
-// 1) Admin: ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_PHONE varsa, hesabı yaradır (və ya mövcud hesabı admin edir).
+// 1) Baş admin: ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_PHONE varsa, hesabı yaradır (və ya mövcud hesabı baş admin edir).
 //    Hesab artıq varsa şifrəsinə toxunulmur — ADMIN_PASSWORD-u sonradan dəyişmək şifrəni dəyişmir.
 //    --if-configured: dəyişənlər yoxdursa admin addımını səssizcə keçir.
 // 2) Slider: standart 5 slaydı yalnız BİR DƏFƏ əlavə edir. Admin sonra hamısını silsə, geri qayıtmır.
@@ -29,16 +29,19 @@ async function seedAdmin() {
     password: ADMIN_PASSWORD,
   })
 
+  // Bu hesab baş admindir: bütün bölmələr + digər adminləri idarə edir
   const existing = await prisma.user.findUnique({ where: { email: data.email } })
   if (existing) {
-    if (existing.role !== 'ADMIN') {
-      await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN' } })
-      console.log(`${data.email} admin edildi.`)
+    if (existing.role !== 'ADMIN' || !existing.isSuperAdmin) {
+      await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN', isSuperAdmin: true } })
+      console.log(`${data.email} baş admin edildi.`)
     }
   } else {
     const { password, ...rest } = data
-    await prisma.user.create({ data: { ...rest, role: 'ADMIN', passwordHash: await hashPassword(password) } })
-    console.log(`Admin yaradıldı: ${data.email}`)
+    await prisma.user.create({
+      data: { ...rest, role: 'ADMIN', isSuperAdmin: true, passwordHash: await hashPassword(password) },
+    })
+    console.log(`Baş admin yaradıldı: ${data.email}`)
   }
 }
 

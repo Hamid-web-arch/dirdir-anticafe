@@ -8,8 +8,6 @@ import {
   PiCaretDownBold,
   PiFunnelBold,
   PiUserPlusBold,
-  PiShieldCheckBold,
-  PiShieldSlashBold,
   PiArrowsClockwiseBold,
 } from 'react-icons/pi'
 import { useAuth } from '../../auth/AuthContext.jsx'
@@ -272,16 +270,9 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
     actions = <p className="text-[0.82rem] text-inkdim">Bu sənin hesabındır — öz rolunu və hesabını buradan dəyişə bilməzsən.</p>
   } else if (isAdmin) {
     actions = (
-      <>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" loading={busy === 'role'} onClick={() => update({ role: 'USER' }, 'role')}>
-            <PiShieldSlashBold size={15} /> Adminlikdən çıxar
-          </Button>
-        </div>
-        <p className="text-[0.78rem] text-inkdim">
-          Admin panelə girə bilir. Bloklamaq və ya silmək üçün əvvəl adminlikdən çıxar.
-        </p>
-      </>
+      <p className="text-[0.82rem] text-inkdim">
+        Bu hesab admindir — onu yalnız baş admin <b>Adminlər</b> bölməsindən idarə edir.
+      </p>
     )
   } else {
     actions = (
@@ -296,16 +287,13 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
               <PiProhibitBold size={15} /> Blokla
             </Button>
           )}
-          <Button size="sm" variant="outline" loading={busy === 'role'} onClick={() => update({ role: 'ADMIN' }, 'role')}>
-            <PiShieldCheckBold size={15} /> Admin et
-          </Button>
           <ConfirmButton onConfirm={remove} question="Hesab və komandaları silinsin?">
             <PiTrashBold size={15} /> Sil
           </ConfirmButton>
         </div>
         <p className="text-[0.78rem] text-inkdim">
           Bloklanan istifadəçi sayta daxil ola bilmir, komandaları lövhədə qalır. Silinəndə hesab və bütün komandaları
-          həmişəlik silinir. Admin edilən istifadəçi admin panelə girə bilir.
+          həmişəlik silinir. Admin etmək üçün baş admin <b>Adminlər</b> bölməsindən istifadə edir.
         </p>
       </>
     )
@@ -393,7 +381,8 @@ function randomPassword(length = 10) {
   return Array.from(bytes, (n) => chars[n % chars.length]).join('')
 }
 
-const EMPTY_USER = { firstName: '', lastName: '', email: '', phone: '', password: '', role: 'USER' }
+// Buradan yalnız adi istifadəçi yaradılır — adminlər "Adminlər" bölməsindən (baş admin)
+const EMPTY_USER = { firstName: '', lastName: '', email: '', phone: '', password: '' }
 
 function NewUserForm({ onCreated, onCancel }) {
   const request = useAdminApi()
@@ -460,13 +449,6 @@ function NewUserForm({ onCreated, onCancel }) {
             </Button>
           </div>
           <p className="text-[0.75rem] text-inkdim mt-1">Şifrəni şəxsə özün çatdır — sonra profilindən dəyişə bilər.</p>
-        </div>
-        <div>
-          <Label htmlFor="new-role">Rol</Label>
-          <Select id="new-role" value={form.role} onChange={set('role')}>
-            <option value="USER">İstifadəçi</option>
-            <option value="ADMIN">Admin — admin panelə girə bilir</option>
-          </Select>
         </div>
       </div>
       <ErrorBox error={error} />

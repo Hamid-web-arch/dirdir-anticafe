@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, publicUser, hashPassword } from '../auth.js'
 import { assertUnique } from './auth.js'
+import { requirePermission } from '../permissions.js'
 import { HttpError } from '../middleware/error.js'
 import { processImage, rawImage, imageUrl } from '../images.js'
 import { TEAM_ORDER } from './competitions.js'
@@ -23,6 +24,19 @@ import {
 
 export const adminRouter = Router()
 adminRouter.use(requireAuth, requireAdmin)
+
+// Bölmə icazələri (server/src/permissions.js). Baş admin hamısına icazəlidir.
+// Siyahını oxumaq bəzən başqa bölməyə də lazımdır: istifadəçi axtarışı — Günün hesabatı və Xəbər göndər,
+// yarışlar siyahısı — İstifadəçilər bölməsinin filtri.
+const listOr = (listKeys, otherKeys) => (req, res, next) =>
+  (req.method === 'GET' && req.path === '/' ? requirePermission(...listKeys) : requirePermission(...otherKeys))(req, res, next)
+adminRouter.use('/users', listOr(['istifadeciler', 'hesabat', 'xeberler'], ['istifadeciler']))
+adminRouter.use('/competitions', listOr(['yarislar', 'istifadeciler'], ['yarislar']))
+adminRouter.use('/teams', requirePermission('yarislar'))
+adminRouter.use('/pricing', requirePermission('qiymetler'))
+adminRouter.use('/images', requirePermission('slider', 'oyunlar'))
+adminRouter.use('/slides', requirePermission('slider'))
+adminRouter.use('/promo-codes', requirePermission('promokodlar'))
 
 // ---------- İstifadəçilər ----------
 
@@ -98,21 +112,20 @@ adminRouter.get('/users/:id', async (req, res) => {
   })
 })
 
-// Yeni hesab: admin işçi üçün hesab aça bilər (rol: USER və ya ADMIN).
+// Yeni hesab — adi istifadəçi. Admin hesabları "Adminlər" bölməsindən (baş admin) yaradılır.
 adminRouter.post('/users', async (req, res) => {
   const data = userAdminCreateSchema.parse(req.body)
   await assertUnique(data)
   const { password, ...rest } = data
   const user = await prisma.user.create({
-    data: { ...rest, passwordHash: await hashPassword(password) },
+    data: { ...rest, role: 'USER', passwordHash: await hashPassword(password) },
     include: { _count: { select: { teams: true } } },
   })
   res.status(201).json({ user: adminUser(user) })
 })
 
-// Qaydalar (panelə giriş itməsin deyə):
-// - admin öz rolunu dəyişə, özünü bloklaya və silə bilməz — deməli ən azı bir admin həmişə qalır;
-// - başqa admini bloklamaq/silmək üçün əvvəl adminlikdən çıxarmaq lazımdır.
+// Burada yalnız adi istifadəçilər bloklanır/silinir. Admin hesabları (öz hesabın da) yalnız
+// "Adminlər" bölməsindən — baş admin tərəfindən — idarə olunur.
 async function findOtherUser(id, me) {
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) throw new HttpError(404, 'NOT_FOUND', 'İstifadəçi tapılmadı.')
@@ -122,21 +135,17 @@ async function findOtherUser(id, me) {
 
 const assertNotAdmin = (role) => {
   if (role === 'ADMIN') {
-    throw new HttpError(400, 'CANNOT_MODIFY_ADMIN', 'Admini bloklamaq və ya silmək olmaz — əvvəl adminlikdən çıxar.')
+    throw new HttpError(400, 'CANNOT_MODIFY_ADMIN', 'Adminlər "Adminlər" bölməsindən idarə olunur.')
   }
 }
 
 adminRouter.patch('/users/:id', async (req, res) => {
-  const { blocked, role } = userAdminUpdateSchema.parse(req.body)
+  const { blocked } = userAdminUpdateSchema.parse(req.body)
   const current = await findOtherUser(req.params.id, req.user)
-  const nextRole = role ?? current.role
-  if (blocked) assertNotAdmin(nextRole)
+  assertNotAdmin(current.role)
 
-  const data = {}
-  if (role) data.role = role
-  // Admin bloklu ola bilməz; təkrar bloklananda ilk blok tarixi saxlanır
-  if (nextRole === 'ADMIN') data.blockedAt = null
-  else if (blocked !== undefined) data.blockedAt = blocked ? (current.blockedAt ?? new Date()) : null
+  // Təkrar bloklananda ilk blok tarixi saxlanır
+  const data = { blockedAt: blocked ? (current.blockedAt ?? new Date()) : null }
 
   const user = await prisma.user.update({
     where: { id: current.id },

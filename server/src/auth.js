@@ -36,6 +36,9 @@ export const publicUser = (u) => ({
   email: u.email,
   phone: u.phone,
   role: u.role,
+  // Admin paneldə hansı bölmələrin görünəcəyi üçün (adi istifadəçidə həmişə false / [])
+  isSuperAdmin: u.role === 'ADMIN' && Boolean(u.isSuperAdmin),
+  permissions: u.role === 'ADMIN' ? (u.permissions ?? []) : [],
   blocked: Boolean(u.blockedAt),
   newsletter: u.newsletter,
   avatarUrl: imageUrl(u.avatarId),

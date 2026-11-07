@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { HttpError } from '../middleware/error.js'
+import { requirePermission } from '../permissions.js'
 import { getPricing } from '../pricing.js'
 import { bakuDay, visitMinutes, visitPrice, publicVisit } from '../visits.js'
 import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema } from '../validation.js'
@@ -9,7 +10,7 @@ import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSch
 // Günün hesabatı: admin hər gələn müştərinin seansını başladır və bitirir.
 // Qeydlər günlərə (Bakı vaxtı) bölünür və silinmir — tarixçədən istənilən günə baxmaq olur.
 export const adminVisitsRouter = Router()
-adminVisitsRouter.use(requireAuth, requireAdmin)
+adminVisitsRouter.use('/visits', requireAuth, requireAdmin, requirePermission('hesabat'))
 
 const withUser = { user: { select: { id: true, firstName: true, lastName: true, phone: true } } }
 

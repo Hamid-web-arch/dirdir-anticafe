@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMIN_PERMISSIONS } from './permissions.js'
 
 // Qaydalar frontend-dəki formalarla eynidir (src/pages/Register.jsx).
 export const OPERATOR_CODES = ['10', '50', '51', '55', '60', '70', '77', '99']
@@ -226,17 +227,33 @@ export const userListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 
-const ROLES = ['USER', 'ADMIN']
+// İstifadəçilər bölməsindən yeni hesab — həmişə adi istifadəçi (adminlər "Adminlər" bölməsindən yaradılır)
+export const userAdminCreateSchema = registerSchema
 
-// Admin paneldən yeni hesab: qeydiyyat qaydaları + rol
-export const userAdminCreateSchema = registerSchema.extend({
-  role: z.enum(ROLES).default('USER'),
+export const userAdminUpdateSchema = z.object({
+  blocked: z.boolean({ error: 'blocked true/false olmalıdır.' }),
 })
 
-export const userAdminUpdateSchema = z
+// ---------- Adminlər (yalnız baş admin) ----------
+
+const permissionList = z
+  .array(z.enum(ADMIN_PERMISSIONS, { error: 'Belə bölmə yoxdur.' }), { error: 'İcazələr siyahı olmalıdır.' })
+  .max(ADMIN_PERMISSIONS.length)
+  .transform((list) => [...new Set(list)])
+
+export const adminCreateSchema = registerSchema.extend({ permissions: permissionList.default([]) })
+
+// Mövcud istifadəçini admin etmək
+export const adminPromoteSchema = z.object({
+  userId: z.string({ error: 'İstifadəçini seç.' }).trim().min(1).max(40),
+  permissions: permissionList.default([]),
+})
+
+export const adminUpdateSchema = z
   .object({
+    permissions: permissionList,
     blocked: z.boolean({ error: 'blocked true/false olmalıdır.' }),
-    role: z.enum(ROLES, { error: 'Rol USER və ya ADMIN olmalıdır.' }),
+    password, // yeni şifrə (admin unudubsa) — köhnə sessiyaları da bağlayır
   })
   .partial()
   .refine((d) => Object.keys(d).length > 0, 'Dəyişiklik yoxdur.')
