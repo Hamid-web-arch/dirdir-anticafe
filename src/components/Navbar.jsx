@@ -38,7 +38,10 @@ export default function Navbar() {
     { to: '/arena', label: t('nav.arena'), icon: PiTrophyBold },
   ]
   // Daxil olubsa düymə hesaba aparır və adını (və şəklini) göstərir
-  const account = user ? { to: '/hesabim', label: user.firstName } : { to: '/giris', label: t('nav.login') }
+  // Admin üçün kabinet yoxdur — düymə birbaşa admin panelə aparır
+  const account = user
+    ? { to: user.role === 'ADMIN' ? '/admin' : '/hesabim', label: user.firstName }
+    : { to: '/giris', label: t('nav.login') }
   const accountIcon = user?.avatarUrl ? (
     <img src={assetUrl(user.avatarUrl)} alt="" className="w-[18px] h-[18px] rounded-full object-cover" />
   ) : (

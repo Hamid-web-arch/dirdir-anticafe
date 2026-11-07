@@ -10,7 +10,6 @@ import {
   PiTrashBold,
   PiPencilSimpleBold,
   PiLockKeyBold,
-  PiShieldCheckBold,
   PiCheckCircleFill,
   PiBellRingingBold,
   PiCoffeeBold,
@@ -41,6 +40,8 @@ export default function Account() {
     )
   }
   if (!user) return <Navigate to="/giris" replace />
+  // Adminin kabineti yoxdur — hər şey admin paneldədir
+  if (user.role === 'ADMIN') return <Navigate to="/admin" replace />
 
   return (
     <section className="relative overflow-hidden py-16 sm:py-24">
@@ -63,14 +64,6 @@ export default function Account() {
         </Reveal>
         <Reveal delay={160}>
           <div className="flex flex-col sm:flex-row gap-3">
-            {user.role === 'ADMIN' && (
-              <Link
-                to="/admin"
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full font-bold text-[0.92rem] bg-ink text-bg hover:bg-primary transition-colors"
-              >
-                <PiShieldCheckBold size={18} /> {t('account.adminPanel')}
-              </Link>
-            )}
             <button
               onClick={logout}
               className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg transition-all"
