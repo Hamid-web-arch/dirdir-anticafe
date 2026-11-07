@@ -1312,3 +1312,49 @@ describe('günün hesabatı (seanslar)', () => {
     assert.equal(res.body.pricing.hall.graceMinutes, 10)
   })
 })
+
+describe('statistika', () => {
+  it('günlük və aylıq: gəlir yalnız bitmiş seanslardan, nağd/kart ayrıca; icazə lazımdır', async () => {
+    const adminToken = await createAdmin()
+    const visit = (day, data) =>
+      ctx.prisma.visit.create({ data: { day, name: 'X', startedAt: new Date(`${day}T10:00:00Z`), ...data } })
+    const ended = (amount, paymentMethod, extra = {}) => ({ endedAt: new Date('2030-01-01'), minutes: 60, amount, paymentMethod, ...extra })
+    await visit('2026-03-05', ended(8, 'cash', { people: 2 }))
+    await visit('2026-03-05', ended(15, 'card', { kind: 'room', people: 2 }))
+    await visit('2026-03-20', ended(4, 'card'))
+    await visit('2026-03-20', { people: 3 }) // davam edir — gəlirə düşmür
+    await visit('2026-04-01', ended(10, 'cash'))
+
+    const daily = await api.get('/api/admin/stats?view=daily&month=2026-03').set(bearer(adminToken))
+    assert.equal(daily.status, 200)
+    assert.equal(daily.body.buckets.length, 31)
+    const d5 = daily.body.buckets.find((b) => b.key === '2026-03-05')
+    assert.deepEqual([d5.total, d5.cash, d5.card, d5.people, d5.hall, d5.room], [23, 8, 15, 4, 8, 15])
+    assert.deepEqual(daily.body.totals, { people: 8, sessions: 4, total: 27, cash: 8, card: 19, other: 0, hall: 12, room: 15 })
+
+    const monthly = await api.get('/api/admin/stats?view=monthly&year=2026').set(bearer(adminToken))
+    assert.equal(monthly.body.buckets.length, 12)
+    assert.deepEqual(monthly.body.buckets.slice(2, 4).map((b) => b.total), [27, 10])
+    assert.equal(monthly.body.totals.total, 37)
+
+    // İcazəsiz admin
+    await api.post('/api/admin/admins').set(bearer(adminToken)).send({
+      firstName: 'A', lastName: 'B', email: 'a@b.az', phone: '501234560', password: 'parol-2026-x', permissions: ['hesabat'],
+    })
+    const other = (await api.post('/api/auth/login').send({ email: 'a@b.az', password: 'parol-2026-x' })).body.token
+    assert.equal((await api.get('/api/admin/stats').set(bearer(other))).status, 403)
+  })
+})
+
+describe('yükləmə (export)', () => {
+  it('tarix aralığındakı seanslar sıra ilə; səhv aralıq rədd olunur', async () => {
+    const adminToken = await createAdmin()
+    for (const [day, hour] of [['2026-05-02', 12], ['2026-05-01', 15], ['2026-05-01', 10], ['2026-06-01', 10]]) {
+      await ctx.prisma.visit.create({ data: { day, name: `${day} ${hour}`, startedAt: new Date(`${day}T${hour}:00:00Z`) } })
+    }
+    const res = await api.get('/api/admin/stats/export?from=2026-05-01&to=2026-05-31').set(bearer(adminToken))
+    assert.deepEqual(res.body.visits.map((v) => v.name), ['2026-05-01 10', '2026-05-01 15', '2026-05-02 12'])
+    assert.equal((await api.get('/api/admin/stats/export?from=2026-05-31&to=2026-05-01').set(bearer(adminToken))).status, 400)
+    assert.equal((await api.get('/api/admin/stats/export?from=2024-01-01&to=2026-05-01').set(bearer(adminToken))).status, 400)
+  })
+})

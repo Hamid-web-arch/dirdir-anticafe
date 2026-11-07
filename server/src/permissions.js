@@ -5,6 +5,7 @@ import { HttpError } from './middleware/error.js'
 // "Adminlər" bölməsi icazə ilə verilmir — yalnız baş admin (isSuperAdmin) görür.
 export const ADMIN_PERMISSIONS = [
   'hesabat', // Günün hesabatı
+  'statistika', // Statistika (günlük / aylıq qrafiklər)
   'istifadeciler', // İstifadəçilər
   'yarislar', // Yarışlar
   'xeberler', // Xəbər göndər

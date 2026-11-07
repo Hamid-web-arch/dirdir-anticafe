@@ -115,7 +115,7 @@ function Sidebar({ unread, sections }) {
                   key={tab.to}
                   to={tab.to}
                   className={({ isActive }) =>
-                    `flex items-center gap-2.5 px-3 py-2 rounded-xl font-bold text-[0.9rem] transition-colors ${
+                    `flex items-center gap-2.5 px-3 py-[7px] rounded-xl font-bold text-[0.9rem] transition-colors ${
                       isActive ? 'bg-primary text-white shadow-cta' : 'text-inkdim hover:text-ink hover:bg-ink/5'
                     }`
                   }

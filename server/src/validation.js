@@ -342,6 +342,25 @@ export const SITE_IMAGE_KEYS = ['login', 'register']
 
 const dayString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarix YYYY-MM-DD formasında olmalıdır.')
 
+// Statistika: günlük (bir ayın günləri) və ya aylıq (bir ilin ayları)
+export const statsQuerySchema = z.object({
+  view: z.enum(['daily', 'monthly']).catch('daily').default('daily'),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().catch(undefined),
+  year: z.string().regex(/^\d{4}$/).optional().catch(undefined),
+})
+
+// Yükləmə (PDF/Excel): tarix aralığındakı bütün seanslar
+export const exportQuerySchema = z
+  .object({
+    from: z.string({ error: 'Başlanğıc tarixi seç.' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarix YYYY-MM-DD formasında olmalıdır.'),
+    to: z.string({ error: 'Son tarixi seç.' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarix YYYY-MM-DD formasında olmalıdır.'),
+  })
+  .refine((q) => q.from <= q.to, { path: ['to'], message: 'Son tarix başlanğıcdan əvvəl ola bilməz.' })
+  .refine((q) => (Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 <= 366, {
+    path: ['to'],
+    message: 'Ən çox 1 illik aralıq seçmək olar.',
+  })
+
 export const visitListQuerySchema = z.object({
   day: dayString.optional().catch(undefined),
 })

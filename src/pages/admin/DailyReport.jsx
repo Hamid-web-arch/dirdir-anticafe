@@ -1,31 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  PiArmchairBold,
+  PiArrowCounterClockwiseBold,
+  PiCalendarBlankBold,
+  PiCaretDownBold,
   PiCaretLeftBold,
   PiCaretRightBold,
-  PiPlayFill,
-  PiStopFill,
-  PiPencilSimpleBold,
-  PiTrashBold,
-  PiArrowCounterClockwiseBold,
-  PiMagnifyingGlassBold,
-  PiUserCircleCheckBold,
-  PiXBold,
+  PiCheckCircleFill,
   PiClockBold,
-  PiUsersBold,
   PiCoinsBold,
-  PiCalendarBlankBold,
-  PiMoneyBold,
   PiCreditCardBold,
-  PiMinusBold,
-  PiPlusBold,
-  PiArmchairBold,
   PiFilmSlateBold,
+  PiMagnifyingGlassBold,
+  PiMinusBold,
+  PiMoneyBold,
+  PiPencilSimpleBold,
+  PiPlayFill,
+  PiPlusBold,
+  PiStopFill,
   PiStudentBold,
   PiTicketBold,
-  PiCaretDownBold,
-  PiCheckCircleFill,
+  PiTrashBold,
+  PiUserCircleCheckBold,
+  PiUsersBold,
+  PiXBold,
+  PiFilePdfBold,
+  PiFileXlsBold,
 } from 'react-icons/pi'
+import { downloadCsv, openPrintWindow, printReport, dayText } from './exportReport.js'
 import { usePricing } from '../../pricing/PricingContext.jsx'
 import {
   visitPrice,
@@ -122,7 +125,7 @@ export default function AdminDailyReport() {
 
   const visits = data?.visits ?? []
   const active = visits.filter((v) => !v.endedAt)
-  const ended = visits.filter((v) => v.endedAt).reverse() // son bitən yuxarıda
+  const ended = visits.filter((v) => v.endedAt)
   const liveAmount = (v) => visitPrice(pricing, visitMinutes(v.startedAt, now), v).amount
   const roomBusy = active.find((v) => v.kind === 'room')
   const peopleCount = visits.reduce((sum, v) => sum + v.people, 0)
@@ -139,7 +142,36 @@ export default function AdminDailyReport() {
             {data ? (isToday ? `Bu gün, ${dayLabel(data.day)}` : dayLabel(data.day)) : ' '}
           </p>
         </div>
-        <DayPicker day={data?.day ?? requested} today={data?.today} onChange={goTo} />
+        <div className="flex flex-wrap items-center gap-2">
+          <DayPicker day={data?.day ?? requested} today={data?.today} onChange={goTo} />
+          {data && (
+            <span className="inline-flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                title="PDF kimi yüklə"
+                onClick={() =>
+                  printReport(openPrintWindow(), {
+                    title: 'Günün hesabatı',
+                    subtitle: dayText(data.day),
+                    visits: data.visits,
+                    mode: 'day',
+                  })
+                }
+              >
+                <PiFilePdfBold size={16} /> PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                title="Excel faylı kimi yüklə"
+                onClick={() => downloadCsv({ filename: `dirdir-hesabat-${data.day}`, visits: data.visits })}
+              >
+                <PiFileXlsBold size={16} /> Excel
+              </Button>
+            </span>
+          )}
+        </div>
       </header>
 
       <ErrorBox error={error} />
@@ -187,40 +219,15 @@ export default function AdminDailyReport() {
               <History day={data.day} today={data.today} version={daysVersion} onSelect={goTo} />
             </div>
 
-            <div className="flex flex-col gap-5">
-              <section className={card}>
-                <h2 className="flex items-center gap-2 font-display font-bold text-[1.1rem] mb-3">
-                  <span className={`w-2.5 h-2.5 rounded-full ${active.length ? 'bg-brand-teal animate-pulse' : 'bg-ink/20'}`} />
-                  Davam edən seanslar
-                  {active.length > 0 && <span className="text-inkdim font-body text-[0.85rem]">({active.length})</span>}
-                </h2>
-                {active.length === 0 ? (
-                  <SmallEmpty>{isToday ? 'Hazırda içəridə heç kim yoxdur. Soldan yeni müştəri başlat.' : 'Davam edən seans yoxdur.'}</SmallEmpty>
-                ) : (
-                  <ul className={`grid gap-2.5 ${active.length > 1 ? '2xl:grid-cols-2' : ''}`}>
-                    {active.map((v) => (
-                      <VisitRow key={v.id} visit={v} now={now} pricing={pricing} onChange={replace} onDelete={remove} notify={notify} />
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section className={card}>
-                <h2 className="flex items-center gap-2 font-display font-bold text-[1.1rem] mb-2">
-                  Bitmiş seanslar
-                  {ended.length > 0 && <span className="text-inkdim font-body text-[0.85rem]">({ended.length})</span>}
-                </h2>
-                {ended.length === 0 ? (
-                  <SmallEmpty>Hələ bitən seans yoxdur.</SmallEmpty>
-                ) : (
-                  <ul className="flex flex-col divide-y divide-ink/5">
-                    {ended.map((v) => (
-                      <EndedRow key={v.id} visit={v} pricing={pricing} onChange={replace} onDelete={remove} notify={notify} />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
+            <VisitsTable
+              visits={visits}
+              now={now}
+              pricing={pricing}
+              isToday={isToday}
+              onChange={replace}
+              onDelete={remove}
+              notify={notify}
+            />
           </div>
         </>
       )}
@@ -257,17 +264,83 @@ function Toast({ toast }) {
   )
 }
 
-function SmallEmpty({ children }) {
-  return <p className="text-center text-inkdim text-[0.9rem] py-5 border-2 border-dashed border-ink/10 rounded-2xl">{children}</p>
+// Günün seansları — cədvəl (kağız jurnal kimi): giriş saatı sırası ilə, aşağıda cəm sətri.
+// Davam edən seansda "Çıxış" yerində canlı saat, Nağd/Kart yerində canlı məbləğ.
+function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify }) {
+  const th = 'px-3 py-2.5 text-[0.78rem] font-bold whitespace-nowrap border-b-2 border-brand-orange/40'
+  const paid = (method) =>
+    round2(visits.filter((v) => v.endedAt && v.paymentMethod === method).reduce((s, v) => s + v.amount, 0))
+  const unknown = round2(visits.filter((v) => v.endedAt && !PAYMENT[v.paymentMethod]).reduce((s, v) => s + v.amount, 0))
+  const live = round2(
+    visits.filter((v) => !v.endedAt).reduce((s, v) => s + visitPrice(pricing, visitMinutes(v.startedAt, now), v).amount, 0),
+  )
+  const people = visits.reduce((s, v) => s + v.people, 0)
+  const td = 'px-3 py-2.5'
+
+  return (
+    <section className={`${card} !p-0 overflow-hidden`}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[780px] text-[0.9rem] tabular-nums border-collapse">
+          <thead className="bg-brand-orange-soft">
+            <tr>
+              <th className={`${th} text-left`}>Müştəri</th>
+              <th className={`${th} text-right`}>Say</th>
+              <th className={`${th} text-left`}>Yer</th>
+              <th className={`${th} text-left`}>Giriş</th>
+              <th className={`${th} text-left`}>Çıxış</th>
+              <th className={`${th} text-right`}>Nağd</th>
+              <th className={`${th} text-right`}>Kart</th>
+              <th className={th}>
+                <span className="sr-only">Əməliyyatlar</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {visits.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-10 text-center text-inkdim">
+                  {isToday ? 'Hələ müştəri yoxdur. Soldan yeni müştəri başlat.' : 'Bu gün üçün qeyd yoxdur.'}
+                </td>
+              </tr>
+            ) : (
+              visits.map((v) => (
+                <VisitTableRow key={v.id} visit={v} now={now} pricing={pricing} onChange={onChange} onDelete={onDelete} notify={notify} />
+              ))
+            )}
+          </tbody>
+          {visits.length > 0 && (
+            <tfoot>
+              <tr className="font-bold bg-ink/[0.03] border-t-2 border-ink/15">
+                <td className={td}>Cəmi</td>
+                <td className={`${td} text-right`}>{people}</td>
+                <td colSpan={3} className={`${td} text-[0.8rem] font-semibold text-inkdim`}>
+                  {live > 0 && `Davam edənlər hələlik: ${money(live)}`}
+                  {unknown > 0 && `${live > 0 ? ' · ' : ''}Üsulsuz: ${money(unknown)}`}
+                </td>
+                <td className={`${td} text-right`}>{money(paid('cash'))}</td>
+                <td className={`${td} text-right`}>{money(paid('card'))}</td>
+                <td className={td} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </section>
+  )
 }
 
-// Bitmiş seans — yığcam sətir: saat, ad və nişanlar, müddət, ödəniş, məbləğ, düymələr
-function EndedRow({ visit, pricing, onChange, onDelete, notify }) {
+// Cədvəlin bir sətri. "Bitir" basılanda altında ödəniş seçimi, "Düzəlt" basılanda düzəliş forması açılır.
+function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
   const request = useAdminApi()
   const [editing, setEditing] = useState(false)
+  const [ending, setEnding] = useState(false) // "Bitir" basılıb — ödəniş üsulu soruşulur
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const price = visitPrice(pricing, visit.minutes, visit)
+  const isActive = !visit.endedAt
+  const isRoom = visit.kind === 'room'
+  const minutes = isActive ? visitMinutes(visit.startedAt, now) : visit.minutes
+  const price = visitPrice(pricing, minutes, visit)
+  const amount = isActive ? price.amount : visit.amount
 
   const act = async (path, options, message) => {
     setBusy(true)
@@ -276,7 +349,7 @@ function EndedRow({ visit, pricing, onChange, onDelete, notify }) {
       const res = await request(path, options)
       if (res?.visit) onChange(res.visit)
       else onDelete(visit.id)
-      notify(message)
+      notify(typeof message === 'function' ? message(res?.visit) : message)
     } catch (err) {
       setError(err)
     } finally {
@@ -284,8 +357,17 @@ function EndedRow({ visit, pricing, onChange, onDelete, notify }) {
     }
   }
 
+  const td = 'px-3 py-2.5 border-b border-ink/10 align-top'
+  const full = (children, extra = '') => (
+    <tr>
+      <td colSpan={8} className={`px-3 py-3 border-b border-ink/10 ${extra}`}>
+        {children}
+      </td>
+    </tr>
+  )
+
   if (editing) {
-    return (
+    return full(
       <EditVisit
         visit={visit}
         onCancel={() => setEditing(false)}
@@ -294,75 +376,138 @@ function EndedRow({ visit, pricing, onChange, onDelete, notify }) {
           setEditing(false)
           notify('Düzəliş saxlandı')
         }}
-      />
+      />,
+      'bg-card',
     )
   }
 
-  const iconBtn = 'p-2 rounded-lg text-inkdim hover:text-ink hover:bg-ink/5 disabled:opacity-40'
+  // Bitmiş seansın məbləği ödəniş üsulunun sütununda; üsul qeyd olunmayıbsa — Nağd sütununda "?" ilə
+  const paidIn = (method) => {
+    if (visit.paymentMethod === method) return money(visit.amount)
+    if (method === 'cash' && !PAYMENT[visit.paymentMethod]) return <span title="Ödəniş üsulu qeyd olunmayıb">{money(visit.amount)} ?</span>
+    return ''
+  }
+  const iconBtn = 'p-1.5 rounded-lg text-inkdim hover:text-ink hover:bg-ink/5 disabled:opacity-40'
+
   return (
-    <li className="py-2.5">
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1">
-        <span className="w-[92px] shrink-0 text-[0.85rem] text-inkdim tabular-nums">
-          {bakuTime(visit.startedAt)}–{bakuTime(visit.endedAt)}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-bold truncate">{visit.name}</span>
-            <VisitBadges visit={visit} />
+    <>
+      <tr className={isActive ? 'bg-brand-teal-soft/50' : 'hover:bg-ink/[0.02]'}>
+        <td className={td}>
+          <div className="font-bold">{visit.name}</div>
+          <div className="flex flex-wrap gap-1 mt-0.5 empty:hidden">
+            <VisitBadges visit={visit} inTable />
           </div>
-          {(visit.note || price.discount > 0) && (
-            <div className="text-[0.75rem] text-inkdim truncate">
-              {price.discount > 0 && `${price.discountSource === 'promo' ? 'promokod' : 'tələbə endirimi'} −${money(price.discount)}`}
-              {price.discount > 0 && visit.note && ' · '}
-              {visit.note && <i>{visit.note}</i>}
+          {price.discount > 0 && (
+            <div className="text-[0.72rem] text-inkdim mt-0.5">
+              {price.discountSource === 'promo' ? 'promokod' : 'tələbə endirimi'} −{money(price.discount)}
             </div>
           )}
-        </div>
-        <span className="text-[0.82rem] text-inkdim tabular-nums shrink-0">{durationText(visit.minutes)}</span>
-        <span className="w-[62px] shrink-0">
-          <PaymentBadge method={visit.paymentMethod} />
-        </span>
-        <span className="w-[72px] shrink-0 text-right font-display font-bold text-primary tabular-nums">{money(visit.amount)}</span>
-        <span className="flex items-center shrink-0">
-          <button
-            type="button"
-            title="Davam etdir"
-            aria-label="Davam etdir"
-            disabled={busy}
-            onClick={() => act(`/admin/visits/${visit.id}/resume`, { method: 'POST' }, `${visit.name} — seans yenidən davam edir`)}
-            className={iconBtn}
-          >
-            <PiArrowCounterClockwiseBold size={16} />
-          </button>
-          <button type="button" title="Düzəlt" aria-label="Düzəlt" onClick={() => setEditing(true)} className={iconBtn}>
-            <PiPencilSimpleBold size={16} />
-          </button>
-          <ConfirmButton question="Silinsin?" onConfirm={() => act(`/admin/visits/${visit.id}`, { method: 'DELETE' }, 'Seans silindi')}>
-            <PiTrashBold size={16} />
-          </ConfirmButton>
-        </span>
-      </div>
-      {error && (
-        <div className="mt-2">
-          <ErrorBox error={error} />
-        </div>
-      )}
-    </li>
+          {visit.note && <div className="text-[0.75rem] italic text-inkdim mt-0.5">{visit.note}</div>}
+        </td>
+        <td className={`${td} text-right font-semibold`}>{visit.people}</td>
+        <td className={td}>{isRoom ? 'Kino' : 'Zal'}</td>
+        <td className={td}>{bakuTime(visit.startedAt)}</td>
+        <td className={td}>
+          {isActive ? (
+            <span className="inline-flex items-center gap-1.5 font-bold text-brand-teal-deep">
+              <span className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
+              {elapsedClock(visit.startedAt, now)}
+            </span>
+          ) : (
+            <>
+              {bakuTime(visit.endedAt)}
+              <div className="text-[0.72rem] text-inkdim">{durationText(visit.minutes)}</div>
+            </>
+          )}
+        </td>
+        {isActive ? (
+          <td colSpan={2} className={`${td} text-right`}>
+            <div className="font-display font-bold text-primary text-[1.05rem] leading-tight">{money(amount)}</div>
+            <div className="text-[0.7rem] text-inkdim">
+              canlı · {!isRoom && visit.people > 1 ? `${visit.people} × ${money(price.perPerson)} · ` : ''}
+              {price.capped ? 'stop çek' : `${price.billedHours} saat`}
+            </div>
+          </td>
+        ) : (
+          <>
+            <td className={`${td} text-right font-semibold`}>{paidIn('cash')}</td>
+            <td className={`${td} text-right font-semibold`}>{paidIn('card')}</td>
+          </>
+        )}
+        <td className={`${td} text-right whitespace-nowrap`}>
+          <span className="inline-flex items-center gap-0.5">
+            {isActive ? (
+              <Button variant="dark" size="sm" onClick={() => setEnding((v) => !v)} className="mr-1">
+                <PiStopFill size={12} /> Bitir
+              </Button>
+            ) : (
+              <button
+                type="button"
+                title="Davam etdir"
+                aria-label="Davam etdir"
+                disabled={busy}
+                onClick={() => act(`/admin/visits/${visit.id}/resume`, { method: 'POST' }, `${visit.name} — seans yenidən davam edir`)}
+                className={iconBtn}
+              >
+                <PiArrowCounterClockwiseBold size={16} />
+              </button>
+            )}
+            <button type="button" title="Düzəlt" aria-label="Düzəlt" onClick={() => setEditing(true)} className={iconBtn}>
+              <PiPencilSimpleBold size={16} />
+            </button>
+            <ConfirmButton question="Silinsin?" onConfirm={() => act(`/admin/visits/${visit.id}`, { method: 'DELETE' }, 'Seans silindi')}>
+              <PiTrashBold size={16} />
+            </ConfirmButton>
+          </span>
+        </td>
+      </tr>
+      {ending &&
+        full(
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <span className="text-[0.88rem] font-bold mr-1">
+              {visit.name} · ödəniş: <span className="text-primary">{money(amount)}</span>
+            </span>
+            {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
+              <Button
+                key={method}
+                variant="dark"
+                size="sm"
+                loading={busy}
+                onClick={() =>
+                  act(
+                    `/admin/visits/${visit.id}/end`,
+                    { method: 'POST', body: { paymentMethod: method } },
+                    (v) => `${visit.name} — seans bitdi: ${money(v.amount)} · ${label}`,
+                  )
+                }
+              >
+                <Icon size={15} /> {label}
+              </Button>
+            ))}
+            <Button variant="ghost" size="sm" onClick={() => setEnding(false)}>
+              Ləğv et
+            </Button>
+          </div>,
+          'bg-brand-teal-soft/30',
+        )}
+      {error && full(<ErrorBox error={error} />)}
+    </>
   )
 }
 
 // Seansın nişanları: kino otağı, nəfər sayı, tələbə, promokod, qeydiyyatlı
-function VisitBadges({ visit }) {
+// inTable — cədvəldə "Kino otağı" və nəfər sayı öz sütunlarındadır, nişan kimi təkrarlanmır
+function VisitBadges({ visit, inTable }) {
   const isRoom = visit.kind === 'room'
   const badge = 'inline-flex items-center gap-1 text-[0.7rem] font-bold px-2 py-0.5 rounded-full'
   return (
     <>
-      {isRoom && (
+      {isRoom && !inTable && (
         <span className={`${badge} text-brand-orange-deep bg-brand-orange-soft`}>
           <PiFilmSlateBold size={13} /> Kino otağı
         </span>
       )}
-      {visit.people > 1 && (
+      {visit.people > 1 && !inTable && (
         <span className={`${badge} text-brand-purple-deep bg-brand-purple-soft`}>
           <PiUsersBold size={13} /> {visit.people} nəfər
         </span>
@@ -658,157 +803,6 @@ function NewVisit({ onCreated, roomBusy }) {
   )
 }
 
-// Davam edən seans: canlı saat və məbləğ. ("Bitmiş seanslar" yığcam EndedRow ilə göstərilir.)
-function VisitRow({ visit, now, pricing, onChange, onDelete, notify }) {
-  const request = useAdminApi()
-  const [editing, setEditing] = useState(false)
-  const [ending, setEnding] = useState(false) // "Bitir" basılıb — ödəniş üsulu soruşulur
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  const isActive = !visit.endedAt
-
-  const minutes = isActive ? visitMinutes(visit.startedAt, now) : visit.minutes
-  const price = visitPrice(pricing, minutes, visit)
-  const isRoom = visit.kind === 'room'
-  const amount = isActive ? price.amount : visit.amount
-
-  const act = async (path, options, message) => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await request(path, options)
-      if (res?.visit) onChange(res.visit)
-      else onDelete(visit.id)
-      notify(typeof message === 'function' ? message(res?.visit) : message)
-    } catch (err) {
-      setError(err)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (editing) {
-    return (
-      <EditVisit
-        visit={visit}
-        onCancel={() => setEditing(false)}
-        onSaved={(v) => {
-          onChange(v)
-          setEditing(false)
-          notify('Düzəliş saxlandı')
-        }}
-      />
-    )
-  }
-
-  return (
-    <li
-      className={`rounded-2xl border p-3.5 sm:p-4 ${isActive ? 'border-brand-teal/40 bg-brand-teal-soft/40' : 'border-ink/10'}`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-bold text-[1.02rem] truncate">{visit.name}</span>
-            <VisitBadges visit={visit} />
-          </div>
-          <div className="text-[0.85rem] text-inkdim mt-0.5 tabular-nums">
-            {bakuTime(visit.startedAt)}
-            {isActive ? ' — davam edir' : ` – ${bakuTime(visit.endedAt)} · ${durationText(visit.minutes)}`}
-          </div>
-          {visit.note && <div className="text-[0.82rem] mt-1 italic text-inkdim">{visit.note}</div>}
-        </div>
-
-        <div className="text-right shrink-0">
-          {isActive && <div className="font-display font-bold text-[1.05rem] tabular-nums">{elapsedClock(visit.startedAt, now)}</div>}
-          <div className={`font-display font-bold tabular-nums text-primary ${isActive ? 'text-[1.5rem]' : 'text-[1.25rem]'}`}>
-            {money(amount)}
-          </div>
-          {!isActive && <PaymentBadge method={visit.paymentMethod} />}
-          {isActive && (
-            <div className="text-[0.72rem] text-inkdim">
-              {!isRoom && visit.people > 1 && `${visit.people} × ${money(price.perPerson)} · `}
-              {price.capped ? 'stop çek' : `${price.billedHours} saat`}
-            </div>
-          )}
-          {!isActive && !isRoom && visit.people > 1 && (
-            <div className="text-[0.72rem] text-inkdim">
-              {visit.people} × {money(price.perPerson)}
-            </div>
-          )}
-          {price.discount > 0 ? (
-            <div className="text-[0.72rem] text-inkdim">
-              {price.discountSource === 'promo' ? 'promokod' : 'tələbə endirimi'} −{money(price.discount)}
-            </div>
-          ) : (
-            !isRoom &&
-            visit.students > 0 && (
-              <div className="text-[0.72rem] text-inkdim">
-                {isActive ? `tələbə endirimi ${pricing.studentDiscount.minHours} saatdan` : 'tələbə endirimi yoxdur (qısa)'}
-              </div>
-            )
-          )}
-        </div>
-      </div>
-
-      {ending ? (
-        <div className="flex flex-wrap items-center gap-1.5 mt-3 bg-card rounded-full p-1 pl-3.5 border border-ink/10">
-          <span className="text-[0.85rem] font-bold mr-1">Ödəniş: {money(amount)}</span>
-          {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
-            <Button
-              key={method}
-              variant="dark"
-              size="sm"
-              loading={busy}
-              onClick={() =>
-                act(
-                  `/admin/visits/${visit.id}/end`,
-                  { method: 'POST', body: { paymentMethod: method } },
-                  (v) => `${visit.name} — seans bitdi: ${money(v.amount)} · ${label}`,
-                )
-              }
-            >
-              <Icon size={15} /> {label}
-            </Button>
-          ))}
-          <Button variant="ghost" size="sm" onClick={() => setEnding(false)}>
-            Ləğv et
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-1.5 mt-3">
-          {isActive ? (
-            <Button variant="dark" size="sm" onClick={() => setEnding(true)}>
-              <PiStopFill size={13} /> Bitir
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              loading={busy}
-              onClick={() => act(`/admin/visits/${visit.id}/resume`, { method: 'POST' }, `${visit.name} — seans yenidən davam edir`)}
-            >
-              <PiArrowCounterClockwiseBold size={14} /> Davam etdir
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            <PiPencilSimpleBold size={14} /> Düzəlt
-          </Button>
-          <span className="ml-auto">
-            <ConfirmButton question="Silinsin?" onConfirm={() => act(`/admin/visits/${visit.id}`, { method: 'DELETE' }, 'Seans silindi')}>
-              <PiTrashBold size={14} /> Sil
-            </ConfirmButton>
-          </span>
-        </div>
-      )}
-      {error && (
-        <div className="mt-2">
-          <ErrorBox error={error} />
-        </div>
-      )}
-    </li>
-  )
-}
-
 // Ümumi zal / Kino otağı seçimi
 // short — dar yerdə qısa yazı ("Zal" / "Kino")
 function KindToggle({ value, onChange, short }) {
@@ -972,16 +966,6 @@ function PeopleStepper({ id, value, onChange, min = 1, max = 50, compact }) {
   )
 }
 
-function PaymentBadge({ method }) {
-  const payment = PAYMENT[method]
-  if (!payment) return <div className="text-[0.72rem] text-inkdim">ödəniş qeyd olunmayıb</div>
-  return (
-    <div className="inline-flex items-center gap-1 text-[0.75rem] font-bold text-inkdim">
-      <payment.icon size={14} /> {payment.label}
-    </div>
-  )
-}
-
 // Səhv düzəltmək: ad (qeydiyyatsızda), başlama/bitmə vaxtı, qeyd. Bitmiş seansın məbləği server tərəfindən yenidən hesablanır.
 function EditVisit({ visit, onCancel, onSaved }) {
   const request = useAdminApi()
@@ -1022,7 +1006,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
   const fieldErrors = error?.fields ?? {}
 
   return (
-    <li className="rounded-2xl border-2 border-primary/40 p-4">
+    <div className="rounded-2xl border-2 border-primary/40 p-4">
       <form onSubmit={save} className="grid gap-3 sm:grid-cols-2" noValidate>
         {!visit.user && (
           <div className="sm:col-span-2">
@@ -1127,7 +1111,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
           </div>
         </div>
       </form>
-    </li>
+    </div>
   )
 }
 

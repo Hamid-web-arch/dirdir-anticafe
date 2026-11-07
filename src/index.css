@@ -44,6 +44,12 @@
   --medal-silver: #9AA4AF;
   --medal-bronze: #C8783A;
 
+  /* --- Statistika qrafikləri (rəng korluğu yoxlamasından keçib; qaranlıq rejimdə aşağıda ayrıca) --- */
+  --chart-cash: #f16623;      /* Nağd */
+  --chart-card: #7C5CFF;      /* Kart */
+  --chart-people: #00927f;    /* Müştəri sayı */
+  --chart-other: #9AA4AF;     /* ödəniş üsulu qeyd olunmayıb */
+
   /* ------------------------------------------------------------
      Aşağıdakılar yuxarıdakı rənglərdən avtomatik hesablanır —
      adətən dəyişməyə ehtiyac yoxdur.
@@ -85,6 +91,10 @@
   --color-night: #0B120F;
   --tone-light: #111A16; /* açıq fon tonları tünd fona qarışır */
   --tone-dark: white;    /* "tünd" mətn tonları qaranlıqda açıq olur ki, oxunsun */
+  --chart-cash: #e45d1b;
+  --chart-card: #7C5CFF;
+  --chart-people: #00a58f;
+  --chart-other: #6B7780;
   color-scheme: dark;
 }
 
