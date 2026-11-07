@@ -347,6 +347,8 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
     setError(null)
     try {
       const res = await request(path, options)
+      // Sətir cədvəldə qalır (bitən seans yerini dəyişmir) — ödəniş seçimi bağlanmalıdır
+      setEnding(false)
       if (res?.visit) onChange(res.visit)
       else onDelete(visit.id)
       notify(typeof message === 'function' ? message(res?.visit) : message)
@@ -462,6 +464,7 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
         </td>
       </tr>
       {ending &&
+        isActive &&
         full(
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[0.88rem] font-bold mr-1">
