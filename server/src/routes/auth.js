@@ -13,6 +13,7 @@ import { HttpError } from '../middleware/error.js'
 import { registerSchema, loginSchema, profileUpdateSchema, passwordChangeSchema } from '../validation.js'
 import { processImage, rawImage } from '../images.js'
 import { teamRank } from './competitions.js'
+import { publicVisit } from '../visits.js'
 
 export const authRouter = Router()
 
@@ -130,4 +131,18 @@ authRouter.get('/me/teams', requireAuth, async (req, res) => {
     })),
   )
   res.json({ teams: result })
+})
+
+// Anticafedəki seanslarım: davam edən (varsa) + son ziyarətlər. Davam edənin məbləğini sayt canlı hesablayır.
+authRouter.get('/me/visits', requireAuth, async (req, res) => {
+  const visits = await prisma.visit.findMany({
+    where: { userId: req.user.id },
+    orderBy: { startedAt: 'desc' },
+    take: 50,
+  })
+  const active = visits.find((v) => !v.endedAt)
+  res.json({
+    active: active ? publicVisit(active) : null,
+    visits: visits.filter((v) => v.endedAt).map(publicVisit),
+  })
 })

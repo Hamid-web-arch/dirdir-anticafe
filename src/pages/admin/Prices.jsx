@@ -13,6 +13,13 @@ const SECTIONS = [
       { path: 'hall.firstHour', label: 'İlk saat', unit: '₼' },
       { path: 'hall.nextHour', label: 'Sonrakı hər saat', unit: '₼' },
       { path: 'hall.cap', label: 'Stop çek (maksimum)', unit: '₼' },
+      {
+        path: 'hall.graceMinutes',
+        label: 'Güzəşt (Günün hesabatı)',
+        unit: 'dəq',
+        step: 1,
+        hint: 'Zal və kino otağı seanslarında ilk saatdan sonra vaxt yarım saatla sayılır; hər yarım saatı bu qədər keçmək pulsuzdur. 10 dəq: 1s10d → 1 saat, 1s15d → 1.5 saat.',
+      },
     ],
   },
   {
@@ -136,6 +143,7 @@ export default function AdminPrices() {
                   <p className="text-[0.75rem] text-inkdim mt-1">
                     Standart: {get(defaults, f.path)} {f.unit}
                   </p>
+                  {f.hint && <p className="text-[0.75rem] text-inkdim mt-1">{f.hint}</p>}
                 </div>
               )
             })}

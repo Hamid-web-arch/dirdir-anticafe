@@ -955,3 +955,276 @@ describe('xəbər göndərmək', () => {
     assert.equal((await api.get('/api/admin/broadcasts').set(bearer(adminToken))).body.broadcasts.length, 1)
   })
 })
+
+describe('günün hesabatı (seanslar)', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+
+  it('qiymət qaydası: ilk saat tam, sonra yarım saat + 10 dəq güzəşt, stop çek', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const hall = { firstHour: 4, nextHour: 3, cap: 13, graceMinutes: 10 }
+    const cases = [
+      [0, 4],
+      [30, 4],
+      [60, 4],
+      [70, 4], // 1s10d → 1 saat
+      [75, 5.5], // 1s15d → 1.5 saat
+      [100, 5.5], // 1s40d → 1.5 saat
+      [105, 7], // 1s45d → 2 saat
+      [130, 7],
+      [135, 8.5],
+      [600, 13], // stop çek
+    ]
+    for (const [minutes, amount] of cases) assert.equal(visitPrice({ hall }, minutes).amount, amount, `${minutes} dəq`)
+  })
+
+  it('admin qeydiyyatsız və qeydiyyatlı müştəri başladır, bitirir; istifadəçi öz kabinetində görür', async () => {
+    const adminToken = await createAdmin()
+    const user = (await register()).body
+
+    const guest = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Murad', startedAt: minutesAgo(75) })
+    assert.equal(guest.status, 201)
+    assert.equal(guest.body.visit.user, null)
+
+    const reg = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ userId: user.user.id, startedAt: minutesAgo(30) })
+    assert.equal(reg.status, 201)
+    assert.equal(reg.body.visit.name, 'Aysel Məmmədova')
+
+    // Eyni istifadəçinin ikinci aktiv seansı olmaz
+    const dup = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ userId: user.user.id })
+    assert.equal(dup.status, 409)
+    assert.equal(dup.body.error.code, 'VISIT_ACTIVE')
+
+    // İstifadəçi davam edən seansını görür
+    let mine = await api.get('/api/auth/me/visits').set(bearer(user.token))
+    assert.equal(mine.body.active.id, reg.body.visit.id)
+    assert.equal(mine.body.visits.length, 0)
+
+    // Ödəniş üsulu seçilmədən bitmir
+    const noMethod = await api.post(`/api/admin/visits/${guest.body.visit.id}/end`).set(bearer(adminToken)).send({})
+    assert.equal(noMethod.status, 400)
+
+    // Bitir: 75 dəq → 5.50, nağd
+    const end = await api
+      .post(`/api/admin/visits/${guest.body.visit.id}/end`)
+      .set(bearer(adminToken))
+      .send({ paymentMethod: 'cash' })
+    assert.equal(end.body.visit.minutes, 75)
+    assert.equal(end.body.visit.amount, 5.5)
+    assert.equal(end.body.visit.paymentMethod, 'cash')
+    const again = await api
+      .post(`/api/admin/visits/${guest.body.visit.id}/end`)
+      .set(bearer(adminToken))
+      .send({ paymentMethod: 'cash' })
+    assert.equal(again.status, 409)
+
+    await api.post(`/api/admin/visits/${reg.body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    mine = await api.get('/api/auth/me/visits').set(bearer(user.token))
+    assert.equal(mine.body.active, null)
+    assert.equal(mine.body.visits[0].amount, 4)
+
+    // Günün siyahısı və tarixçə
+    const list = await api.get('/api/admin/visits').set(bearer(adminToken))
+    assert.equal(list.body.day, list.body.today)
+    assert.equal(list.body.visits.length, 2)
+    const days = await api.get('/api/admin/visits/days').set(bearer(adminToken))
+    assert.deepEqual(days.body.days, [{ day: list.body.today, count: 2, total: 9.5, cash: 5.5, card: 4 }])
+
+    // İstifadəçi admin ünvanlarına girə bilməz
+    assert.equal((await api.get('/api/admin/visits').set(bearer(user.token))).status, 403)
+  })
+
+  it('düzəliş məbləği yenidən hesablayır; gələcək vaxt və səhv sıra qəbul olunmur', async () => {
+    const adminToken = await createAdmin()
+    const { body } = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Leyla', startedAt: minutesAgo(200) })
+    const id = body.visit.id
+    await api.post(`/api/admin/visits/${id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+
+    const start = new Date(Date.now() - 200 * 60_000)
+    const fixed = await api
+      .patch(`/api/admin/visits/${id}`)
+      .set(bearer(adminToken))
+      .send({ endedAt: new Date(start.getTime() + 105 * 60_000).toISOString(), note: '2 çay', paymentMethod: 'card' })
+    assert.equal(fixed.status, 200)
+    assert.equal(fixed.body.visit.amount, 7)
+    assert.equal(fixed.body.visit.note, '2 çay')
+    assert.equal(fixed.body.visit.paymentMethod, 'card')
+
+    const backwards = await api.patch(`/api/admin/visits/${id}`).set(bearer(adminToken)).send({ endedAt: minutesAgo(300) })
+    assert.equal(backwards.status, 400)
+
+    const future = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'X', startedAt: new Date(Date.now() + 3600_000).toISOString() })
+    assert.equal(future.status, 400)
+
+    const noName = await api.post('/api/admin/visits').set(bearer(adminToken)).send({})
+    assert.equal(noName.status, 400)
+
+    // Davam etdir → yenidən aktiv, sonra sil
+    const resumed = await api.post(`/api/admin/visits/${id}/resume`).set(bearer(adminToken))
+    assert.equal(resumed.body.visit.endedAt, null)
+    assert.equal(resumed.body.visit.paymentMethod, null)
+    assert.equal((await api.delete(`/api/admin/visits/${id}`).set(bearer(adminToken))).status, 204)
+    assert.equal((await api.get('/api/admin/visits').set(bearer(adminToken))).body.visits.length, 0)
+  })
+
+  it('qrup: bir nəfərin adına 5 nəfər — məbləğ nəfər sayına vurulur, stop çek hər nəfərə', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const hall = { firstHour: 4, nextHour: 3, cap: 13, graceMinutes: 10 }
+    assert.equal(visitPrice({ hall }, 75, { people: 5 }).amount, 27.5)
+    assert.equal(visitPrice({ hall }, 600, { people: 5 }).amount, 65)
+
+    const adminToken = await createAdmin()
+    const tooMany = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Qrup', people: 0 })
+    assert.equal(tooMany.status, 400)
+
+    const { body } = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Rəşad', people: 5, startedAt: minutesAgo(75) })
+    assert.equal(body.visit.people, 5)
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    assert.equal(end.body.visit.amount, 27.5)
+
+    // Nəfər sayını düzəldəndə məbləğ yenidən hesablanır
+    const fixed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ people: 3 })
+    assert.equal(fixed.body.visit.amount, 16.5)
+
+    const days = await api.get('/api/admin/visits/days').set(bearer(adminToken))
+    assert.equal(days.body.days[0].count, 3) // müştəri sayı = nəfərlərin cəmi
+  })
+
+  it('kino otağı: otaq qiyməti, tutum həddi, eyni anda bir seans', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const { DEFAULT_PRICING } = await import('../src/pricing.js')
+    // Kiçik qrup (2 nəfərə qədər): ilk saat 15, sonrakı saat 10; 1s15d → 1.5 saat → 20
+    assert.equal(visitPrice(DEFAULT_PRICING, 75, { people: 2, kind: 'room' }).amount, 20)
+    assert.equal(visitPrice(DEFAULT_PRICING, 30, { people: 1, kind: 'room' }).amount, 15)
+    // Böyük qrup: saatı 20; 5 nəfərdən sonra hər nəfərə saatda +2 → 7 nəfər, 2 saat: 40 + 2·2·2 = 48
+    assert.equal(visitPrice(DEFAULT_PRICING, 120, { people: 7, kind: 'room' }).amount, 48)
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 4, kind: 'room' }).amount, 20)
+
+    const adminToken = await createAdmin()
+    const tooMany = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Ailə', kind: 'room', people: 9 })
+    assert.equal(tooMany.status, 400)
+
+    const { body } = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Nigar', kind: 'room', people: 7, startedAt: minutesAgo(120) })
+    assert.equal(body.visit.kind, 'room')
+
+    const busy = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Elvin', kind: 'room', people: 2 })
+    assert.equal(busy.status, 409)
+    assert.equal(busy.body.error.code, 'ROOM_BUSY')
+    // Zal isə sərbəstdir
+    assert.equal((await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Elvin' })).status, 201)
+
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+    assert.equal(end.body.visit.amount, 48)
+
+    // Otaq boşaldı — yeni kino seansı başlaya bilər
+    const next = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Elvin', kind: 'room', people: 2 })
+    assert.equal(next.status, 201)
+    // Davam edən seansın yerini dəyişmək olmaz
+    const move = await api.patch(`/api/admin/visits/${next.body.visit.id}`).set(bearer(adminToken)).send({ kind: 'hall' })
+    assert.equal(move.status, 400)
+    // Bitmiş seansı zala keçirmək məbləği yenidən hesablayır: 7 nəfər × 7₼ (2 saat) = 49
+    const toHall = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ kind: 'hall' })
+    assert.equal(toHall.body.visit.amount, 49)
+    // Otaq məşğulkən köhnə kino seansını davam etdirmək olmur
+    await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ kind: 'room' })
+    const resume = await api.post(`/api/admin/visits/${body.visit.id}/resume`).set(bearer(adminToken))
+    assert.equal(resume.body.error.code, 'ROOM_BUSY')
+  })
+
+  it('tələbə endirimi: yalnız zalda, 3 saatdan, yalnız tələbələrin payına', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const { DEFAULT_PRICING } = await import('../src/pricing.js')
+    // 3 saat: nəfər başına 10₼; tələbəyə 20% → 8₼
+    assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 1, kind: 'hall', students: 1 }).amount, 8)
+    // 2.5 saat — endirim yoxdur: 8.5₼
+    assert.equal(visitPrice(DEFAULT_PRICING, 150, { people: 1, kind: 'hall', students: 1 }).amount, 8.5)
+    // 5 nəfər, 2-si tələbə, 3 saat: 50 − 2·10·20% = 46
+    assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 5, kind: 'hall', students: 2 }).amount, 46)
+    // Kino otağında tələbə endirimi yoxdur
+    assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 2, kind: 'room', students: 2 }).amount, 35)
+
+    const adminToken = await createAdmin()
+    const tooMany = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Qrup', people: 2, students: 3 })
+    assert.equal(tooMany.status, 400)
+
+    const { body } = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Tural', people: 5, students: 2, startedAt: minutesAgo(180) })
+    assert.equal(body.visit.students, 2)
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+    assert.equal(end.body.visit.amount, 46)
+
+    // Tələbə sayını düzəldəndə məbləğ yenidən hesablanır
+    const fixed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ students: 0 })
+    assert.equal(fixed.body.visit.amount, 50)
+    // Kino otağına keçəndə tələbə sayı sıfırlanır
+    const room = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Səbinə', kind: 'room', people: 2, students: 2 })
+    assert.equal(room.body.visit.students, 0)
+  })
+
+  it('promokod: bütün məbləğə, tələbə endirimi ilə cəmlənmir, faiz seansa yazılır', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const { DEFAULT_PRICING } = await import('../src/pricing.js')
+    // Zal, 1 saat, 2 nəfər: 8₼ − 10% = 7.2
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 2, promoPercent: 10 }).amount, 7.2)
+    // Kino otağı: 15₼ − 10% = 13.5
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 2, kind: 'room', promoPercent: 10 }).amount, 13.5)
+    // Tələbə (20%) və promokod (10%) — çox olan: tələbə
+    const both = visitPrice(DEFAULT_PRICING, 180, { people: 1, students: 1, promoPercent: 10 })
+    assert.equal(both.amount, 8)
+    assert.equal(both.discountSource, 'student')
+    // Promokod çoxdursa — promokod
+    assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 1, students: 1, promoPercent: 50 }).discountSource, 'promo')
+
+    const adminToken = await createAdmin()
+    await ctx.prisma.promoCode.create({ data: { code: 'DIRDIR10', percent: 10 } })
+    await ctx.prisma.promoCode.create({ data: { code: 'OLD', percent: 30, active: false } })
+
+    const bad = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Ayan', promoCode: 'old' })
+    assert.equal(bad.status, 404)
+    assert.equal(bad.body.error.code, 'PROMO_NOT_FOUND')
+
+    const { body } = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Ayan', people: 2, promoCode: 'dirdir10', startedAt: minutesAgo(60) })
+    assert.equal(body.visit.promoCode, 'DIRDIR10')
+    assert.equal(body.visit.promoPercent, 10)
+
+    // Kod sonradan söndürülsə də seansın endirimi qalır
+    await ctx.prisma.promoCode.update({ where: { code: 'DIRDIR10' }, data: { active: false } })
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+    assert.equal(end.body.visit.amount, 7.2)
+    // Eyni kodla düzəliş — qalır; null — silinir və məbləğ yenidən hesablanır
+    const same = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ promoCode: 'DIRDIR10', note: 'x' })
+    assert.equal(same.body.visit.promoPercent, 10)
+    const removed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ promoCode: null })
+    assert.equal(removed.body.visit.promoCode, null)
+    assert.equal(removed.body.visit.amount, 8)
+  })
+
+  it('köhnə saxlanmış qiymətlərdə güzəşt dəqiqəsi standart 10 olur', async () => {
+    await ctx.prisma.appSetting.create({
+      data: {
+        key: 'pricing',
+        value: JSON.stringify({
+          hall: { firstHour: 5, nextHour: 3, cap: 15 },
+          room: { maxPeople: 8, smallGroup: { maxPeople: 2, firstHour: 15, nextHour: 10 }, group: { perHour: 20, includedPeople: 5, extraPerPerson: 2 } },
+          studentDiscount: { percent: 20, minHours: 3 },
+        }),
+      },
+    })
+    const res = await api.get('/api/pricing')
+    assert.equal(res.body.pricing.hall.firstHour, 5)
+    assert.equal(res.body.pricing.hall.graceMinutes, 10)
+  })
+})

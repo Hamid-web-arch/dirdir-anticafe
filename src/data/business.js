@@ -15,7 +15,7 @@ export const business = {
   // bu cədvəl yalnız server cavab verənə qədər və ya backend qoşulmayanda işləyir. server/src/pricing.js ilə eyni olmalıdır.
   pricing: {
     // Ümumi zal: ilk saat + sonrakı hər saat; bir nəfər stop çekdən artıq ödəmir.
-    hall: { firstHour: 4, nextHour: 3, cap: 13 },
+    hall: { firstHour: 4, nextHour: 3, cap: 13, graceMinutes: 10 },
     // Kino otağı (maksimum maxPeople nəfər):
     // - smallGroup.maxPeople nəfərə qədər: ilk saat firstHour, sonrakı hər saat nextHour
     // - daha çox: saatı perHour; includedPeople nəfərdən sonra hər əlavə nəfər saatda +extraPerPerson

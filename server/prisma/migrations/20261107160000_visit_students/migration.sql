@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Visit" ADD COLUMN "students" INTEGER NOT NULL DEFAULT 0;

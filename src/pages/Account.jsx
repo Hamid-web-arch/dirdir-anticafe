@@ -13,6 +13,7 @@ import {
   PiShieldCheckBold,
   PiCheckCircleFill,
   PiBellRingingBold,
+  PiCoffeeBold,
 } from 'react-icons/pi'
 import Reveal from '../components/Reveal.jsx'
 import Switch from '../components/Switch.jsx'
@@ -22,6 +23,8 @@ import { api, assetUrl } from '../lib/api.js'
 import { formatPhone, phoneDigits, isPhone, MIN_PASSWORD, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
 import { useSeo } from '../lib/seo.js'
+import { usePricing } from '../pricing/PricingContext.jsx'
+import { visitPrice, visitMinutes, elapsedClock, durationText, useNow, bakuTime } from '../pricing/visitPrice.js'
 
 const MAX_UPLOAD = 10 * 1024 * 1024
 
@@ -45,6 +48,9 @@ export default function Account() {
       <div className="relative z-10 max-w-[760px] mx-auto px-5 sm:px-7 flex flex-col gap-6">
         <Reveal>
           <ProfileCard />
+        </Reveal>
+        <Reveal delay={40}>
+          <Visits />
         </Reveal>
         <Reveal delay={60}>
           <History />
@@ -406,6 +412,97 @@ function PasswordCard() {
             </button>
           </div>
         </form>
+      )}
+    </div>
+  )
+}
+
+// Anticafe ziyarətləri: admin seansı başladanda burada canlı saat və məbləğ görünür.
+// Seans başlayıb-bitəndə görünsün deyə siyahı vaxtaşırı yenilənir.
+function Visits() {
+  const { t, date } = useI18n()
+  const { token } = useAuth()
+  const pricing = usePricing()
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () =>
+      api('/auth/me/visits', { token })
+        .then((d) => !cancelled && setData(d))
+        .catch(() => !cancelled && setData((prev) => prev ?? { active: null, visits: [] }))
+    load()
+    const id = setInterval(load, 30_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [token])
+
+  const active = data?.active
+  const now = useNow(1000, Boolean(active))
+  const units = { h: t('account.hoursShort'), m: t('account.minutesShort') }
+  const money = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}₼`
+
+  if (data && !active && data.visits.length === 0) return null // heç ziyarət yoxdursa kartı göstərmirik
+
+  const live = active ? visitPrice(pricing, visitMinutes(active.startedAt, now), active) : null
+
+  return (
+    <div className={card}>
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-4">
+        <PiCoffeeBold size={20} className="text-primary" /> {t('account.visits')}
+      </h2>
+      {data === null ? (
+        <PiSpinnerBold size={22} className="animate-spin text-inkdim" />
+      ) : (
+        <>
+          {active && (
+            <div className="rounded-2xl bg-brand-teal-soft p-5 mb-4">
+              <div className="flex items-center gap-2 font-bold text-brand-teal-deep">
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-teal animate-pulse" />
+                {t('account.visitNow')}
+                <span className="font-semibold text-ink/60">· {t('account.visitSince', { time: bakuTime(active.startedAt) })}</span>
+              </div>
+              <div className="flex items-end justify-between gap-4 mt-3">
+                <div className="font-display font-bold text-[2rem] leading-none tabular-nums">{elapsedClock(active.startedAt, now)}</div>
+                <div className="text-right">
+                  <div className="text-[0.78rem] font-bold text-ink/60">{t('account.visitAmount')}</div>
+                  <div className="font-display font-bold text-[2rem] leading-none text-primary tabular-nums">{money(live.amount)}</div>
+                </div>
+              </div>
+              <p className="text-[0.8rem] text-ink/60 mt-3">
+                {active.kind === 'room' && `${t('account.visitRoom')} · ${t('units.people', { count: active.people })} · `}
+                {active.kind !== 'room' && active.people > 1 && `${t('units.people', { count: active.people })} × ${money(live.perPerson)} · `}
+                {live.capped ? t('account.visitCap') : t('account.visitBilled', { hours: live.billedHours })} ·{' '}
+                {live.discount > 0 &&
+                  `${
+                    live.discountSource === 'promo'
+                      ? t('account.visitPromo', { code: active.promoCode, amount: money(live.discount) })
+                      : t('account.visitStudent', { amount: money(live.discount) })
+                  } · `}
+                {t('account.visitsLive')}
+              </p>
+            </div>
+          )}
+          {data.visits.length > 0 && (
+            <ul className="flex flex-col divide-y divide-ink/5">
+              {data.visits.map((v) => (
+                <li key={v.id} className="flex items-center gap-3 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold">{date(v.startedAt)}</div>
+                    <div className="text-[0.85rem] text-inkdim tabular-nums">
+                      {bakuTime(v.startedAt)} – {bakuTime(v.endedAt)} · {durationText(v.minutes, units)}
+                      {v.kind === 'room' && ` · ${t('account.visitRoom')}`}
+                      {v.people > 1 && ` · ${t('units.people', { count: v.people })}`}
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-display font-bold text-primary tabular-nums">{money(v.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   )

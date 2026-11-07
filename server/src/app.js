@@ -16,6 +16,7 @@ import { getSiteImages } from './site.js'
 import { optionalAuth } from './auth.js'
 import { feedbackSchema } from './validation.js'
 import { adminRouter } from './routes/admin.js'
+import { adminVisitsRouter } from './routes/admin-visits.js'
 import { errorHandler, notFound } from './middleware/error.js'
 
 const limiter = (limit, windowMinutes, options = {}) =>
@@ -103,6 +104,7 @@ export function createApp() {
   app.use('/api/promo', promoRouter)
   app.use('/api/admin', adminRouter)
   app.use('/api/admin', adminContentRouter)
+  app.use('/api/admin', adminVisitsRouter)
 
   app.use(notFound)
   app.use(errorHandler)

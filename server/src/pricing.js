@@ -5,7 +5,9 @@ import { prisma } from './db.js'
 // Admin heç nə saxlamayıbsa, bu standart cədvəl işləyir (Instagram "Qiymət" story-si).
 export const DEFAULT_PRICING = {
   // Ümumi zal: ilk saat + sonrakı hər saat; bir nəfər stop çekdən artıq ödəmir.
-  hall: { firstHour: 4, nextHour: 3, cap: 13 },
+  // graceMinutes: Günün hesabatında ilk saatdan sonra vaxt yarım saatlıq addımla sayılır,
+  // hər yarım saatı bu qədər dəqiqə keçmək pulsuzdur (1s10d → 1 saat, 1s15d → 1.5 saat).
+  hall: { firstHour: 4, nextHour: 3, cap: 13, graceMinutes: 10 },
   // Kino otağı: smallGroup.maxPeople nəfərə qədər ilk saat/sonrakı saat;
   // daha çox — saatı perHour, includedPeople nəfərdən sonra hər əlavə nəfər saatda +extraPerPerson.
   room: {
@@ -39,6 +41,8 @@ export const pricingSchema = z
       firstHour: price('İlk saatın qiyməti'),
       nextHour: price('Sonrakı saatın qiyməti'),
       cap: price('Stop çek'),
+      // Köhnə saxlanmış qiymətlərdə bu sahə yoxdur — standart dəyər götürülür.
+      graceMinutes: people('Güzəşt dəqiqəsi', 0, 29).default(10),
     }),
     room: z.object({
       maxPeople: people('Otağın tutumu', 2, 30),

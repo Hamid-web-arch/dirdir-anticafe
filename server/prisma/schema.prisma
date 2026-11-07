@@ -19,25 +19,27 @@ enum CompetitionStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String   @unique // həmişə kiçik hərflə saxlanır
-  phone        String   @unique // 9 rəqəm, +994-süz (məs. 501234567)
-  passwordHash String
+  id                String    @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String    @unique // həmişə kiçik hərflə saxlanır
+  phone             String    @unique // 9 rəqəm, +994-süz (məs. 501234567)
+  passwordHash      String
   passwordChangedAt DateTime? // bu andan əvvəl verilmiş tokenlər etibarsızdır (şifrə dəyişəndə)
-  role         Role     @default(USER)
-  blockedAt    DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
-  newsletter   Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)
-  avatarId     String?  @unique
-  avatar       Image?   @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role              Role      @default(USER)
+  blockedAt         DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
+  newsletter        Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)
+  avatarId          String?   @unique
+  avatar            Image?    @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   teams         Team[]
   pointsAwarded TeamPointEntry[]
   feedback      Feedback[]
   broadcasts    Broadcast[]
+  visits        Visit[]          @relation("UserVisits")
+  visitsLogged  Visit[]          @relation("VisitCreatedBy")
 }
 
 // Yüklənmiş şəkillər (slider, profil). Serverdə kiçildilib WebP-yə çevrilir.
@@ -185,4 +187,33 @@ model Broadcast {
   createdById    String?
   createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
+}
+
+// Günün hesabatı: admin anticafeyə gələn hər müştərinin seansını qeyd edir.
+// Qeydiyyatlı istifadəçidirsə userId doludur — seans onun kabinetində də görünür.
+model Visit {
+  id            String    @id @default(cuid())
+  day           String // Bakı vaxtı ilə başlama günü, YYYY-MM-DD (tarixçə bu sahə ilə qruplanır)
+  userId        String?
+  user          User?     @relation("UserVisits", fields: [userId], references: [id], onDelete: SetNull)
+  name          String // müştərinin adı (qeydiyyatlı istifadəçidə — o anki adı)
+  kind          String    @default("hall") // hall (ümumi zal) | room (kino otağı)
+  students      Int       @default(0) // onlardan neçəsi tələbədir (tələbə endirimi, yalnız zalda)
+  people        Int       @default(1)
+  promoCode     String? // tətbiq olunan promokod
+  promoPercent  Int? // kodun o anki faizi (kod sonra dəyişsə/silinsə də seansın endirimi qalır) // neçə nəfər (qrup bir nəfərin adına yazılır; məbləğ nəfər başına × say)
+  startedAt     DateTime
+  endedAt       DateTime? // boşdursa seans davam edir
+  minutes       Int? // bitəndə: qalma müddəti (dəqiqə)
+  amount        Decimal?  @db.Decimal(8, 2) // bitəndə: hesablanan məbləğ (o anki qiymətlərlə)
+  paymentMethod String? // bitəndə: cash (nağd) | card (kart)
+  note          String?
+  createdById   String?
+  createdBy     User?     @relation("VisitCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([day, startedAt])
+  @@index([userId, startedAt])
+  @@index([endedAt])
 }

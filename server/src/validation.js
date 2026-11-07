@@ -320,3 +320,65 @@ export const broadcastSchema = z
 
 // ---------- Saytın şəkilləri ----------
 export const SITE_IMAGE_KEYS = ['login', 'register']
+
+// ---------- Günün hesabatı (seanslar) ----------
+
+const dayString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarix YYYY-MM-DD formasında olmalıdır.')
+
+export const visitListQuerySchema = z.object({
+  day: dayString.optional().catch(undefined),
+})
+
+const visitName = z
+  .string({ error: 'Müştərinin adını yaz.' })
+  .trim()
+  .min(1, 'Müştərinin adını yaz.')
+  .max(80, 'Ad ən çox 80 simvol ola bilər.')
+
+const visitNote = z.string().trim().max(300, 'Qeyd ən çox 300 simvol ola bilər.')
+
+const visitPeople = z
+  .number({ error: 'Nəfər sayını yaz.' })
+  .int('Nəfər sayı tam ədəd olmalıdır.')
+  .min(1, 'Ən az 1 nəfər.')
+  .max(50, 'Ən çox 50 nəfər.')
+
+const visitStudents = z
+  .number({ error: 'Tələbə sayını yaz.' })
+  .int('Tələbə sayı tam ədəd olmalıdır.')
+  .min(0, 'Mənfi ola bilməz.')
+  .max(50, 'Ən çox 50 nəfər.')
+
+const visitKind = z.enum(['hall', 'room'], { error: 'Seansın növünü seç: ümumi zal və ya kino otağı.' })
+
+const visitTime = (label) => z.coerce.date({ error: `${label} düzgün deyil.` })
+
+// Ya qeydiyyatlı istifadəçi (userId), ya da yalnız ad. startedAt yazılmasa — indi.
+export const visitCreateSchema = z
+  .object({
+    userId: z.string().trim().min(1).max(40).optional(),
+    name: visitName.optional(),
+    kind: visitKind.optional(),
+    people: visitPeople.optional(),
+    students: visitStudents.optional(),
+    promoCode: promoCodeValue.optional(),
+    startedAt: visitTime('Başlama vaxtı').optional(),
+    note: visitNote.optional(),
+  })
+  .refine((v) => v.userId || v.name, { path: ['name'], message: 'Müştərinin adını yaz və ya qeydiyyatlı istifadəçini seç.' })
+
+const paymentMethod = z.enum(['cash', 'card'], { error: 'Ödəniş üsulunu seç: nağd və ya kart.' })
+
+export const visitEndSchema = z.object({ paymentMethod })
+
+export const visitUpdateSchema = z.object({
+  paymentMethod: paymentMethod.optional(),
+  people: visitPeople.optional(),
+  kind: visitKind.optional(),
+  students: visitStudents.optional(),
+  promoCode: promoCodeValue.nullable().optional(),
+  name: visitName.optional(),
+  startedAt: visitTime('Başlama vaxtı').optional(),
+  endedAt: visitTime('Bitmə vaxtı').optional(),
+  note: visitNote.nullable().optional(),
+})

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
 import FloatingWhatsApp from './components/FloatingWhatsApp.jsx'
@@ -27,9 +27,12 @@ const AdminGames = lazy(() => import('./pages/admin/Games.jsx'))
 const AdminFeedback = lazy(() => import('./pages/admin/Feedback.jsx'))
 const AdminAppearance = lazy(() => import('./pages/admin/Appearance.jsx'))
 const AdminBroadcasts = lazy(() => import('./pages/admin/Broadcasts.jsx'))
+const AdminDailyReport = lazy(() => import('./pages/admin/DailyReport.jsx'))
 
 export default function App() {
   const { t } = useI18n()
+  // Admin panel tam ekrandır: saytın menyusu, footeri və WhatsApp düyməsi orada göstərilmir
+  const isAdmin = useLocation().pathname.startsWith('/admin')
   return (
     <div className="font-body text-ink">
       <ScrollToTop />
@@ -40,7 +43,7 @@ export default function App() {
       >
         {t('nav.skip')}
       </a>
-      <Navbar />
+      {!isAdmin && <Navbar />}
       <main id="main" tabIndex={-1} className="outline-none">
         <Suspense fallback={<Spinner />}>
           <Routes>
@@ -54,7 +57,8 @@ export default function App() {
             <Route path="/oyunlar/:id" element={<GameDetails />} />
             <Route path="/neler-var/:id" element={<SlideDetails />} />
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="yarislar" replace />} />
+              <Route index element={<Navigate to="hesabat" replace />} />
+              <Route path="hesabat" element={<AdminDailyReport />} />
               <Route path="yarislar" element={<AdminCompetitions />} />
               <Route path="slider" element={<AdminSlides />} />
               <Route path="istifadeciler" element={<AdminUsers />} />
@@ -69,8 +73,12 @@ export default function App() {
           </Routes>
         </Suspense>
       </main>
-      <Footer />
-      <FloatingWhatsApp />
+      {!isAdmin && (
+        <>
+          <Footer />
+          <FloatingWhatsApp />
+        </>
+      )}
     </div>
   )
 }
