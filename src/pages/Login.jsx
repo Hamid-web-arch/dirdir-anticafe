@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { PiSignInBold } from 'react-icons/pi'
 import AuthLayout, { Field, PasswordField, SubmitButton, DemoNotice, FormError } from '../components/AuthLayout.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
@@ -12,7 +12,6 @@ export default function Login() {
   const { user, login } = useAuth()
   const i18n = useI18n()
   const { t, errorText } = i18n
-  const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
   useSeo({ title: t('seo.login.title'), noindex: true })
@@ -23,7 +22,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
-  if (user) return <Navigate to={next} replace />
+  // Daxil olandan sonra: xüsusi ünvan (?next=) varsa ora; yoxdursa admin birbaşa admin panelə
+  // (Günün hesabatı), adi istifadəçi kabinetinə. login() istifadəçini yazan kimi bu sətir yönləndirir.
+  if (user) return <Navigate to={!params.get('next') && user.role === 'ADMIN' ? '/admin' : next} replace />
 
   const update = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -46,8 +47,7 @@ export default function Login() {
 
     setLoading(true)
     try {
-      await login(form)
-      navigate(next)
+      await login(form) // yönləndirmə yuxarıdakı <Navigate> ilədir (rola görə)
     } catch (err) {
       setServerError(err)
     } finally {
