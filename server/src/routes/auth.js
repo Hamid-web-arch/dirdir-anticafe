@@ -10,7 +10,7 @@ import {
   requireAuth,
 } from '../auth.js'
 import { HttpError } from '../middleware/error.js'
-import { registerSchema, loginSchema, profileUpdateSchema, passwordChangeSchema } from '../validation.js'
+import { registerSchema, loginSchema, profileUpdateSchema, passwordChangeSchema, emailChangeSchema } from '../validation.js'
 import { processImage, rawImage } from '../images.js'
 import { teamRank } from './competitions.js'
 import { publicVisit } from '../visits.js'
@@ -75,6 +75,20 @@ authRouter.patch('/me', requireAuth, async (req, res) => {
   const data = profileUpdateSchema.parse(req.body)
   await assertUnique({ phone: data.phone }, req.user.id)
   const user = await prisma.user.update({ where: { id: req.user.id }, data })
+  res.json({ user: publicUser(user) })
+})
+
+// Email dəyişmək (hazırkı şifrə ilə). Token dəyişmir — sessiya istifadəçinin id-si ilədir.
+authRouter.post('/me/email', requireAuth, async (req, res) => {
+  const { email, currentPassword } = emailChangeSchema.parse(req.body)
+  if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
+    throw new HttpError(400, 'WRONG_PASSWORD', 'Şifrə yanlışdır.', {
+      fields: { currentPassword: 'Şifrə yanlışdır.' },
+      fieldCodes: { currentPassword: 'WRONG_PASSWORD' },
+    })
+  }
+  await assertUnique({ email }, req.user.id)
+  const user = await prisma.user.update({ where: { id: req.user.id }, data: { email } })
   res.json({ user: publicUser(user) })
 })
 

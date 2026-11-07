@@ -37,6 +37,13 @@ async function seedAdmin() {
       console.log(`${data.email} baş admin edildi.`)
     }
   } else {
+    // Baş admin emailini paneldən dəyişibsə, ADMIN_EMAIL köhnə qala bilər — ikinci hesab yaratmırıq
+    // (eyni telefon nömrəsinə görə alınmazdı və server açılmazdı).
+    const superAdmin = await prisma.user.findFirst({ where: { role: 'ADMIN', isSuperAdmin: true } })
+    if (superAdmin) {
+      console.log(`Baş admin artıq var (${superAdmin.email}) — ADMIN_EMAIL (${data.email}) üçün yeni hesab yaradılmadı.`)
+      return
+    }
     const { password, ...rest } = data
     await prisma.user.create({
       data: { ...rest, role: 'ADMIN', isSuperAdmin: true, passwordHash: await hashPassword(password) },

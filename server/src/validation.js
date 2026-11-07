@@ -66,6 +66,12 @@ export const profileUpdateSchema = z
   .partial()
   .refine((d) => Object.keys(d).length > 0, 'Dəyişiklik yoxdur.')
 
+// Email dəyişmək — hesabın girişi olduğu üçün hazırkı şifrə ilə təsdiqlənir
+export const emailChangeSchema = z.object({
+  email,
+  currentPassword: z.string({ error: 'Hazırkı şifrəni yaz.' }).min(1, 'Hazırkı şifrəni yaz.'),
+})
+
 export const passwordChangeSchema = z.object({
   currentPassword: z.string({ error: 'Köhnə şifrəni yaz.' }).min(1, 'Köhnə şifrəni yaz.'),
   newPassword: password,

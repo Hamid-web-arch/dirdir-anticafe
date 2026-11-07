@@ -34,11 +34,15 @@ export default function AdminLayout() {
 
   const allowed = visibleSections(user)
   const current = SECTIONS.find((s) => pathname.startsWith(`/admin/${s.to}`))
+  // Profilim — hər admin üçün açıqdır (icazədən asılı deyil)
+  const isProfile = pathname.startsWith('/admin/profil')
   // /admin — icazəli ilk bölməyə (adətən Günün hesabatı)
-  if (!current && allowed.length > 0) return <Navigate to={`/admin/${allowed[0].to}`} replace />
+  if (!current && !isProfile && allowed.length > 0) return <Navigate to={`/admin/${allowed[0].to}`} replace />
 
   let content = <Outlet />
-  if (allowed.length === 0) {
+  if (isProfile) {
+    // olduğu kimi
+  } else if (allowed.length === 0) {
     content = (
       <NoAccess title="Hələ heç bir bölmə açılmayıb">
         Baş admin sənə hansı bölmələrdə işləyəcəyini seçəndə onlar burada görünəcək.
@@ -135,14 +139,34 @@ function Sidebar({ unread, sections }) {
   
         {/* Aşağıda: hesab, sayta keçid, rejim və çıxış (saytın menyusu admin paneldə yoxdur) — bir sətirdə */}
         <div className="mt-auto p-2 lg:p-3 border-t border-ink/10">
-          <div className="flex items-center gap-2 pl-2">
-            <span className="w-8 h-8 shrink-0 rounded-full bg-ink text-bg flex items-center justify-center font-bold text-[0.78rem]">
-              {user.firstName?.[0]}
-              {user.lastName?.[0]}
-            </span>
-            <span className="flex-1 min-w-0 font-bold text-[0.85rem] truncate" title={user.email}>
-              {user.firstName}
-            </span>
+          <div className="flex items-center gap-1">
+            {/* Profilim: ad, telefon, email, şifrə */}
+            <NavLink
+              to="profil"
+              title={user.email}
+              className={({ isActive }) =>
+                `flex-1 min-w-0 flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors ${
+                  isActive ? 'bg-primary text-white' : 'hover:bg-ink/5'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-[0.78rem] ${
+                      isActive ? 'bg-white text-primary' : 'bg-ink text-bg'
+                    }`}
+                  >
+                    {user.firstName?.[0]}
+                    {user.lastName?.[0]}
+                  </span>
+                  <span className="min-w-0 leading-tight">
+                    <span className="block font-bold text-[0.85rem] truncate">{user.firstName}</span>
+                    <span className={`block text-[0.72rem] font-semibold ${isActive ? 'text-white/85' : 'text-primary'}`}>Profilim</span>
+                  </span>
+                </>
+              )}
+            </NavLink>
             <Link to="/" title="Sayta keç" aria-label="Sayta keç" className={footerBtn}>
               <PiArrowSquareOutBold size={18} />
             </Link>

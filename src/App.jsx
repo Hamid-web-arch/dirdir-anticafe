@@ -29,6 +29,7 @@ const AdminAppearance = lazy(() => import('./pages/admin/Appearance.jsx'))
 const AdminBroadcasts = lazy(() => import('./pages/admin/Broadcasts.jsx'))
 const AdminAdmins = lazy(() => import('./pages/admin/Admins.jsx'))
 const AdminStats = lazy(() => import('./pages/admin/Stats.jsx'))
+const AdminProfile = lazy(() => import('./pages/admin/Profile.jsx'))
 const AdminDailyReport = lazy(() => import('./pages/admin/DailyReport.jsx'))
 
 export default function App() {
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="xeberler" element={<AdminBroadcasts />} />
               <Route path="adminler" element={<AdminAdmins />} />
               <Route path="statistika" element={<AdminStats />} />
+              <Route path="profil" element={<AdminProfile />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

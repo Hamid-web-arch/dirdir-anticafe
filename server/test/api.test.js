@@ -1358,3 +1358,22 @@ describe('yükləmə (export)', () => {
     assert.equal((await api.get('/api/admin/stats/export?from=2024-01-01&to=2026-05-01').set(bearer(adminToken))).status, 400)
   })
 })
+
+describe('email dəyişmək', () => {
+  it('hazırkı şifrə ilə; yanlış şifrə və tutulmuş email rədd olunur; yeni email ilə giriş', async () => {
+    const adminToken = await createAdmin()
+    await register()
+    const change = (body) => api.post('/api/auth/me/email').set(bearer(adminToken)).send(body)
+
+    assert.equal((await change({ email: 'yeni@dirdir.az', currentPassword: 'yanlis' })).body.error.code, 'WRONG_PASSWORD')
+    assert.equal((await change({ email: 'aysel@mail.com', currentPassword: 'admin-password' })).status, 409)
+
+    const ok = await change({ email: 'DirdirAntikafe@Gmail.com', currentPassword: 'admin-password' })
+    assert.equal(ok.body.user.email, 'dirdirantikafe@gmail.com')
+    assert.equal(ok.body.user.isSuperAdmin, true)
+    // Köhnə token işləyir; yeni email ilə daxil olmaq olur
+    assert.equal((await api.get('/api/admin/admins').set(bearer(adminToken))).status, 200)
+    const login = await api.post('/api/auth/login').send({ login: 'dirdirantikafe@gmail.com', password: 'admin-password' })
+    assert.ok(login.body.token)
+  })
+})
