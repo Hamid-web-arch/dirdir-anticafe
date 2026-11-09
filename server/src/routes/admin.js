@@ -49,18 +49,26 @@ const USER_SORT = {
   name: [{ firstName: 'asc' }, { lastName: 'asc' }],
 }
 
-// Axtarış: "Aysel Məm" kimi bir neçə söz — hər söz ad, soyad, email və ya telefonda olmalıdır.
-function userSearchWhere(q) {
+// Müştəri kodu: "DD1001", "dd-1001" və ya sadəcə "1001" → 1001
+const customerNoOf = (word) => {
+  if (!/^(dd)?-?\d{1,9}$/i.test(word)) return null
+  return Number(word.replace(/\D/g, ''))
+}
+
+// Axtarış: "Aysel Məm" kimi bir neçə söz — hər söz ad, soyad, email, telefon və ya müştəri kodunda olmalıdır.
+export function userSearchWhere(q) {
   const words = q.split(/\s+/).filter(Boolean)
   return words.map((word) => {
     // Telefonla yalnız rəqəmli sözdə axtarırıq ("user1"-dəki 1 bütün nömrələrə uyğun gəlməsin)
     const digits = /^[+\d()-]+$/.test(word) ? phoneDigits(word) : ''
+    const customerNo = customerNoOf(word)
     return {
       OR: [
         { firstName: { contains: word, mode: 'insensitive' } },
         { lastName: { contains: word, mode: 'insensitive' } },
         { email: { contains: word, mode: 'insensitive' } },
         ...(digits ? [{ phone: { contains: digits } }] : []),
+        ...(customerNo ? [{ customerNo }] : []),
       ],
     }
   })
@@ -90,6 +98,13 @@ adminRouter.get('/users', async (req, res) => {
     }),
     prisma.user.count({ where }),
   ])
+  // Müştəri kodu ilə axtarışda ("DD1003" və ya "1003") həmin müştəri həmişə birinci — telefonunda
+  // eyni rəqəmlər olan başqaları ondan sonra (və siyahının başqa səhifəsində qalsa da)
+  const exactNo = q && !/\s/.test(q.trim()) ? customerNoOf(q.trim()) : null
+  if (exactNo && offset === 0) {
+    const exact = await prisma.user.findFirst({ where: { AND: [...and, { customerNo: exactNo }] }, include: { _count: { select: { teams: true } } } })
+    if (exact) users.splice(0, users.length, exact, ...users.filter((u) => u.id !== exact.id).slice(0, limit - 1))
+  }
   res.json({ users: users.map(adminUser), total })
 })
 

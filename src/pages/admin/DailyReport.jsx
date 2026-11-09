@@ -711,13 +711,17 @@ function NewVisit({ onCreated, roomBusy }) {
             <div className="font-bold truncate">
               {selected.firstName} {selected.lastName}
             </div>
-            <div className="text-[0.78rem] text-inkdim truncate">Qeydiyyatlı · {selected.phone}</div>
+            <div className="text-[0.78rem] text-inkdim truncate">
+              <b className="text-ink">{selected.customerCode}</b> · Qeydiyyatlı · {selected.phone}
+            </div>
           </div>
           <button type="button" onClick={reset} aria-label="Seçimi ləğv et" className="p-1.5 rounded-full hover:bg-ink/10">
             <PiXBold size={15} />
           </button>
         </div>
-      ) : (
+      ) : null}
+      {selected && <UserGifts userId={selected.id} />}
+      {selected ? null : (
         <div className="relative">
           <PiMagnifyingGlassBold size={17} className="absolute left-3.5 top-[0.85rem] text-inkdim pointer-events-none" />
           <TextInput
@@ -725,7 +729,7 @@ function NewVisit({ onCreated, roomBusy }) {
             value={query}
             maxLength={80}
             autoComplete="off"
-            placeholder="Ad, soyad və ya telefon"
+            placeholder="Ad, telefon və ya müştəri kodu (DD1001)"
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
@@ -750,7 +754,7 @@ function NewVisit({ onCreated, roomBusy }) {
                       {u.firstName} {u.lastName}
                     </span>
                     <span className="block text-[0.78rem] text-inkdim truncate">
-                      {u.phone} · {u.email}
+                      <b className="text-ink">{u.customerCode}</b> · {u.phone} · {u.email}
                     </span>
                   </span>
                 </button>
@@ -835,6 +839,54 @@ function NewVisit({ onCreated, roomBusy }) {
         </Button>
       </div>
     </form>
+  )
+}
+
+// Seçilmiş qeydiyyatlı müştərinin hədiyyə çarxından qazanıb hələ almadığı hədiyyələr.
+// Hədiyyəni verəndə "Verildi" — siyahıdan çıxır (Hədiyyə çarxı bölməsində tarixçə qalır).
+function UserGifts({ userId }) {
+  const request = useAdminApi()
+  const [spins, setSpins] = useState([])
+  const [busyId, setBusyId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    request(`/admin/wheel/spins?status=unused&userId=${encodeURIComponent(userId)}`)
+      .then((d) => !cancelled && setSpins(d.spins))
+      .catch(() => !cancelled && setSpins([]))
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  const give = async (spin) => {
+    setBusyId(spin.id)
+    try {
+      await request(`/admin/wheel/spins/${spin.id}`, { method: 'PATCH', body: { used: true } })
+      setSpins((list) => list.filter((s) => s.id !== spin.id))
+    } catch {
+      // uğursuz olsa siyahıda qalır — admin yenidən basa bilər
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  if (!spins.length) return null
+  return (
+    <div className="mt-2 rounded-xl border-2 border-dashed border-primary/40 bg-brand-orange-soft px-3.5 py-2.5">
+      <p className="text-[0.8rem] font-bold text-brand-orange-deep mb-1.5">🎁 Hədiyyə çarxından qazandığı hədiyyə var:</p>
+      <ul className="flex flex-col gap-1.5">
+        {spins.map((s) => (
+          <li key={s.id} className="flex items-center gap-2">
+            <span className="flex-1 min-w-0 font-bold text-[0.9rem] truncate">{s.prize.az}</span>
+            <Button variant="dark" size="sm" loading={busyId === s.id} onClick={() => give(s)}>
+              Verildi
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

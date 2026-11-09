@@ -20,6 +20,7 @@ enum CompetitionStatus {
 
 model User {
   id                String    @id @default(cuid())
+  customerNo        Int       @unique @default(autoincrement()) // müştəri kodu: 1001 → "DD1001" (server/src/auth.js)
   firstName         String
   lastName          String
   email             String    @unique // həmişə kiçik hərflə saxlanır
@@ -42,6 +43,30 @@ model User {
   broadcasts    Broadcast[]
   visits        Visit[]          @relation("UserVisits")
   visitsLogged  Visit[]          @relation("VisitCreatedBy")
+  wheelSpins    WheelSpin[]
+}
+
+// Hədiyyə çarxı: hər fırlatma və qazanılan hədiyyə. Admin kafedə hədiyyəni verəndə "istifadə olundu" qeyd edir.
+model WheelSpin {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prize     Json // { az, en, ru } — hədiyyənin o anki adı (admin sonra siyahını dəyişsə də qalır)
+  createdAt DateTime  @default(now())
+  usedAt    DateTime? // doluysa — hədiyyə kafedə verilib
+  usedById  String? // hansı admin verib
+
+  @@index([userId, createdAt])
+  @@index([usedAt, createdAt])
+}
+
+// Yüklənmiş videolar (ana səhifənin fonu). Bazada saxlanır — Render-in pulsuz serverində disk yoxdur.
+model Video {
+  id        String   @id @default(cuid())
+  mime      String
+  data      Bytes
+  size      Int
+  createdAt DateTime @default(now())
 }
 
 // Yüklənmiş şəkillər (slider, profil). Serverdə kiçildilib WebP-yə çevrilir.

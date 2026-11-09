@@ -13,6 +13,8 @@ import {
   PiCheckCircleFill,
   PiBellRingingBold,
   PiCoffeeBold,
+  PiGiftBold,
+  PiIdentificationCardBold,
 } from 'react-icons/pi'
 import Reveal from '../components/Reveal.jsx'
 import Switch from '../components/Switch.jsx'
@@ -49,6 +51,9 @@ export default function Account() {
       <div className="relative z-10 max-w-[760px] mx-auto px-5 sm:px-7 flex flex-col gap-6">
         <Reveal>
           <ProfileCard />
+        </Reveal>
+        <Reveal delay={30}>
+          <Gifts />
         </Reveal>
         <Reveal delay={40}>
           <Visits />
@@ -143,6 +148,14 @@ function ProfileCard() {
               </span>
             )}
           </p>
+          {/* Müştəri kodu: kafedə deyir, admin Günün hesabatında bununla tapır */}
+          {user.customerCode && (
+            <div className="inline-flex items-center gap-2.5 mt-2.5 rounded-xl bg-brand-orange-soft px-3 py-1.5" title={t('account.customerCodeHint')}>
+              <PiIdentificationCardBold size={18} className="text-primary shrink-0" />
+              <span className="text-[0.8rem] font-semibold text-inkdim">{t('account.customerCode')}:</span>
+              <span className="font-display font-bold text-[1.05rem] tracking-wider text-ink">{user.customerCode}</span>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-3">
             <input
               ref={fileInput}
@@ -412,6 +425,56 @@ function PasswordCard() {
 
 // Anticafe ziyarətləri: admin seansı başladanda burada canlı saat və məbləğ görünür.
 // Seans başlayıb-bitəndə görünsün deyə siyahı vaxtaşırı yenilənir.
+// Hədiyyə çarxından qazanılanlar. Heç fırlatmayıbsa kart görünmür.
+function Gifts() {
+  const { t, pick, date } = useI18n()
+  const { user, token } = useAuth()
+  const [spins, setSpins] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api('/wheel', { token })
+      .then((d) => !cancelled && setSpins(d.me?.spins ?? []))
+      .catch(() => !cancelled && setSpins([]))
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  if (!spins?.length) return null
+
+  return (
+    <div className={card}>
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-1">
+        <PiGiftBold size={20} className="text-primary" /> {t('account.giftsTitle')}
+      </h2>
+      <p className="text-[0.85rem] text-inkdim mb-4">
+        {t('account.giftsHint')} <span className="font-bold text-ink">{user.customerCode}</span>
+      </p>
+      <ul className="flex flex-col gap-2">
+        {spins.map((s) => (
+          <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-ink/10 px-4 py-3 ${s.usedAt ? 'opacity-60' : ''}`}>
+            <span className="text-[1.3rem]" aria-hidden="true">
+              🎁
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className={`block font-bold ${s.usedAt ? 'line-through' : ''}`}>{pick(s.prize)}</span>
+              <span className="block text-[0.78rem] text-inkdim">{date(s.createdAt)}</span>
+            </span>
+            <span
+              className={`shrink-0 text-[0.75rem] font-bold px-2.5 py-1 rounded-full ${
+                s.usedAt ? 'bg-ink/5 text-inkdim' : 'bg-brand-teal-soft text-brand-teal-deep'
+              }`}
+            >
+              {s.usedAt ? t('account.giftUsed') : t('account.giftWaiting')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Visits() {
   const { t, date } = useI18n()
   const { token } = useAuth()

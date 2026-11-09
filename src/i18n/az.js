@@ -64,45 +64,31 @@ export default {
     statFirst: 'ilk saat, hər şey daxil',
     statHours: 'gündəlik iş saatları',
     statCinema: 'öz kino otağımız',
-    wheel: {
-      tea: 'ÇAY',
-      coffee: 'KOFE',
-      cinema: 'KİNO',
-      games: 'OYUN',
-      sweets: 'ŞİRNİ',
-      drinks: 'SƏRİN İÇKİ',
-      firstHour: 'İLK SAAT',
-    },
-    wheelSpin: 'Çarxı fırlat',
-    wheelHint: 'Bas, fırlat!',
-    wheelAgain: 'Yenidən fırlat',
-    wheelClose: 'Bağla',
-    wheelPrizes: {
-      tea: {
-        title: '🍵 Çay düşdü!',
-        text: 'Çay limitsizdir — bir fincan yox, nə qədər istəsən.',
-      },
-      coffee: {
-        title: '☕ Kofe düşdü!',
-        text: 'Limitsiz kofe ilə oyuna enerjili başla.',
-      },
-      cinema: {
-        title: '🎬 Kino düşdü!',
-        text: 'Öz kino otağımızda dostlarınla film gecəsi et.',
-      },
-      games: {
-        title: '🎲 Oyun düşdü!',
-        text: 'Onlarla stolüstü oyun — hamısı saat haqqına daxildir.',
-      },
-      sweets: {
-        title: '🍪 Şirni düşdü!',
-        text: 'Şirniyyat limitsizdir — çəkinmə, götür.',
-      },
-      drinks: {
-        title: '🥤 Sərin içki düşdü!',
-        text: 'Sərin içkilər də saat haqqına daxildir.',
-      },
-    },
+  },
+
+  // Hədiyyə çarxı (src/components/GiftWheel.jsx)
+  wheel: {
+    label: '🎁 Hədiyyəni indi qazan!',
+    open: 'Hədiyyə çarxını aç',
+    close: 'Bağla',
+    title: 'Hədiyyə çarxı',
+    subtitle: '{period} çarxı fırlat, hədiyyəni qazan!',
+    weekly: 'Həftədə bir dəfə',
+    everyDays: '{days} gündə bir dəfə',
+    spin: 'Çarxı fırlat',
+    spinning: 'Fırlanır…',
+    onlyMembers: 'Hədiyyə qazanmaq üçün saytda qeydiyyat lazımdır.',
+    needAccount: 'Hədiyyəni qazanmaq üçün qeydiyyatdan keç — bir dəqiqəlikdir.',
+    register: 'Qeydiyyatdan keç',
+    login: 'Hesabım var, daxil ol',
+    won: '🎉 Təbriklər! {prize} qazandın!',
+    claim: 'Kafeyə gələndə müştəri kodunu de: {code}. Hədiyyən profilində saxlanılır.',
+    myPrizes: 'Hədiyyələrimə bax',
+    nextIn: 'Növbəti fırlatma: {time} sonra',
+    lastPrize: 'Son hədiyyən: {prize}',
+    waitDays: '{days} gün {hours} saat',
+    waitHours: '{hours} saat {minutes} dəq',
+    waitMinutes: '{minutes} dəq',
   },
 
   highlights: {
@@ -348,6 +334,12 @@ export default {
   },
 
   account: {
+    customerCode: 'Müştəri kodun',
+    customerCodeHint: 'Kafedə bu kodu de — səni dərhal tapaq.',
+    giftsTitle: 'Hədiyyələrim',
+    giftsHint: 'Hədiyyəni almaq üçün kafedə müştəri kodunu de.',
+    giftWaiting: 'Gözləyir',
+    giftUsed: 'İstifadə olunub',
     newsletterTitle: "Bildirişlər",
     newsletterOn: "Turnirlər, endirimlər və yeniliklər barədə sənə yazacağıq.",
     newsletterOff: "Söndürülüb — bizdən xəbər mesajı almayacaqsan.",

@@ -3,7 +3,7 @@ import Reveal from './Reveal.jsx'
 import { business } from '../data/business.js'
 import { useI18n } from '../i18n/index.jsx'
 import { usePricing } from '../pricing/PricingContext.jsx'
-import PrizeWheel from './PrizeWheel.jsx'
+import { useHeroVideo } from '../lib/site.js'
 
 const money = (n) => `${n}${business.currency}`
 
@@ -12,14 +12,25 @@ export default function Hero() {
   const pricing = usePricing()
   // Saatlıq qiymət — zalda ilk saat
   const pricePerHour = pricing.hall.firstHour
+  // Admin paneldən (Görünüş) yüklənən fon videosu; yoxdursa — sadə fon
+  const video = useHeroVideo()
 
   return (
-    <section id="top" className="relative overflow-hidden pt-10 sm:pt-20 pb-12 sm:pb-16">
-      <div className="absolute w-[380px] h-[380px] bg-brand-yellow/35 rounded-full blur-3xl -top-32 -right-20 pointer-events-none" />
-      <div className="absolute w-[260px] h-[260px] bg-brand-teal/35 rounded-full blur-3xl -bottom-16 -left-16 pointer-events-none" />
+    <section
+      id="top"
+      className={`relative overflow-hidden pt-10 sm:pt-20 pb-12 sm:pb-16 ${video ? 'min-h-[78vh] sm:min-h-[640px] flex items-center' : ''}`}
+    >
+      {video ? (
+        <HeroVideo src={video} />
+      ) : (
+        <>
+          <div className="absolute w-[380px] h-[380px] bg-brand-yellow/35 rounded-full blur-3xl -top-32 -right-20 pointer-events-none" />
+          <div className="absolute w-[260px] h-[260px] bg-brand-teal/35 rounded-full blur-3xl -bottom-16 -left-16 pointer-events-none" />
+        </>
+      )}
 
-      <div className="relative z-10 max-w-[1120px] mx-auto px-5 sm:px-7 grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-8 md:gap-12 items-center">
-        <Reveal direction="left">
+      <div className="relative z-10 w-full max-w-[1120px] mx-auto px-5 sm:px-7">
+        <Reveal direction="left" className="max-w-[640px]">
           <span className="inline-flex items-center gap-1.5 text-[0.82rem] tracking-wide uppercase text-brand-purple font-bold mb-5 bg-brand-purple-soft px-3.5 py-1.5 rounded-full">
             <PiMapPin size={16} /> {t('hero.badge', { price: money(pricePerHour) })}
           </span>
@@ -69,12 +80,28 @@ export default function Hero() {
             </div>
           </div>
         </Reveal>
-
-        {/* Telefonda çarx mətndən sonra və kiçik — başlıq ilk ekranda görünsün */}
-        <Reveal direction="right" delay={120} className="flex justify-center items-center">
-          <PrizeWheel price={money(pricePerHour)} />
-        </Reveal>
       </div>
     </section>
+  )
+}
+
+// Fon videosu: səssiz, təkrarlanan; üstündə rəngli pərdə ki, yazılar oxunsun.
+// Hərəkəti azaldılmış cihazlarda avtomatik oynamır (ilk kadr görünür).
+function HeroVideo({ src }) {
+  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  return (
+    <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <video
+        key={src}
+        src={src}
+        autoPlay={!reduced}
+        muted
+        loop
+        playsInline
+        preload={reduced ? 'metadata' : 'auto'}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 bg-bg/80 md:bg-transparent md:bg-gradient-to-r md:from-bg/95 md:via-bg/75 md:to-bg/10" />
+    </div>
   )
 }

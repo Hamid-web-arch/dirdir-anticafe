@@ -28,9 +28,13 @@ export const signToken = (user) =>
 // bu andan əvvəl verilmiş bütün tokenlər (başqa cihazlardakı sessiyalar) etibarsız olur.
 export const passwordChangeMoment = () => new Date(Math.floor(Date.now() / 1000) * 1000)
 
+// Müştəri kodu: 1001 → "DD1001". Kafedə müştərini tanımaq üçün (Günün hesabatında axtarışda da işləyir).
+export const customerCode = (no) => (no == null ? null : `DD${String(no).padStart(4, '0')}`)
+
 // Klientə qaytarılan istifadəçi — şifrə hash-i heç vaxt çıxmır.
 export const publicUser = (u) => ({
   id: u.id,
+  customerCode: customerCode(u.customerNo),
   firstName: u.firstName,
   lastName: u.lastName,
   email: u.email,

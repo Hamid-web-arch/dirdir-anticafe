@@ -11,6 +11,7 @@ import {
   PiClipboardTextBold,
   PiUserGearBold,
   PiChartBarBold,
+  PiGiftBold,
 } from 'react-icons/pi'
 
 // Admin paneldəki bölmələr. `to` həm ünvan, həm də icazə açarıdır — server/src/permissions.js ilə eyni.
@@ -29,6 +30,7 @@ export const SECTIONS = [
   { to: 'oyunlar', label: 'Oyunlar', icon: PiDiceFiveBold, group: 'Sayt' },
   { to: 'slider', label: 'Slider', icon: PiImagesBold, group: 'Sayt' },
   { to: 'gorunus', label: 'Görünüş', icon: PiPaintBrushBold, group: 'Sayt' },
+  { to: 'carx', label: 'Hədiyyə çarxı', icon: PiGiftBold, group: 'Sayt' },
   { to: 'adminler', label: 'Adminlər', icon: PiUserGearBold, group: 'İdarəetmə', superOnly: true },
 ]
 

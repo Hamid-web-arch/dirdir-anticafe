@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
 import FloatingWhatsApp from './components/FloatingWhatsApp.jsx'
+import GiftWheel from './components/GiftWheel.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
 import Home from './pages/Home.jsx'
 import Arena from './pages/Arena.jsx'
@@ -31,6 +32,7 @@ const AdminAdmins = lazy(() => import('./pages/admin/Admins.jsx'))
 const AdminStats = lazy(() => import('./pages/admin/Stats.jsx'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile.jsx'))
 const AdminDailyReport = lazy(() => import('./pages/admin/DailyReport.jsx'))
+const AdminWheel = lazy(() => import('./pages/admin/Wheel.jsx'))
 
 export default function App() {
   const { t } = useI18n()
@@ -74,6 +76,7 @@ export default function App() {
               <Route path="xeberler" element={<AdminBroadcasts />} />
               <Route path="adminler" element={<AdminAdmins />} />
               <Route path="statistika" element={<AdminStats />} />
+              <Route path="carx" element={<AdminWheel />} />
               <Route path="profil" element={<AdminProfile />} />
             </Route>
             <Route path="*" element={<NotFound />} />
@@ -84,6 +87,7 @@ export default function App() {
         <>
           <Footer />
           <FloatingWhatsApp />
+          <GiftWheel />
         </>
       )}
     </div>

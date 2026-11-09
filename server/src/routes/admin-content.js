@@ -5,7 +5,8 @@ import { HttpError } from '../middleware/error.js'
 import { requirePermission } from '../permissions.js'
 import { processImage, rawImage } from '../images.js'
 import { publicGame } from './games.js'
-import { getSiteImages, siteImageSettingKey } from '../site.js'
+import { getSiteImages, siteImageSettingKey, getHeroVideo, HERO_VIDEO_KEY } from '../site.js'
+import { rawVideo, checkVideo } from '../videos.js'
 import { emailConfigured, sendMail } from '../mail.js'
 import {
   gameCreateSchema,
@@ -152,6 +153,41 @@ adminContentRouter.delete('/site-images/:key', async (req, res) => {
     await tx.image.deleteMany({ where: { id: old.value } })
   })
   res.json({ images: await getSiteImages() })
+})
+
+// ---------- Ana səhifənin fon videosu ----------
+
+adminContentRouter.use('/hero-video', requirePermission('gorunus'))
+
+adminContentRouter.get('/hero-video', async (req, res) => {
+  res.json({ url: await getHeroVideo() })
+})
+
+// Videonun özü göndərilir (Content-Type: video/*); köhnə video silinir.
+adminContentRouter.put('/hero-video', rawVideo, async (req, res) => {
+  const video = checkVideo(req.body)
+  await prisma.$transaction(async (tx) => {
+    const old = await tx.appSetting.findUnique({ where: { key: HERO_VIDEO_KEY } })
+    const created = await tx.video.create({ data: video, select: { id: true } })
+    await tx.appSetting.upsert({
+      where: { key: HERO_VIDEO_KEY },
+      create: { key: HERO_VIDEO_KEY, value: created.id },
+      update: { value: created.id },
+    })
+    if (old) await tx.video.deleteMany({ where: { id: old.value } })
+  })
+  res.json({ url: await getHeroVideo() })
+})
+
+// Videonu sil — ana səhifə sadə fona qayıdır
+adminContentRouter.delete('/hero-video', async (req, res) => {
+  await prisma.$transaction(async (tx) => {
+    const old = await tx.appSetting.findUnique({ where: { key: HERO_VIDEO_KEY } })
+    if (!old) return
+    await tx.appSetting.delete({ where: { key: HERO_VIDEO_KEY } })
+    await tx.video.deleteMany({ where: { id: old.value } })
+  })
+  res.json({ url: null })
 })
 
 // ---------- Xəbər göndərmək ----------

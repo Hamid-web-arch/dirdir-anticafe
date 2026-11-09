@@ -127,7 +127,7 @@ export default function AdminUsers() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Ad, soyad, email və ya telefon (məs. Aysel, 050 123)"
+            placeholder="Ad, soyad, email, telefon və ya müştəri kodu (məs. Aysel, 050 123, DD1001)"
             aria-label="İstifadəçi axtar"
             className="w-full bg-bg border-2 border-ink/10 rounded-full pl-11 pr-11 py-3 outline-none focus:border-primary"
           />
@@ -320,7 +320,7 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
             )}
           </div>
           <div className="text-[0.82rem] text-inkdim truncate">
-            {u.email} · +994 {formatPhone(u.phone)}
+            <b className="text-ink">{u.customerCode}</b> · {u.email} · +994 {formatPhone(u.phone)}
           </div>
         </div>
         <div className="hidden sm:block text-right text-[0.8rem] text-inkdim shrink-0">

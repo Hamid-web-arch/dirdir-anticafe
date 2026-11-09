@@ -62,45 +62,30 @@ export default {
     statFirst: 'first hour, all included',
     statHours: 'open daily',
     statCinema: 'our own cinema room',
-    wheel: {
-      tea: 'TEA',
-      coffee: 'COFFEE',
-      cinema: 'CINEMA',
-      games: 'GAMES',
-      sweets: 'SWEETS',
-      drinks: 'DRINKS',
-      firstHour: 'FIRST HOUR',
-    },
-    wheelSpin: 'Spin the wheel',
-    wheelHint: 'Tap to spin!',
-    wheelAgain: 'Spin again',
-    wheelClose: 'Close',
-    wheelPrizes: {
-      tea: {
-        title: '🍵 You got tea!',
-        text: 'Tea is unlimited — not one cup, as much as you like.',
-      },
-      coffee: {
-        title: '☕ You got coffee!',
-        text: 'Start your game full of energy with unlimited coffee.',
-      },
-      cinema: {
-        title: '🎬 You got cinema!',
-        text: 'Have a movie night with friends in our own cinema room.',
-      },
-      games: {
-        title: '🎲 You got games!',
-        text: 'Dozens of board games — all included in the hourly price.',
-      },
-      sweets: {
-        title: '🍪 You got sweets!',
-        text: 'Sweets are unlimited — go ahead, help yourself.',
-      },
-      drinks: {
-        title: '🥤 You got cold drinks!',
-        text: 'Soft drinks are included in the hourly price too.',
-      },
-    },
+  },
+
+  wheel: {
+    label: '🎁 Win a gift now!',
+    open: 'Open the gift wheel',
+    close: 'Close',
+    title: 'Gift wheel',
+    subtitle: 'Spin the wheel {period} and win a gift!',
+    weekly: 'once a week',
+    everyDays: 'once every {days} days',
+    spin: 'Spin the wheel',
+    spinning: 'Spinning…',
+    onlyMembers: 'You need an account on the site to win a gift.',
+    needAccount: 'Sign up to win your gift — it takes a minute.',
+    register: 'Sign up',
+    login: 'I have an account — log in',
+    won: '🎉 Congrats! You won {prize}!',
+    claim: 'Tell us your customer code at the café: {code}. Your gift is saved in your profile.',
+    myPrizes: 'See my gifts',
+    nextIn: 'Next spin in {time}',
+    lastPrize: 'Your last gift: {prize}',
+    waitDays: '{days} d {hours} h',
+    waitHours: '{hours} h {minutes} min',
+    waitMinutes: '{minutes} min',
   },
 
   highlights: {
@@ -345,6 +330,12 @@ export default {
   },
 
   account: {
+    customerCode: 'Your customer code',
+    customerCodeHint: 'Tell us this code at the café so we can find you right away.',
+    giftsTitle: 'My gifts',
+    giftsHint: 'To get your gift, tell us your customer code at the café.',
+    giftWaiting: 'Waiting',
+    giftUsed: 'Used',
     newsletterTitle: "Notifications",
     newsletterOn: "We'll message you about tournaments, discounts and news.",
     newsletterOff: "Off — you won't receive news messages from us.",

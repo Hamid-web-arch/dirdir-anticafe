@@ -15,6 +15,7 @@ export const ADMIN_PERMISSIONS = [
   'oyunlar', // Oyunlar
   'slider', // Slider
   'gorunus', // Görünüş
+  'carx', // Hədiyyə çarxı (hədiyyələr, müddət, qazananlar)
 ]
 
 // Baş admin hər şeyə icazəlidir; digər admin yalnız ona verilən bölmələrə

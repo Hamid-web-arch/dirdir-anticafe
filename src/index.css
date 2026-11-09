@@ -455,6 +455,74 @@ body {
   }
 }
 
+/* Sol aşağıdakı hədiyyə çarxı düyməsi (GiftWheel): balaca çarx yavaş fırlanır, ətrafdan narıncı dalğalar,
+   "Hədiyyəni indi qazan!" yazısı ara-sıra yırğalanır. Pəncərə açılanda yumşaq böyüyür. */
+@layer components {
+  .gift-float {
+    animation: gift-pulse 2.6s ease-out infinite;
+  }
+  .gift-float-wheel {
+    animation: gift-spin 9s linear infinite;
+  }
+  .gift-label {
+    animation:
+      wheel-prize-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both,
+      gift-nudge 6s ease-in-out 2s infinite;
+  }
+  .gift-modal {
+    animation: gift-modal-in 0.3s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  }
+  @keyframes gift-pulse {
+    0% {
+      box-shadow:
+        0 0 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+        0 10px 24px rgb(0 0 0 / 0.18);
+    }
+    70%,
+    100% {
+      box-shadow:
+        0 0 0 18px color-mix(in srgb, var(--color-primary) 0%, transparent),
+        0 10px 24px rgb(0 0 0 / 0.18);
+    }
+  }
+  @keyframes gift-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes gift-nudge {
+    0%,
+    86%,
+    100% {
+      transform: none;
+    }
+    90% {
+      transform: translateX(4px) rotate(-2deg);
+    }
+    94% {
+      transform: translateX(-2px) rotate(1deg);
+    }
+  }
+  @keyframes gift-modal-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gift-float,
+    .gift-float-wheel,
+    .gift-label,
+    .gift-modal {
+      animation: none;
+    }
+  }
+}
+
 /* Hesablayıcıdakı slayderlər: dolu hissə --fill faizi ilə rənglənir */
 @layer components {
   .range {

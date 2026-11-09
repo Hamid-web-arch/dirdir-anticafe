@@ -1450,3 +1450,146 @@ describe('email dəyişmək', () => {
     assert.ok(login.body.token)
   })
 })
+
+describe('müştəri kodu', () => {
+  it('hər istifadəçiyə ardıcıl kod; profildə görünür; adminin axtarışında kodla tapılır', async () => {
+    const adminToken = await createAdmin()
+    const first = await register()
+    const second = await register({ email: 'kamal@mail.com', phone: '0551112233', firstName: 'Kamal' })
+    assert.match(first.body.user.customerCode, /^DD\d{4}$/)
+    const no = (code) => Number(code.slice(2))
+    assert.equal(no(second.body.user.customerCode), no(first.body.user.customerCode) + 1)
+
+    const me = await api.get('/api/auth/me').set(bearer(second.body.token))
+    assert.equal(me.body.user.customerCode, second.body.user.customerCode)
+
+    // "DD0003" və "dd-0003" — yalnız bu istifadəçi
+    const code = second.body.user.customerCode
+    for (const q of [code, code.toLowerCase().replace('dd', 'dd-')]) {
+      const res = await api.get(`/api/admin/users?q=${encodeURIComponent(q)}`).set(bearer(adminToken))
+      assert.deepEqual(res.body.users.map((u) => u.firstName), ['Kamal'], q)
+    }
+    // Sadəcə rəqəm telefonlara da uyğun gələ bilər (hər iki nömrədə var) — kodu olan həmişə birincidir,
+    // siyahı yeni qeydiyyatdan başlasa da (Kamal daha yenidir)
+    const firstNo = no(first.body.user.customerCode)
+    const digits = await api.get(`/api/admin/users?q=${firstNo}&limit=1`).set(bearer(adminToken))
+    assert.equal(digits.body.users[0].firstName, 'Aysel')
+  })
+})
+
+describe('hədiyyə çarxı', () => {
+  it('yalnız daxil olan fırladır, müddət keçməmiş təkrar olmur, hədiyyə profildə görünür', async () => {
+    const guest = await api.get('/api/wheel')
+    assert.equal(guest.status, 200)
+    assert.equal(guest.body.me, null)
+    assert.ok(guest.body.prizes.length >= 2)
+    assert.equal(guest.body.prizes[0].chance, undefined) // şanslar gizlidir
+    assert.equal((await api.post('/api/wheel/spin')).status, 401)
+
+    const { body: user } = await register()
+    const spin = await api.post('/api/wheel/spin').set(bearer(user.token))
+    assert.equal(spin.status, 201)
+    assert.deepEqual(spin.body.spin.prize, spin.body.prizes[spin.body.index].label)
+    assert.ok(new Date(spin.body.nextSpinAt) > new Date(Date.now() + 6 * 24 * 3600 * 1000))
+
+    const again = await api.post('/api/wheel/spin').set(bearer(user.token))
+    assert.equal(again.status, 409)
+    assert.equal(again.body.error.code, 'WHEEL_WAIT')
+
+    const state = await api.get('/api/wheel').set(bearer(user.token))
+    assert.equal(state.body.me.spins.length, 1)
+    assert.ok(state.body.me.nextSpinAt)
+
+    // Fırlatma 8 gün əvvəl olubsa — yenidən olar
+    await ctx.prisma.wheelSpin.updateMany({ data: { createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000) } })
+    assert.equal((await api.post('/api/wheel/spin').set(bearer(user.token))).status, 201)
+  })
+
+  it('admin müddəti və hədiyyələri dəyişir, söndürür; hədiyyəni "istifadə olundu" qeyd edir', async () => {
+    const adminToken = await createAdmin()
+    const { body: user } = await register()
+
+    const bad = await api
+      .put('/api/admin/wheel')
+      .set(bearer(adminToken))
+      .send({ enabled: true, periodDays: 0, prizes: [{ label: { az: 'Tək' }, chance: 1 }] })
+    assert.equal(bad.status, 400)
+    assert.ok(bad.body.error.fields.periodDays)
+    assert.ok(bad.body.error.fields.prizes)
+
+    const saved = await api
+      .put('/api/admin/wheel')
+      .set(bearer(adminToken))
+      .send({ enabled: true, periodDays: 1, prizes: [{ label: { az: 'Çay' }, chance: 1 }, { label: { az: 'Kofe', en: 'Coffee' }, chance: 1 }] })
+    assert.equal(saved.status, 200)
+    assert.equal(saved.body.wheel.periodDays, 1)
+    assert.equal((await api.get('/api/wheel')).body.prizes.length, 2)
+
+    const spin = await api.post('/api/wheel/spin').set(bearer(user.token))
+    assert.ok(['Çay', 'Kofe'].includes(spin.body.spin.prize.az))
+    // 1 günlük müddət: 25 saat əvvəlki fırlatmadan sonra yenidən olar
+    await ctx.prisma.wheelSpin.updateMany({ data: { createdAt: new Date(Date.now() - 25 * 3600 * 1000) } })
+    assert.equal((await api.post('/api/wheel/spin').set(bearer(user.token))).status, 201)
+
+    // İstifadəçinin istifadə olunmamış hədiyyələri (Günün hesabatı) və "verildi" qeydi
+    const unused = await api.get(`/api/admin/wheel/spins?status=unused&userId=${user.user.id}`).set(bearer(adminToken))
+    assert.equal(unused.body.spins.length, 2)
+    assert.equal(unused.body.spins[0].user.customerCode, user.user.customerCode)
+    const used = await api.patch(`/api/admin/wheel/spins/${unused.body.spins[0].id}`).set(bearer(adminToken)).send({ used: true })
+    assert.ok(used.body.spin.usedAt)
+    const left = await api.get(`/api/admin/wheel/spins?status=unused&userId=${user.user.id}`).set(bearer(adminToken))
+    assert.equal(left.body.spins.length, 1)
+
+    // Söndürüləndə fırlatmaq olmur
+    await api.put('/api/admin/wheel').set(bearer(adminToken)).send({ ...saved.body.wheel, enabled: false })
+    await ctx.prisma.wheelSpin.deleteMany()
+    const off = await api.post('/api/wheel/spin').set(bearer(user.token))
+    assert.equal(off.body.error.code, 'WHEEL_OFF')
+    // Adi istifadəçi ayarlara baxa bilməz
+    assert.equal((await api.get('/api/admin/wheel').set(bearer(user.token))).status, 403)
+  })
+})
+
+describe('ana səhifənin videosu', () => {
+  // Kiçik "MP4": 4-cü baytdan "ftyp" + brend
+  const fakeMp4 = () => {
+    const buf = Buffer.alloc(4096, 7)
+    buf.write('ftypisom', 4, 'latin1')
+    return buf
+  }
+
+  it('admin yükləyir; sayt ünvanı alır; hissə-hissə (Range) verilir; silinir', async () => {
+    const adminToken = await createAdmin()
+    assert.equal((await api.get('/api/site')).body.heroVideo, null)
+
+    const notVideo = await api.put('/api/admin/hero-video').set(bearer(adminToken)).set('Content-Type', 'video/mp4').send(Buffer.from('salam dünya, bu video deyil'))
+    assert.equal(notVideo.status, 400)
+    assert.equal(notVideo.body.error.code, 'VIDEO_INVALID')
+
+    const up = await api.put('/api/admin/hero-video').set(bearer(adminToken)).set('Content-Type', 'video/mp4').send(fakeMp4())
+    assert.equal(up.status, 200)
+    const url = up.body.url
+    assert.match(url, /^\/api\/videos\//)
+    assert.equal((await api.get('/api/site')).body.heroVideo, url)
+
+    const full = await api.get(url).buffer(true)
+    assert.equal(full.status, 200)
+    assert.equal(full.headers['content-type'], 'video/mp4')
+    assert.equal(Number(full.headers['content-length']), 4096)
+
+    const part = await api.get(url).set('Range', 'bytes=0-99').buffer(true)
+    assert.equal(part.status, 206)
+    assert.equal(part.headers['content-range'], 'bytes 0-99/4096')
+    assert.equal(Number(part.headers['content-length']), 100)
+    assert.equal((await api.get(url).set('Range', 'bytes=5000-')).status, 416)
+
+    // Əvəz edəndə köhnəsi silinir
+    const second = await api.put('/api/admin/hero-video').set(bearer(adminToken)).set('Content-Type', 'video/mp4').send(fakeMp4())
+    assert.notEqual(second.body.url, url)
+    assert.equal(await ctx.prisma.video.count(), 1)
+
+    const removed = await api.delete('/api/admin/hero-video').set(bearer(adminToken))
+    assert.equal(removed.body.url, null)
+    assert.equal(await ctx.prisma.video.count(), 0)
+  })
+})

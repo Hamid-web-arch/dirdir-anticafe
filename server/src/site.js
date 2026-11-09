@@ -1,6 +1,15 @@
 import { prisma } from './db.js'
 import { imageUrl } from './images.js'
 import { SITE_IMAGE_KEYS } from './validation.js'
+import { videoUrl } from './videos.js'
+
+// Ana səhifənin fon videosu: AppSetting "video.hero" = videonun id-si
+export const HERO_VIDEO_KEY = 'video.hero'
+
+export async function getHeroVideo() {
+  const row = await prisma.appSetting.findUnique({ where: { key: HERO_VIDEO_KEY } })
+  return videoUrl(row?.value ?? null)
+}
 
 // Saytın admin paneldən dəyişən şəkilləri (giriş / qeydiyyat səhifələri). AppSetting-də "image.<açar>" = şəklin id-si.
 export const siteImageSettingKey = (key) => `image.${key}`

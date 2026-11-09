@@ -12,7 +12,9 @@ import { promoRouter } from './routes/promo.js'
 import { getPricing } from './pricing.js'
 import { gamesRouter } from './routes/games.js'
 import { adminContentRouter } from './routes/admin-content.js'
-import { getSiteImages } from './site.js'
+import { getSiteImages, getHeroVideo } from './site.js'
+import { serveVideo } from './videos.js'
+import { wheelRouter, adminWheelRouter } from './routes/wheel.js'
 import { optionalAuth } from './auth.js'
 import { feedbackSchema } from './validation.js'
 import { adminRouter } from './routes/admin.js'
@@ -55,6 +57,8 @@ export function createApp() {
 
   // Şəkillər brauzerdə keşlənir; sorğu limitinə daxil deyil ki, şəkilli səhifələr limiti yeməsin.
   app.get('/api/images/:id', serveImage)
+  // Video da hissə-hissə (Range) yüklənir — hər hissə bir sorğudur, limitə daxil deyil
+  app.get('/api/videos/:id', serveVideo)
 
   // Şifrə təxmin etməyə və kod axtarmağa qarşı daha sərt limit
   app.use('/api/auth/login', limiter(10, 15))
@@ -73,6 +77,7 @@ export function createApp() {
   app.use('/api/auth/me/avatar', limiter(20, 60)) // hər yükləmə serverdə emal olunur
   app.use('/api/promo', limiter(20, 1))
   app.use('/api/feedback', limiter(5, 15)) // spam olmasın
+  app.use('/api/wheel/spin', limiter(10, 15))
   app.use('/api', limiter(300, 15))
 
   // Şəxsi məlumatlı cavablar brauzerdə və aralıq keşlərdə saxlanmasın (şəkillər yuxarıda, ayrıca keşlənir)
@@ -88,7 +93,8 @@ export function createApp() {
 
   // Admin paneldən dəyişən şəkillər (giriş / qeydiyyat)
   app.get('/api/site', async (req, res) => {
-    res.json({ images: await getSiteImages() })
+    const [images, heroVideo] = await Promise.all([getSiteImages(), getHeroVideo()])
+    res.json({ images, heroVideo })
   })
 
   // Rəy və təkliflər — hər kəs yaza bilər; daxil olubsa, kimin yazdığı da saxlanır
@@ -109,6 +115,8 @@ export function createApp() {
   app.use('/api/admin', adminVisitsRouter)
   app.use('/api/admin', adminAdminsRouter)
   app.use('/api/admin', adminStatsRouter)
+  app.use('/api/wheel', wheelRouter)
+  app.use('/api/admin', adminWheelRouter)
 
   app.use(notFound)
   app.use(errorHandler)
