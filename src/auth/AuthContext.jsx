@@ -60,7 +60,18 @@ export function AuthProvider({ children }) {
       token,
       checking,
       login: async (credentials) => saveSession(await api('/auth/login', { method: 'POST', body: credentials })),
-      register: async (data) => saveSession(await api('/auth/register', { method: 'POST', body: data })),
+      // Qeydiyyat: server emailə kod göndəribsə { pending, email } qaytarılır (hesab hələ yoxdur);
+      // email göndərmə qurulmayıbsa hesab dərhal yaranır və daxil oluruq (null qaytarılır)
+      register: async (data) => {
+        const res = await api('/auth/register', { method: 'POST', body: data })
+        if (res.pending) return res
+        saveSession(res)
+        return null
+      },
+      // Emailə gələn kod düzgündürsə hesab yaranır və daxil oluruq
+      verifyRegistration: async (body) => saveSession(await api('/auth/register/verify', { method: 'POST', body })),
+      // Şifrə bərpası: kod + yeni şifrə → yeni sessiya
+      resetPassword: async (body) => saveSession(await api('/auth/password/reset', { method: 'POST', body })),
       // Profil dəyişəndə (ad, şəkil) serverin qaytardığı yeni istifadəçi
       updateUser: setUser,
       // Şifrə dəyişəndə server yeni token verir (köhnə tokenlər etibarsız olur)

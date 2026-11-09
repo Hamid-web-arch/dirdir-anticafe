@@ -10,7 +10,19 @@ import {
   requireAuth,
 } from '../auth.js'
 import { HttpError } from '../middleware/error.js'
-import { registerSchema, loginSchema, profileUpdateSchema, passwordChangeSchema, emailChangeSchema } from '../validation.js'
+import {
+  registerRequestSchema,
+  registerVerifySchema,
+  registerResendSchema,
+  passwordForgotSchema,
+  passwordResetSchema,
+  loginSchema,
+  profileUpdateSchema,
+  passwordChangeSchema,
+  emailChangeSchema,
+} from '../validation.js'
+import { canSendCodes } from '../mail.js'
+import { issueCode, checkCode, consumeCodes, latestCode, assertCanResend } from '../emailCodes.js'
 import { processImage, rawImage } from '../images.js'
 import { teamRank } from './competitions.js'
 import { publicVisit } from '../visits.js'
@@ -39,15 +51,84 @@ export async function assertUnique({ email, phone }, exceptUserId) {
   throw new HttpError(409, 'ACCOUNT_EXISTS', 'Bu məlumatlarla artıq hesab var.', { fields, fieldCodes })
 }
 
+// Qeydiyyat iki addımdır: forma → emailə 6 rəqəmli kod → kod təsdiqlənəndə hesab yaranır.
+// Email göndərmə qurulmayıbsa (canlıda RESEND_API_KEY yoxdur), hesab əvvəlki kimi dərhal yaranır.
 authRouter.post('/register', async (req, res) => {
-  const data = registerSchema.parse(req.body)
+  const { lang, ...data } = registerRequestSchema.parse(req.body)
   await assertUnique(data)
 
   const { password, ...rest } = data
-  const user = await prisma.user.create({
-    data: { ...rest, passwordHash: await hashPassword(password) },
+  const passwordHash = await hashPassword(password)
+  if (!canSendCodes()) {
+    const user = await prisma.user.create({ data: { ...rest, passwordHash } })
+    return res.status(201).json({ token: signToken(user), user: publicUser(user) })
+  }
+
+  // Formanı təkrar göndərəndə (məs. səhv emaili düzəldib) məktub spamı olmasın
+  assertCanResend(await latestCode(rest.email, 'register'))
+  await issueCode({
+    email: rest.email,
+    purpose: 'register',
+    name: rest.firstName,
+    lang,
+    data: { ...rest, passwordHash, lang },
   })
+  res.status(202).json({ pending: true, email: rest.email })
+})
+
+// Kod düzgündürsə hesab yaranır və istifadəçi dərhal daxil olur
+authRouter.post('/register/verify', async (req, res) => {
+  const { email, code } = registerVerifySchema.parse(req.body)
+  const record = await checkCode({ email, purpose: 'register', code })
+  const { lang, passwordHash, ...rest } = record.data
+  // Kod gözləyərkən bu email/telefonla başqası qeydiyyatdan keçə bilərdi
+  await assertUnique({ email, phone: rest.phone })
+  const user = await prisma.user.create({ data: { ...rest, email, passwordHash } })
+  await consumeCodes(email, 'register')
   res.status(201).json({ token: signToken(user), user: publicUser(user) })
+})
+
+// Kod gəlməyib — yenisini göndər (eyni məlumatlarla)
+authRouter.post('/register/resend', async (req, res) => {
+  const { email, lang } = registerResendSchema.parse(req.body)
+  const last = await latestCode(email, 'register')
+  if (!last?.data) {
+    throw new HttpError(400, 'CODE_EXPIRED', 'Qeydiyyatın vaxtı bitib — formanı yenidən doldur.')
+  }
+  assertCanResend(last)
+  await issueCode({ email, purpose: 'register', name: last.data.firstName, lang, data: last.data })
+  res.json({ ok: true })
+})
+
+// ---------- Şifrə bərpası ----------
+// Hesabın olub-olmadığını bildirmirik: email tapılmasa da cavab eynidir (amma məktub getmir).
+
+authRouter.post('/password/forgot', async (req, res) => {
+  const { email, lang } = passwordForgotSchema.parse(req.body)
+  if (!canSendCodes()) throw new HttpError(503, 'EMAIL_OFF', 'Şifrə bərpası hələ işləmir — bizə WhatsApp-dan yaz.')
+  const user = await prisma.user.findUnique({ where: { email } })
+  const last = await latestCode(email, 'reset')
+  // Bloklanmış hesaba və tez-tez istəyə məktub getmir — cavab yenə də eynidir
+  const tooSoon = last && Date.now() - last.createdAt.getTime() < 60_000
+  if (user && !user.blockedAt && !tooSoon) {
+    // Gözləmirik: cavabın vaxtından da hesabın olub-olmadığı bilinməsin (xəta issueCode-da loglanır)
+    issueCode({ email, purpose: 'reset', name: user.firstName, lang }).catch(() => {})
+  }
+  res.json({ ok: true, email })
+})
+
+authRouter.post('/password/reset', async (req, res) => {
+  const { email, code, newPassword } = passwordResetSchema.parse(req.body)
+  await checkCode({ email, purpose: 'reset', code })
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user || user.blockedAt) throw new HttpError(400, 'CODE_EXPIRED', 'Kodun vaxtı bitib — yeni kod istə.')
+  // Şifrə dəyişir və bütün köhnə sessiyalar bağlanır (auth.js → passwordChangedAt)
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(newPassword), passwordChangedAt: passwordChangeMoment() },
+  })
+  await consumeCodes(email, 'reset')
+  res.json({ token: signToken(updated), user: publicUser(updated) })
 })
 
 authRouter.post('/login', async (req, res) => {

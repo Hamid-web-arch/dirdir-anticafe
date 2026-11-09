@@ -10,6 +10,7 @@ import Arena from './pages/Arena.jsx'
 import Sponsors from './pages/Sponsors.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
 import Account from './pages/Account.jsx'
 import Games, { GameDetails } from './pages/Games.jsx'
 import SlideDetails from './pages/SlideDetails.jsx'
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/sponsorlar" element={<Sponsors />} />
             <Route path="/giris" element={<Login />} />
             <Route path="/qeydiyyat" element={<Register />} />
+            <Route path="/sifre-berpa" element={<ForgotPassword />} />
             <Route path="/hesabim" element={<Account />} />
             <Route path="/oyunlar" element={<Games />} />
             <Route path="/oyunlar/:id" element={<GameDetails />} />

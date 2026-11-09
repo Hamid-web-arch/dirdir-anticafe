@@ -2,6 +2,7 @@
 export default {
   langName: 'Русский',
   seo: {
+    forgot: { title: 'Восстановление пароля — DırDır Anticafe' },
     home: {
       title: 'DırDır Anticafe Баку — антикафе, первый час {price}',
       description:
@@ -260,6 +261,23 @@ export default {
   },
 
   auth: {
+    codeTitle: 'Подтверди email',
+    codeSubtitle: 'Мы отправили 6-значный код на {email}. Аккаунт будет создан после ввода кода.',
+    codeLabel: 'Код подтверждения',
+    codeHint: 'Письма нет? Проверь папку «Спам».',
+    codeSubmit: 'Подтвердить',
+    codeResend: 'Отправить код ещё раз',
+    codeResendIn: 'Новый код через {seconds} с',
+    codeResent: 'Новый код отправлен.',
+    codeChangeEmail: 'Изменить email',
+    forgotLink: 'Забыл пароль?',
+    forgotTitle: 'Восстановление пароля',
+    forgotSubtitle: 'Введи email аккаунта — мы отправим туда код.',
+    forgotSubmit: 'Отправить код',
+    resetSubtitle: 'Если аккаунт с адресом {email} существует, мы отправили туда 6-значный код. Введи его и новый пароль.',
+    newPassword: 'Новый пароль',
+    resetSubmit: 'Обновить пароль',
+    backToLogin: 'Вернуться ко входу',
     newsletter: 'Сообщать о новостях, турнирах и скидках',
     newsletterNote: 'По email или в WhatsApp. Можно изменить в профиле в любое время.',
     loginTitle: 'С возвращением!',
@@ -295,6 +313,7 @@ export default {
   },
 
   validation: {
+    code: 'Введи 6-значный код из письма.',
     email: 'Введите корректный email.',
     login: 'Введите корректный email или номер телефона.',
     passwordRequired: 'Введите пароль.',
@@ -308,6 +327,11 @@ export default {
   },
 
   errors: {
+    CODE_INVALID: 'Неверный код.',
+    CODE_EXPIRED: 'Срок кода истёк — запроси новый.',
+    CODE_COOLDOWN: 'Новый код можно запросить через минуту.',
+    EMAIL_FAILED: 'Не удалось отправить письмо. Попробуй чуть позже.',
+    EMAIL_OFF: 'Восстановление пароля пока не работает — напиши нам в WhatsApp.',
     NETWORK: 'Не удалось связаться с сервером. Проверьте интернет и попробуйте снова.',
     SERVER_ERROR: 'На сервере произошла ошибка. Попробуйте позже.',
     RATE_LIMITED: 'Слишком много попыток — попробуйте чуть позже.',

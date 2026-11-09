@@ -40,7 +40,11 @@ Daxil olmaq tələb edən ünvanlara `Authorization: Bearer <token>` başlığı
 | Metod | Ünvan | Kim | Nə edir |
 |---|---|---|---|
 | GET | `/api/health` | hamı | Server və baza işləyir? |
-| POST | `/api/auth/register` | hamı | `{ firstName, lastName, email, phone, password }` → `{ token, user }` |
+| POST | `/api/auth/register` | hamı | `{ firstName, lastName, email, phone, password, lang? }` → 202 `{ pending, email }` (emailə 6 rəqəmli kod gedir). Email qurulmayıbsa → 201 `{ token, user }` |
+| POST | `/api/auth/register/verify` | hamı | `{ email, code }` → hesab yaranır → `{ token, user }` |
+| POST | `/api/auth/register/resend` | hamı | `{ email, lang? }` — yeni kod (ən tez 60 saniyədən bir) |
+| POST | `/api/auth/password/forgot` | hamı | `{ email, lang? }` — hesab varsa emailə bərpa kodu (cavab hər halda eynidir) |
+| POST | `/api/auth/password/reset` | hamı | `{ email, code, newPassword }` → `{ token, user }`; köhnə sessiyalar bağlanır |
 | POST | `/api/auth/login` | hamı | `{ login, password }` → `{ token, user }`; `login` — email və ya telefon nömrəsi (köhnə `email` sahəsi də qəbul olunur) |
 | GET / PATCH | `/api/auth/me` | istifadəçi | Profil / ad, soyad, telefonu dəyiş |
 | POST | `/api/auth/me/password` | istifadəçi | `{ currentPassword, newPassword }` |
@@ -92,12 +96,22 @@ Xətalarda `code` sahəsi də var (məs. `EMAIL_TAKEN`, `TEAM_NAME_TAKEN`) — s
 Şifrələr bcrypt ilə saxlanır; giriş (15 dəqiqədə 10), qeydiyyat və promokod yoxlaması üçün sorğu limiti var;
 yalnız `CORS_ORIGINS`-dəki saytlar API-yə brauzerdən müraciət edə bilər.
 
-## Email göndərmək (könüllü)
+## Email göndərmək
 
-Admin paneldəki "Xəbər göndər" email ilə işləsin deyə serverə SMTP ayarları lazımdır (Render → dirdir-api → Environment):
-`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. Gmail: hesabda 2 addımlı doğrulamanı aç,
-myaccount.google.com/apppasswords-dan "App password" yarat — `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`.
-Ayarlar yoxdursa email kanalı söndürülür; WhatsApp kanalı həmişə işləyir (hər alıcı üçün hazır mesajlı link).
+Email bunlar üçündür: **qeydiyyat kodu** (hesab kod təsdiqlənəndə yaranır), **şifrə bərpası** və admin paneldəki "Xəbər göndər".
+Məktublar `noreply@dirdir.az` ünvanından [Resend](https://resend.com) ilə (HTTPS API) gedir — Render-in pulsuz planı
+SMTP portlarını (25, 465, 587) bağlayır, ona görə Gmail SMTP orada işləmir.
+
+1. resend.com-da hesab aç → **Domains → Add domain** → `dirdir.az`. Resend-in göstərdiyi DNS qeydlərini (TXT/MX/CNAME)
+   domeni aldığın yerdə əlavə et və "Verify" bas.
+2. **API Keys → Create** (icazə: *Sending access*) → açarı kopyala.
+3. Render → dirdir-api → Environment: `RESEND_API_KEY` = açar (`MAIL_FROM` render.yaml-dadır). Saxla — server yenidən başlayır.
+
+`RESEND_API_KEY` boşdursa: canlıda qeydiyyat əvvəlki kimi kodsuz (dərhal) işləyir, şifrə bərpası söndürülür, "Xəbər göndər"-də
+email kanalı bağlıdır (WhatsApp kanalı həmişə işləyir). Lokalda (`NODE_ENV=development`) məktublar göndərilmir — serverin
+terminalına yazılır, qeydiyyat kodunu oradan götürürsən. SMTP (`SMTP_*`) yalnız SMTP-yə icazə verən hostinq üçündür.
+
+Kodlar 6 rəqəmlidir, 15 dəqiqə keçərlidir, 5 səhv cəhddən sonra etibarsız olur; bazada yalnız HMAC-ı saxlanır.
 
 ## Canlıya çıxarmaq (Render + Neon)
 

@@ -94,6 +94,9 @@ export default function Login() {
           onChange={update('password')}
           error={message('password')}
         />
+        <Link to="/sifre-berpa" className="self-end -mt-2 text-[0.88rem] font-bold text-primary hover:underline">
+          {t('auth.forgotLink')}
+        </Link>
 
         {serverError && <FormError>{errorText(serverError)}</FormError>}
 

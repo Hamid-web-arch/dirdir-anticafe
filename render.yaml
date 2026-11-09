@@ -33,3 +33,9 @@ services:
         sync: false
       - key: ADMIN_PHONE
         sync: false
+      # Email (qeydiyyat kodu, şifrə bərpası, xəbərlər): Resend-in API açarı — Render panelində yazılır.
+      # Boş qalsa, qeydiyyat kodsuz (dərhal) işləyir və şifrə bərpası söndürülür.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: DırDır Anticafe <noreply@dirdir.az>

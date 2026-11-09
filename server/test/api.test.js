@@ -15,7 +15,18 @@ const aysel = {
   password: 'dirdir2026',
 }
 
-const register = (overrides = {}) => api.post('/api/auth/register').send({ ...aysel, ...overrides })
+let mailbox // src/mail.js → testMailbox: testlərdə məktublar bura düşür
+
+// Emailə gələn sonuncu 6 rəqəmli kod
+const codeFor = (to) => [...mailbox].reverse().find((m) => m.to === to)?.text.match(/\b\d{6}\b/)?.[0]
+
+// Qeydiyyat iki addımdır (forma → emailə kod → təsdiq). Bu köməkçi ikisini də edir və təsdiqin cavabını
+// qaytarır ({ token, user }); forma xətalıdırsa — ilk addımın cavabını.
+const register = async (overrides = {}) => {
+  const res = await api.post('/api/auth/register').send({ ...aysel, ...overrides })
+  if (res.status !== 202) return res
+  return api.post('/api/auth/register/verify').send({ email: res.body.email, code: codeFor(res.body.email) })
+}
 const bearer = (token) => ({ Authorization: `Bearer ${token}` })
 
 // Testlər üçün kiçik real şəkil (PNG)
@@ -52,9 +63,13 @@ async function registerMany(n) {
 before(async () => {
   ctx = await startTestServer()
   api = request(ctx.app)
+  mailbox = (await import('../src/mail.js')).testMailbox
 })
 after(() => ctx.stop())
-beforeEach(() => ctx.reset())
+beforeEach(() => {
+  mailbox.length = 0
+  return ctx.reset()
+})
 
 describe('ümumi', () => {
   it('health bazaya çatır', async () => {
@@ -1591,5 +1606,116 @@ describe('ana səhifənin videosu', () => {
     const removed = await api.delete('/api/admin/hero-video').set(bearer(adminToken))
     assert.equal(removed.body.url, null)
     assert.equal(await ctx.prisma.video.count(), 0)
+  })
+})
+
+describe('email ilə təsdiq', () => {
+  const start = (overrides = {}) => api.post('/api/auth/register').send({ ...aysel, ...overrides })
+  const verify = (code, email = 'aysel@mail.com') => api.post('/api/auth/register/verify').send({ email, code })
+  const ago = (seconds) => new Date(Date.now() - seconds * 1000)
+  const otherThan = (code) => (code === '000000' ? '111111' : '000000')
+
+  it('qeydiyyat: kod emailə gəlir, hesab yalnız təsdiqdən sonra yaranır', async () => {
+    const res = await start({ lang: 'en' })
+    assert.equal(res.status, 202)
+    assert.deepEqual(res.body, { pending: true, email: 'aysel@mail.com' })
+    assert.equal(await ctx.prisma.user.count(), 0)
+
+    const mail = mailbox.at(-1)
+    const code = codeFor('aysel@mail.com')
+    assert.equal(mail.to, 'aysel@mail.com')
+    assert.match(mail.subject, /sign-up code/)
+    assert.match(mail.from, /noreply@dirdir\.az/)
+    assert.ok(mail.html.includes(code))
+    // Kodun özü və şifrə bazada açıq saxlanmır
+    const stored = JSON.stringify(await ctx.prisma.emailCode.findFirst())
+    assert.ok(!stored.includes(code))
+    assert.ok(!stored.includes(aysel.password))
+
+    const wrong = await verify(otherThan(code))
+    assert.equal(wrong.status, 400)
+    assert.equal(wrong.body.error.code, 'CODE_INVALID')
+    assert.equal((await verify('12ab')).status, 400)
+
+    const ok = await verify(code)
+    assert.equal(ok.status, 201)
+    assert.ok(ok.body.token)
+    assert.equal(ok.body.user.firstName, 'Aysel')
+    assert.equal(ok.body.user.phone, '501234567')
+    // Kod birdəfəlikdir; şifrə ilə giriş işləyir
+    assert.equal((await verify(code)).body.error.code, 'CODE_EXPIRED')
+    const login = await api.post('/api/auth/login').send({ login: 'aysel@mail.com', password: aysel.password })
+    assert.equal(login.status, 200)
+  })
+
+  it('5 səhv cəhddən sonra kod etibarsızdır; yeni kod bir dəqiqədən sonra; vaxtı keçən kod işləmir', async () => {
+    await start()
+    const good = codeFor('aysel@mail.com')
+    for (let i = 0; i < 5; i++) await verify(otherThan(good))
+    assert.equal((await verify(good)).body.error.code, 'CODE_EXPIRED')
+
+    // Dərhal yeni kod — olmaz; bir dəqiqə sonra — olar
+    const soon = await api.post('/api/auth/register/resend').send({ email: 'aysel@mail.com' })
+    assert.equal(soon.status, 429)
+    await ctx.prisma.emailCode.updateMany({ data: { createdAt: ago(61) } })
+    const resend = await api.post('/api/auth/register/resend').send({ email: 'aysel@mail.com', lang: 'ru' })
+    assert.equal(resend.status, 200)
+    assert.match(mailbox.at(-1).subject, /Код регистрации/)
+    const fresh = codeFor('aysel@mail.com')
+
+    // 15 dəqiqədən köhnə kod işləmir
+    await ctx.prisma.emailCode.updateMany({ data: { expiresAt: ago(1) } })
+    assert.equal((await verify(fresh)).body.error.code, 'CODE_EXPIRED')
+    assert.equal(await ctx.prisma.user.count(), 0)
+  })
+
+  it('kod gözləyərkən eyni email başqası tərəfindən tutulubsa — hesab yaranmır', async () => {
+    await start()
+    const code = codeFor('aysel@mail.com')
+    await ctx.prisma.user.create({ data: { firstName: 'X', lastName: 'Y', email: 'aysel@mail.com', phone: '559998877', passwordHash: 'x' } })
+    const res = await verify(code)
+    assert.equal(res.status, 409)
+    assert.equal(res.body.error.code, 'ACCOUNT_EXISTS')
+  })
+
+  it('şifrə bərpası: kod emailə gəlir, yeni şifrə işləyir, köhnə sessiyalar bağlanır', async () => {
+    const { body } = await register()
+    mailbox.length = 0
+
+    // Olmayan email — cavab eynidir, amma məktub getmir
+    const ghost = await api.post('/api/auth/password/forgot').send({ email: 'yoxdur@mail.com' })
+    assert.equal(ghost.status, 200)
+    const forgot = await api.post('/api/auth/password/forgot').send({ email: 'AYSEL@mail.com' })
+    assert.equal(forgot.status, 200)
+    assert.deepEqual(Object.keys(ghost.body).sort(), Object.keys(forgot.body).sort())
+    await new Promise((r) => setTimeout(r, 100)) // məktub fonda göndərilir
+    assert.equal(mailbox.length, 1)
+    assert.equal(mailbox[0].to, 'aysel@mail.com')
+    assert.match(mailbox[0].subject, /Şifrəni bərpa et/)
+
+    const code = codeFor('aysel@mail.com')
+    const short = await api.post('/api/auth/password/reset').send({ email: 'aysel@mail.com', code, newPassword: '123' })
+    assert.equal(short.status, 400)
+
+    await new Promise((r) => setTimeout(r, 1100)) // köhnə tokenin "iat"-ı şifrə dəyişmə anından əvvəl olsun
+    const reset = await api.post('/api/auth/password/reset').send({ email: 'aysel@mail.com', code, newPassword: 'yeni-sifre-2026' })
+    assert.equal(reset.status, 200)
+    assert.ok(reset.body.token)
+
+    assert.equal((await api.get('/api/auth/me').set(bearer(body.token))).status, 401)
+    assert.equal((await api.get('/api/auth/me').set(bearer(reset.body.token))).status, 200)
+    assert.equal((await api.post('/api/auth/login').send({ login: 'aysel@mail.com', password: aysel.password })).status, 401)
+    assert.equal((await api.post('/api/auth/login').send({ login: 'aysel@mail.com', password: 'yeni-sifre-2026' })).status, 200)
+    // Kod birdəfəlikdir
+    const again = await api.post('/api/auth/password/reset').send({ email: 'aysel@mail.com', code, newPassword: 'basqa-sifre-1' })
+    assert.equal(again.body.error.code, 'CODE_EXPIRED')
+  })
+
+  it('bərpa kodu qeydiyyat kodu kimi işləmir', async () => {
+    await register()
+    await api.post('/api/auth/password/forgot').send({ email: 'aysel@mail.com' })
+    await new Promise((r) => setTimeout(r, 100))
+    const asRegister = await verify(codeFor('aysel@mail.com'))
+    assert.equal(asRegister.status, 400)
   })
 })

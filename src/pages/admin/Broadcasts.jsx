@@ -223,9 +223,10 @@ function EmailSetupNote() {
     <div className="flex gap-3 rounded-xl bg-brand-yellow-soft text-brand-yellow-deep px-4 py-3 text-[0.88rem] font-semibold">
       <PiWarningCircleBold size={20} className="shrink-0 mt-0.5" />
       <div>
-        Email göndərmək hələ qoşulmayıb. Qoşmaq üçün serverə (Render → dirdir-api → Environment) poçt ayarları əlavə olunmalıdır:
-        <code className="block mt-1.5 font-mono text-[0.8rem] font-medium">SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM</code>
-        Gmail ilə də olur — Claude-dan addım-addım kömək istə.
+        Email göndərmək hələ qoşulmayıb. Qoşmaq üçün resend.com-da dirdir.az domenini təsdiqləyib API açarını serverə
+        (Render → dirdir-api → Environment) yazmaq lazımdır:
+        <code className="block mt-1.5 font-mono text-[0.8rem] font-medium">RESEND_API_KEY</code>
+        Bu, qeydiyyat kodunu və şifrə bərpasını da işə salır.
       </div>
     </div>
   )

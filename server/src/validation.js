@@ -44,6 +44,21 @@ export const registerSchema = z.object({
   newsletter: z.boolean().default(false),
 })
 
+// Emailə gələn 6 rəqəmli kod
+const emailCode = z
+  .string({ error: 'Emailə gələn kodu yaz.' })
+  .trim()
+  .regex(/^\d{6}$/, 'Emailə gələn 6 rəqəmli kodu yaz.')
+const mailLang = z.enum(['az', 'en', 'ru']).catch('az').default('az') // məktubun dili
+
+// Saytdakı qeydiyyat forması: + təsdiq məktubunun dili (admin hesab yaradanda lazım deyil)
+export const registerRequestSchema = registerSchema.extend({ lang: mailLang })
+
+export const registerVerifySchema = z.object({ email, code: emailCode })
+export const registerResendSchema = z.object({ email, lang: mailLang })
+export const passwordForgotSchema = z.object({ email, lang: mailLang })
+export const passwordResetSchema = z.object({ email, code: emailCode, newPassword: password })
+
 // Giriş: email və ya telefon nömrəsi bir sahədə ("login"). Köhnə klientlər üçün "email" sahəsi də qəbul olunur.
 // "@" varsa email kimi, yoxdursa telefon kimi axtarılır.
 export const loginSchema = z.preprocess(

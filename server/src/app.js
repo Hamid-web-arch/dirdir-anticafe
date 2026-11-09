@@ -72,7 +72,10 @@ export function createApp() {
       },
     }),
   )
-  app.use('/api/auth/register', limiter(10, 60))
+  // Qeydiyyat + kod təsdiqi + yeni kod (kafenin Wi-Fi-ında çox adam eyni IP-dən qeydiyyatdan keçir).
+  // Kodu təxmin etməyə qarşı əsas qoruma — hər kod üçün 5 səhv cəhd (src/emailCodes.js).
+  app.use('/api/auth/register', limiter(40, 60))
+  app.use('/api/auth/password', limiter(15, 15)) // şifrə bərpası: kod istəmək və təsdiq
   app.use('/api/auth/me/password', limiter(10, 15))
   app.use('/api/auth/me/avatar', limiter(20, 60)) // hər yükləmə serverdə emal olunur
   app.use('/api/promo', limiter(20, 1))

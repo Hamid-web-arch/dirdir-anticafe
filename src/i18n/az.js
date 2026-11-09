@@ -4,6 +4,7 @@ export default {
   langName: 'Azərbaycanca',
   // Google-da və brauzer tabında görünən başlıq/təsvir (src/lib/seo.js). Başlıq ~60, təsvir ~155 simvol.
   seo: {
+    forgot: { title: 'Şifrəni bərpa et — DırDır Anticafe' },
     home: {
       title: 'DırDır Anticafe Bakı — antikafe, ilk saat {price}',
       description:
@@ -259,6 +260,23 @@ export default {
   },
 
   auth: {
+    codeTitle: 'Emailini təsdiqlə',
+    codeSubtitle: '{email} ünvanına 6 rəqəmli kod göndərdik. Hesabın kodu yazandan sonra yaranacaq.',
+    codeLabel: 'Təsdiq kodu',
+    codeHint: 'Məktub gəlmirsə, "Spam" qovluğuna bax.',
+    codeSubmit: 'Təsdiqlə',
+    codeResend: 'Kodu yenidən göndər',
+    codeResendIn: 'Yeni kod {seconds} san. sonra',
+    codeResent: 'Yeni kod göndərildi.',
+    codeChangeEmail: 'Emaili dəyiş',
+    forgotLink: 'Şifrəni unutmusan?',
+    forgotTitle: 'Şifrəni bərpa et',
+    forgotSubtitle: 'Hesabının emailini yaz — ora bərpa kodu göndərəcəyik.',
+    forgotSubmit: 'Kod göndər',
+    resetSubtitle: '{email} ünvanında hesab varsa, ora 6 rəqəmli kod göndərdik. Kodu və yeni şifrəni yaz.',
+    newPassword: 'Yeni şifrə',
+    resetSubmit: 'Şifrəni yenilə',
+    backToLogin: 'Girişə qayıt',
     newsletter: 'Yeniliklərdən, turnirlərdən və endirimlərdən xəbərdar ol',
     newsletterNote: 'Email və ya WhatsApp ilə. Profilindən istənilən vaxt dəyişə bilərsən.',
     loginTitle: 'Xoş gəldin!',
@@ -294,6 +312,7 @@ export default {
   },
 
   validation: {
+    code: 'Emailə gələn 6 rəqəmli kodu yaz.',
     email: 'Düzgün email ünvanı yaz.',
     login: 'Email ünvanını və ya telefon nömrəsini düzgün yaz.',
     passwordRequired: 'Şifrəni yaz.',
@@ -307,6 +326,11 @@ export default {
   },
 
   errors: {
+    CODE_INVALID: 'Kod yanlışdır.',
+    CODE_EXPIRED: 'Kodun vaxtı bitib — yeni kod istə.',
+    CODE_COOLDOWN: 'Yeni kodu bir dəqiqədən sonra istəyə bilərsən.',
+    EMAIL_FAILED: 'Məktubu göndərmək alınmadı. Bir az sonra yenidən yoxla.',
+    EMAIL_OFF: 'Şifrə bərpası hələ işləmir — bizə WhatsApp-dan yaz.',
     NETWORK: 'Serverə qoşulmaq olmadı. İnterneti yoxla və yenidən cəhd et.',
     SERVER_ERROR: 'Serverdə xəta baş verdi. Bir az sonra yenidən yoxla.',
     RATE_LIMITED: 'Çox sayda cəhd edildi, bir az sonra yenidən yoxla.',

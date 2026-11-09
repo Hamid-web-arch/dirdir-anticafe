@@ -35,7 +35,7 @@ export async function startTestServer() {
     hashPassword,
     async reset() {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE "Broadcast", "Feedback", "Game", "TeamPointEntry", "Team", "Competition", "Slide", "Image", "PromoCode", "AppSetting", "Visit", "WheelSpin", "Video", "User" RESTART IDENTITY CASCADE',
+        'TRUNCATE "Broadcast", "Feedback", "Game", "TeamPointEntry", "Team", "Competition", "Slide", "Image", "PromoCode", "AppSetting", "Visit", "WheelSpin", "Video", "EmailCode", "User" RESTART IDENTITY CASCADE',
       )
     },
     async stop() {

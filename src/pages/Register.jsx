@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { PiUserPlusBold } from 'react-icons/pi'
+import { PiUserPlusBold, PiEnvelopeSimpleBold, PiArrowLeftBold } from 'react-icons/pi'
 import Switch from '../components/Switch.jsx'
 import AuthLayout, { Field, PasswordField, SubmitButton, DemoNotice, FormError } from '../components/AuthLayout.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
-import { apiEnabled } from '../lib/api.js'
+import { api, apiEnabled } from '../lib/api.js'
+import { CodeField, ResendCode } from '../components/EmailCode.jsx'
 import { isEmail, isPhone, phoneDigits, formatPhone, MIN_PASSWORD, safeNext, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
 import { useSeo } from '../lib/seo.js'
@@ -12,7 +13,7 @@ import { useSeo } from '../lib/seo.js'
 export default function Register() {
   const { user, register } = useAuth()
   const i18n = useI18n()
-  const { t, errorText } = i18n
+  const { t, errorText, lang } = i18n
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
@@ -28,6 +29,7 @@ export default function Register() {
     newsletter: true, // standart olaraq açıq — istəyən söndürür
   })
   const [errors, setErrors] = useState({})
+  const [pending, setPending] = useState(null) // emailə kod göndərilib: { email }
   const [serverError, setServerError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -57,8 +59,13 @@ export default function Register() {
     setLoading(true)
     try {
       const { confirm, ...data } = form
-      await register(data)
-      navigate(next)
+      const result = await register({ ...data, lang })
+      // Kod göndərilibsə — ikinci addım (kodu yazmaq); yoxsa hesab artıq yaranıb
+      if (result?.pending) {
+        setPending({ email: result.email })
+        window.scrollTo({ top: 0, behavior: 'smooth' }) // yeni addımın başlığı görünsün
+      }
+      else navigate(next)
     } catch (err) {
       // Server sahə xətası qaytarırsa (məs. email artıq var), onu həmin sahənin altında göstəririk.
       setServerError(err)
@@ -68,6 +75,7 @@ export default function Register() {
   }
 
   if (user) return <Navigate to={next} replace />
+  if (pending) return <ConfirmEmail email={pending.email} onBack={() => setPending(null)} onDone={() => navigate(next)} />
 
   const message = (field) => fieldMessage(field, errors, serverError, i18n)
   const loginHref = params.get('next') ? `/giris?next=${encodeURIComponent(next)}` : '/giris'
@@ -164,6 +172,67 @@ export default function Register() {
         </SubmitButton>
 
         {sent && <DemoNotice>{t('auth.demoRegister')}</DemoNotice>}
+      </form>
+    </AuthLayout>
+  )
+}
+
+// Qeydiyyatın ikinci addımı: emailə gələn 6 rəqəmli kod. Kod düzgündürsə hesab yaranır və daxil oluruq.
+function ConfirmEmail({ email, onBack, onDone }) {
+  const { verifyRegistration } = useAuth()
+  const i18n = useI18n()
+  const { t, errorText, lang } = i18n
+  const [code, setCode] = useState('')
+  const [error, setError] = useState(null)
+  const [serverError, setServerError] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (code.length !== 6) return setError({ key: 'validation.code' })
+    setLoading(true)
+    setServerError(null)
+    try {
+      await verifyRegistration({ email, code })
+      onDone()
+    } catch (err) {
+      setServerError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const codeError = fieldMessage('code', { code: error }, serverError, i18n)
+
+  return (
+    <AuthLayout
+      imageKey="register"
+      title={t('auth.codeTitle')}
+      subtitle={t('auth.codeSubtitle', { email })}
+      panelTitle={t('auth.registerPanelTitle')}
+      panelText={t('auth.registerPanelText')}
+      footer={
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 font-bold text-primary hover:underline">
+          <PiArrowLeftBold size={15} /> {t('auth.codeChangeEmail')}
+        </button>
+      }
+    >
+      <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <CodeField
+          value={code}
+          onChange={(v) => {
+            setCode(v)
+            setError(null)
+            setServerError(null)
+          }}
+          error={codeError}
+        />
+        <p className="flex items-center gap-2 text-[0.85rem] text-inkdim -mt-2">
+          <PiEnvelopeSimpleBold size={16} className="shrink-0" /> {t('auth.codeHint')}
+        </p>
+        {serverError && !serverError.fields?.code && <FormError>{errorText(serverError)}</FormError>}
+        <SubmitButton loading={loading}>{t('auth.codeSubmit')}</SubmitButton>
+        <ResendCode onResend={() => api('/auth/register/resend', { method: 'POST', body: { email, lang } })} />
       </form>
     </AuthLayout>
   )

@@ -210,7 +210,7 @@ adminContentRouter.get('/broadcasts', async (req, res) => {
 adminContentRouter.post('/broadcasts', async (req, res) => {
   const { channel, subject, body, userIds } = broadcastSchema.parse(req.body)
   if (channel === 'email' && !emailConfigured()) {
-    throw new HttpError(400, 'EMAIL_NOT_CONFIGURED', 'Email göndərmək üçün serverdə SMTP ayarları yoxdur.')
+    throw new HttpError(400, 'EMAIL_NOT_CONFIGURED', 'Email göndərmək üçün serverdə RESEND_API_KEY yoxdur.')
   }
 
   const recipients = await prisma.user.findMany({

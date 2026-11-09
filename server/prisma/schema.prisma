@@ -246,3 +246,20 @@ model Visit {
   @@index([userId, startedAt])
   @@index([endedAt])
 }
+
+// Emailə göndərilən birdəfəlik kodlar: qeydiyyatı təsdiqləmək (register) və şifrəni bərpa etmək (reset).
+// Kodun özü saxlanmır — yalnız HMAC-ı. Qeydiyyatda hesab kod təsdiqlənəndə yaranır, o vaxta qədər
+// məlumatlar (şifrə — hash kimi) "data"-da gözləyir.
+model EmailCode {
+  id        String   @id @default(cuid())
+  email     String
+  purpose   String // register | reset
+  codeHash  String
+  data      Json? // register: { firstName, lastName, phone, newsletter, passwordHash }
+  attempts  Int      @default(0) // səhv cəhdlər; həddi keçəndə kod etibarsızdır
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
+}

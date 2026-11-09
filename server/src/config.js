@@ -18,13 +18,16 @@ const schema = z.object({
         .filter(Boolean),
     ),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
-  // Email göndərmək (admin paneldən xəbərlər). Boş qalsa, email kanalı söndürülür.
+  // Email göndərmək: qeydiyyat kodu, şifrə bərpası, admin paneldən xəbərlər.
+  // Əsas yol — Resend (HTTPS API; Render-in pulsuz planı SMTP portlarını bağlayır): RESEND_API_KEY + MAIL_FROM.
+  RESEND_API_KEY: z.string().default(''),
+  // SMTP — ancaq SMTP-yə icazə verən hostinqdə (məs. Render-in pullu planı).
   // Gmail üçün: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=ünvan, SMTP_PASS="App password" (16 hərf).
   SMTP_HOST: z.string().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(465),
   SMTP_USER: z.string().default(''),
   SMTP_PASS: z.string().default(''),
-  MAIL_FROM: z.string().default(''), // məs. "DırDır Anticafe <dirdir@gmail.com>"; boşdursa SMTP_USER
+  MAIL_FROM: z.string().default(''), // məs. "DırDır Anticafe <noreply@dirdir.az>"; boşdursa SMTP_USER
   // Testlərdə rate limit söndürülür
   RATE_LIMIT_ENABLED: z
     .enum(['true', 'false'])

@@ -2,6 +2,7 @@
 export default {
   langName: 'English',
   seo: {
+    forgot: { title: 'Reset password — DırDır Anticafe' },
     home: {
       title: 'DırDır Anticafe Baku — anticafe, first hour {price}',
       description:
@@ -255,6 +256,23 @@ export default {
   },
 
   auth: {
+    codeTitle: 'Confirm your email',
+    codeSubtitle: 'We sent a 6-digit code to {email}. Your account is created once you enter it.',
+    codeLabel: 'Confirmation code',
+    codeHint: "No email? Check your Spam folder.",
+    codeSubmit: 'Confirm',
+    codeResend: 'Send the code again',
+    codeResendIn: 'New code in {seconds} s',
+    codeResent: 'A new code has been sent.',
+    codeChangeEmail: 'Change email',
+    forgotLink: 'Forgot your password?',
+    forgotTitle: 'Reset your password',
+    forgotSubtitle: "Enter your account's email — we'll send a reset code there.",
+    forgotSubmit: 'Send code',
+    resetSubtitle: 'If there is an account for {email}, we sent a 6-digit code there. Enter it and your new password.',
+    newPassword: 'New password',
+    resetSubmit: 'Update password',
+    backToLogin: 'Back to log in',
     newsletter: 'Keep me posted about news, tournaments and discounts',
     newsletterNote: 'By email or WhatsApp. You can change this anytime in your profile.',
     loginTitle: 'Welcome back!',
@@ -290,6 +308,7 @@ export default {
   },
 
   validation: {
+    code: 'Enter the 6-digit code from the email.',
     email: 'Enter a valid email address.',
     login: 'Enter a valid email address or phone number.',
     passwordRequired: 'Enter your password.',
@@ -303,6 +322,11 @@ export default {
   },
 
   errors: {
+    CODE_INVALID: 'The code is wrong.',
+    CODE_EXPIRED: 'The code has expired — ask for a new one.',
+    CODE_COOLDOWN: 'You can ask for a new code in a minute.',
+    EMAIL_FAILED: "Couldn't send the email. Try again a bit later.",
+    EMAIL_OFF: "Password reset isn't available yet — message us on WhatsApp.",
     NETWORK: "Couldn't reach the server. Check your connection and try again.",
     SERVER_ERROR: 'Something went wrong on the server. Please try again later.',
     RATE_LIMITED: 'Too many attempts — please try again in a little while.',
