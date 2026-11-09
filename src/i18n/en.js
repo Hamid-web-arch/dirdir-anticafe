@@ -132,6 +132,7 @@ export default {
     capText: 'After {hours} hours the price stays the same, however long you stay.',
     student: "We're students",
     studentHint: '{percent}% off when you stay {hours} hours or more. Student ID required.',
+    studentHintTiers: '{shortPercent}% off for {short} hours, {longPercent}% off for {long} hours or more. Student ID required.',
     studentTooShort: 'The discount applies from {hours} hours — add more time.',
     promo: 'Promo code',
     promoPlaceholder: 'Enter code',

@@ -70,6 +70,9 @@ async function closing(startedAt, endedAt, visit) {
   return { endedAt, minutes, amount: visitPrice(pricing, minutes, visit).amount }
 }
 
+// Xüsusi endirim → bazadakı sahələr (null — endirim yoxdur)
+const discountFields = (discount) => ({ discountType: discount?.type ?? null, discountValue: discount?.value ?? null })
+
 async function findVisit(id) {
   const visit = await prisma.visit.findUnique({ where: { id } })
   if (!visit) throw new HttpError(404, 'NOT_FOUND', 'Seans tapılmadı.')
@@ -104,7 +107,7 @@ adminVisitsRouter.get('/visits/days', async (req, res) => {
 })
 
 adminVisitsRouter.post('/visits', async (req, res) => {
-  const { userId, name, kind = 'hall', people = 1, students: rawStudents = 0, promoCode, startedAt = new Date(), note } =
+  const { userId, name, kind = 'hall', people = 1, students: rawStudents = 0, promoCode, discount, startedAt = new Date(), note } =
     visitCreateSchema.parse(req.body)
   const promo = promoCode ? await promoFor(promoCode) : {}
   const students = studentsFor({ kind, people, students: rawStudents })
@@ -129,6 +132,7 @@ adminVisitsRouter.post('/visits', async (req, res) => {
       people,
       students,
       ...promo,
+      ...discountFields(discount),
       startedAt,
       note: note || null,
       createdById: req.user.id,
@@ -153,7 +157,7 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
 
 // Səhv düzəltmək: ad, növ, nəfər sayı, qeyd, başlama/bitmə vaxtı. Bitmiş seansda məbləğ yenidən hesablanır.
 adminVisitsRouter.patch('/visits/:id', async (req, res) => {
-  const { name, kind, people, students, promoCode, startedAt, endedAt, note, paymentMethod } = visitUpdateSchema.parse(req.body)
+  const { name, kind, people, students, promoCode, discount, startedAt, endedAt, note, paymentMethod } = visitUpdateSchema.parse(req.body)
   const visit = await findVisit(req.params.id)
   if ((endedAt || paymentMethod) && !visit.endedAt) {
     throw new HttpError(400, 'VALIDATION', 'Seansı bitirmək üçün "Bitir" düyməsini işlət.')
@@ -183,6 +187,10 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
   if (kind) data.kind = kind
   if (nextStudents !== visit.students) data.students = nextStudents
   if (promoChanged) Object.assign(data, promo)
+  // Xüsusi endirim: göndərilməyibsa — olduğu kimi qalır
+  const nextDiscount =
+    discount !== undefined ? discountFields(discount) : { discountType: visit.discountType, discountValue: visit.discountValue }
+  if (discount !== undefined) Object.assign(data, nextDiscount)
   if (paymentMethod) data.paymentMethod = paymentMethod
   if (startedAt) {
     assertNotFuture(startedAt, 'startedAt', 'Başlama vaxtı')
@@ -190,7 +198,7 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     data.day = bakuDay(startedAt)
   }
   if (endedAt) assertNotFuture(endedAt, 'endedAt', 'Bitmə vaxtı')
-  if (visit.endedAt && (startedAt || endedAt || people || kind || students !== undefined || promoChanged)) {
+  if (visit.endedAt && (startedAt || endedAt || people || kind || students !== undefined || promoChanged || discount !== undefined)) {
     Object.assign(
       data,
       await closing(startedAt ?? visit.startedAt, endedAt ?? visit.endedAt, {
@@ -198,6 +206,7 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
         kind: nextKind,
         students: nextStudents,
         promoPercent: promo.promoPercent,
+        ...nextDiscount,
       }),
     )
   }

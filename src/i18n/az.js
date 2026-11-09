@@ -134,6 +134,8 @@ export default {
     capText: '{hours} saatdan sonra nə qədər qalsan da, qiymət dəyişməyəcək.',
     student: 'Tələbəyik',
     studentHint: '{hours} saat və daha çox qalanda {percent}% endirim. Tələbə bileti tələb olunur.',
+    studentHintTiers:
+      '{short} saat qalanda {shortPercent}%, {long} saat və daha çox qalanda {longPercent}% endirim. Tələbə bileti tələb olunur.',
     studentTooShort: 'Endirim {hours} saat və daha çox qalanda keçərlidir — vaxtı artır.',
     promo: 'Promokod',
     promoPlaceholder: 'Kodu yaz',

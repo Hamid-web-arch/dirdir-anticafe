@@ -1220,13 +1220,21 @@ describe('günün hesabatı (seanslar)', () => {
     assert.equal(resume.body.error.code, 'ROOM_BUSY')
   })
 
-  it('tələbə endirimi: yalnız zalda, 3 saatdan, yalnız tələbələrin payına', async () => {
+  it('tələbə endirimi: yalnız zalda, pilləli (2 saat 10%, 3+ saat 20%), yalnız tələbələrin payına', async () => {
     const { visitPrice } = await import('../src/visits.js')
     const { DEFAULT_PRICING } = await import('../src/pricing.js')
     // 3 saat: nəfər başına 10₼; tələbəyə 20% → 8₼
     assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 1, kind: 'hall', students: 1 }).amount, 8)
-    // 2.5 saat — endirim yoxdur: 8.5₼
-    assert.equal(visitPrice(DEFAULT_PRICING, 150, { people: 1, kind: 'hall', students: 1 }).amount, 8.5)
+    // 2.5 saat — 1-ci pillə (10%): 8.5 − 0.85 = 7.65₼
+    assert.equal(visitPrice(DEFAULT_PRICING, 150, { people: 1, kind: 'hall', students: 1 }).amount, 7.65)
+    // 2 saat — 10%: 7 − 0.7 = 6.3₼
+    assert.equal(visitPrice(DEFAULT_PRICING, 120, { people: 1, kind: 'hall', students: 1 }).amount, 6.3)
+    // 1 saat — endirim yoxdur
+    const oneHour = visitPrice(DEFAULT_PRICING, 60, { people: 1, kind: 'hall', students: 1 })
+    assert.equal(oneHour.amount, 4)
+    assert.equal(oneHour.studentEligible, false)
+    // 1s40d → 1.5 saat hesablanır — hələ 2 saat deyil, endirim yoxdur
+    assert.equal(visitPrice(DEFAULT_PRICING, 100, { people: 1, kind: 'hall', students: 1 }).amount, 5.5)
     // 5 nəfər, 2-si tələbə, 3 saat: 50 − 2·10·20% = 46
     assert.equal(visitPrice(DEFAULT_PRICING, 180, { people: 5, kind: 'hall', students: 2 }).amount, 46)
     // Kino otağında tələbə endirimi yoxdur
@@ -1294,6 +1302,71 @@ describe('günün hesabatı (seanslar)', () => {
     const removed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ promoCode: null })
     assert.equal(removed.body.visit.promoCode, null)
     assert.equal(removed.body.visit.amount, 8)
+  })
+
+  it('xüsusi endirim: faizlə və ya manatla, ən böyük endirim tətbiq olunur, düzəltmək və silmək olur', async () => {
+    const { visitPrice } = await import('../src/visits.js')
+    const { DEFAULT_PRICING } = await import('../src/pricing.js')
+    // Zal, 1 saat, 2 nəfər (8₼): 25% → 6₼; 3₼ → 5₼; məbləğdən çox manat → 0
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 2, discountType: 'percent', discountValue: 25 }).amount, 6)
+    const amount = visitPrice(DEFAULT_PRICING, 60, { people: 2, discountType: 'amount', discountValue: 3 })
+    assert.equal(amount.amount, 5)
+    assert.equal(amount.discountSource, 'custom')
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 1, discountType: 'amount', discountValue: 50 }).amount, 0)
+    // Kino otağı (15₼): 5₼ endirim → 10₼
+    assert.equal(visitPrice(DEFAULT_PRICING, 60, { people: 2, kind: 'room', discountType: 'amount', discountValue: 5 }).amount, 10)
+    // Tələbə 3 saat (20% = 2₼) və 1₼ xüsusi endirim — böyük olan: tələbə
+    const both = visitPrice(DEFAULT_PRICING, 180, { people: 1, students: 1, discountType: 'amount', discountValue: 1 })
+    assert.equal(both.amount, 8)
+    assert.equal(both.discountSource, 'student')
+
+    const adminToken = await createAdmin()
+    const tooBig = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Leyla', discount: { type: 'percent', value: 120 } })
+    assert.equal(tooBig.status, 400)
+    assert.ok(tooBig.body.error.fields['discount.value'])
+
+    const { body } = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Leyla', people: 2, discount: { type: 'amount', value: 2.5 }, startedAt: minutesAgo(60) })
+    assert.equal(body.visit.discountType, 'amount')
+    assert.equal(body.visit.discountValue, 2.5)
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    assert.equal(end.body.visit.amount, 5.5)
+    // Faizə dəyişəndə məbləğ yenidən hesablanır; null — silinir
+    const percent = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ discount: { type: 'percent', value: 50 } })
+    assert.equal(percent.body.visit.amount, 4)
+    const kept = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ note: 'dost' })
+    assert.equal(kept.body.visit.discountValue, 50)
+    const removed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ discount: null })
+    assert.equal(removed.body.visit.discountType, null)
+    assert.equal(removed.body.visit.amount, 8)
+  })
+
+  it('köhnə tək pilləli tələbə endirimi yeni pilləli qaydaya keçirilir', async () => {
+    await ctx.prisma.appSetting.create({
+      data: {
+        key: 'pricing',
+        value: JSON.stringify({
+          hall: { firstHour: 4, nextHour: 3, cap: 13, graceMinutes: 10 },
+          room: { maxPeople: 8, smallGroup: { maxPeople: 2, firstHour: 15, nextHour: 10 }, group: { perHour: 20, includedPeople: 5, extraPerPerson: 2 } },
+          studentDiscount: { percent: 20, minHours: 3 },
+        }),
+      },
+    })
+    const res = await api.get('/api/pricing')
+    assert.deepEqual(res.body.pricing.studentDiscount, { short: { minHours: 2, percent: 10 }, long: { minHours: 3, percent: 20 } })
+    // 2-ci pillənin saatı 1-cidən az ola bilməz
+    const adminToken = await createAdmin()
+    const bad = await api
+      .put('/api/admin/pricing')
+      .set(bearer(adminToken))
+      .send({ ...res.body.pricing, studentDiscount: { short: { minHours: 3, percent: 10 }, long: { minHours: 2, percent: 20 } } })
+    assert.equal(bad.status, 400)
+    assert.ok(bad.body.error.fields['studentDiscount.long.minHours'])
   })
 
   it('köhnə saxlanmış qiymətlərdə güzəşt dəqiqəsi standart 10 olur', async () => {

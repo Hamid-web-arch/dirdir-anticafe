@@ -19,6 +19,7 @@ import { business, whatsappUrl } from '../data/business.js'
 import { api, apiEnabled } from '../lib/api.js'
 import { useI18n } from '../i18n/index.jsx'
 import { usePricing } from '../pricing/PricingContext.jsx'
+import { studentPercent, studentTiers } from '../pricing/visitPrice.js'
 
 const { currency, promoCodes } = business
 // Backend qoşulubsa kodları server yoxlayır; yoxsa business.js-dəki siyahı (boşdursa sahə gizlənir).
@@ -102,8 +103,10 @@ export default function Calculator() {
   const people = clamp(chosenPeople, limits.people)
   const { subtotal, rows, capped } = quote(pricing, mode, people, hours, { t, money, hoursText })
 
-  const studentEligible = mode === 'hall' && student && hours >= studentDiscount.minHours
-  const studentPct = studentEligible ? studentDiscount.percent : 0
+  // Tələbə endirimi pillələri: məs. 2 saatda 10%, 3 saat və çox — 20%
+  const tiers = studentTiers(studentDiscount)
+  const studentPct = mode === 'hall' && student ? studentPercent(studentDiscount, hours) : 0
+  const studentEligible = studentPct > 0
   const promoPct = promo?.percent ?? 0
   const discountPct = Math.max(studentPct, promoPct)
   const discountSource =
@@ -266,7 +269,7 @@ export default function Calculator() {
                 hint={hoursHint}
               />
 
-              {mode === 'hall' && studentDiscount.percent > 0 && (
+              {mode === 'hall' && tiers.length > 0 && (
                 <div className="flex flex-col gap-2.5">
                   <label className="flex items-center gap-3 cursor-pointer select-none group">
                     <input
@@ -282,13 +285,20 @@ export default function Calculator() {
                       <PiStudentBold size={18} className="text-primary" /> {t('calc.student')}
                     </span>
                     <span className="ml-auto text-[0.78rem] font-bold px-2.5 py-1 rounded-full bg-brand-orange-soft text-brand-orange-deep">
-                      -{studentDiscount.percent}%
+                      -{studentPct || tiers.at(-1).percent}%
                     </span>
                   </label>
                   <p className="text-[0.85rem] text-inkdim pl-9">
                     {student && !studentEligible
-                      ? t('calc.studentTooShort', { hours: studentDiscount.minHours })
-                      : t('calc.studentHint', { hours: studentDiscount.minHours, percent: studentDiscount.percent })}
+                      ? t('calc.studentTooShort', { hours: tiers[0].minHours })
+                      : tiers.length > 1
+                        ? t('calc.studentHintTiers', {
+                            short: tiers[0].minHours,
+                            shortPercent: tiers[0].percent,
+                            long: tiers[1].minHours,
+                            longPercent: tiers[1].percent,
+                          })
+                        : t('calc.studentHint', { hours: tiers[0].minHours, percent: tiers[0].percent })}
                   </p>
                 </div>
               )}

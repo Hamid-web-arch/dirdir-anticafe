@@ -39,10 +39,12 @@ const SECTIONS = [
   {
     title: 'Tələbə endirimi',
     icon: PiStudentBold,
-    note: 'Yalnız ümumi zalda. Faiz 0 olsa, endirim saytda görünmür.',
+    note: 'Yalnız ümumi zalda, iki pillə: 1-ci pillənin saatı qədər qalanda kiçik endirim, 2-ci pillənin saatı və çox qalanda böyük endirim. Ondan az qalanda endirim yoxdur. Faiz 0 olsa, o pillə işləmir.',
     fields: [
-      { path: 'studentDiscount.percent', label: 'Endirim', unit: '%', step: 1 },
-      { path: 'studentDiscount.minHours', label: 'Ən az qalma müddəti', unit: 'saat', step: 0.5 },
+      { path: 'studentDiscount.short.minHours', label: '1-ci pillə — qalma müddəti', unit: 'saat', step: 0.5 },
+      { path: 'studentDiscount.short.percent', label: '1-ci pillə — endirim', unit: '%', step: 1 },
+      { path: 'studentDiscount.long.minHours', label: '2-ci pillə — bu qədər və çox', unit: 'saat', step: 0.5 },
+      { path: 'studentDiscount.long.percent', label: '2-ci pillə — endirim', unit: '%', step: 1 },
     ],
   },
 ]

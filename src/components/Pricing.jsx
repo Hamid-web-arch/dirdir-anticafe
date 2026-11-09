@@ -4,6 +4,7 @@ import Reveal from './Reveal.jsx'
 import { business } from '../data/business.js'
 import { useI18n } from '../i18n/index.jsx'
 import { usePricing } from '../pricing/PricingContext.jsx'
+import { studentTiers } from '../pricing/visitPrice.js'
 
 const money = (n) => `${n}${business.currency}`
 
@@ -16,7 +17,10 @@ export default function Pricing() {
     [t('pricing.firstHour'), money(hall.firstHour)],
     [t('pricing.nextHour'), money(hall.nextHour)],
     [t('pricing.cap'), money(hall.cap)],
-    studentDiscount.percent > 0 && [t('pricing.students'), t('pricing.studentsValue', { percent: studentDiscount.percent })],
+    studentTiers(studentDiscount).length > 0 && [
+      t('pricing.students'),
+      t('pricing.studentsValue', { percent: Math.max(...studentTiers(studentDiscount).map((tier) => tier.percent)) }),
+    ],
   ].filter(Boolean)
   const roomRows = [
     [t('pricing.roomSmallFirst', { small: room.smallGroup.maxPeople }), money(room.smallGroup.firstHour)],

@@ -21,6 +21,7 @@ import {
   PiStopFill,
   PiStudentBold,
   PiTicketBold,
+  PiTagBold,
   PiTrashBold,
   PiUserCircleCheckBold,
   PiUsersBold,
@@ -41,6 +42,7 @@ import {
   shiftDay,
   toBakuInput,
   fromBakuInput,
+  studentTiers,
 } from '../../pricing/visitPrice.js'
 import { formatAzDate } from '../../i18n/index.jsx'
 import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, Spinner } from './ui.jsx'
@@ -48,6 +50,18 @@ import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, S
 // Məbləğ: 4 → "4₼", 5.5 → "5.50₼"
 const money = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}₼`
 const round2 = (n) => Math.round(n * 100) / 100
+
+// Xüsusi endirim formada: { type: 'percent' | 'amount', value: '' } (mətn — sahəni boşaltmaq olsun)
+const EMPTY_DISCOUNT = { type: 'percent', value: '' }
+// Formadakı endirim → serverə; boşdursa və ya 0-dırsa — endirim yoxdur (null)
+const discountBody = (d) => {
+  const value = Number(String(d.value).replace(',', '.'))
+  return String(d.value).trim() !== '' && value > 0 ? { type: d.type, value } : null
+}
+// Tətbiq olunan endirimin adı (cəmlənmir — ən böyüyü)
+const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim' }
+// "−15%" və ya "−2₼"
+const discountLabel = (type, value) => (type === 'amount' ? `−${money(value)}` : `−${value}%`)
 
 // Ödəniş üsulları — seans bitəndə seçilir
 const PAYMENT = {
@@ -401,7 +415,7 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           </div>
           {price.discount > 0 && (
             <div className="text-[0.72rem] text-inkdim mt-0.5">
-              {price.discountSource === 'promo' ? 'promokod' : 'tələbə endirimi'} −{money(price.discount)}
+              {DISCOUNT_SOURCE[price.discountSource]} −{money(price.discount)}
             </div>
           )}
           {visit.note && <div className="text-[0.75rem] italic text-inkdim mt-0.5">{visit.note}</div>}
@@ -525,6 +539,11 @@ function VisitBadges({ visit, inTable }) {
           <PiTicketBold size={13} /> {visit.promoCode} −{visit.promoPercent}%
         </span>
       )}
+      {visit.discountValue > 0 && (
+        <span className={`${badge} text-brand-orange-deep bg-brand-orange-soft`} title="Xüsusi endirim">
+          <PiTagBold size={13} /> Endirim {discountLabel(visit.discountType, visit.discountValue)}
+        </span>
+      )}
       {visit.user && (
         <span className={`${badge} text-brand-teal-deep bg-brand-teal-soft`} title="Saytda qeydiyyatı var — seans kabinetində görünür">
           <PiUserCircleCheckBold size={13} /> Qeydiyyatlı
@@ -591,6 +610,7 @@ function NewVisit({ onCreated, roomBusy }) {
   const [kind, setKind] = useState('hall')
   const [students, setStudents] = useState(0)
   const [promo, setPromo] = useState(null) // { code, percent }
+  const [discount, setDiscount] = useState(EMPTY_DISCOUNT)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -630,6 +650,7 @@ function NewVisit({ onCreated, roomBusy }) {
     setPeople(1)
     setStudents(0)
     setPromo(null)
+    setDiscount(EMPTY_DISCOUNT)
     setKind('hall')
     setExtrasOpen(false)
     document.getElementById('visit-name')?.focus()
@@ -640,6 +661,7 @@ function NewVisit({ onCreated, roomBusy }) {
     setError(null)
     const counts = { kind, people, students: kind === 'room' ? 0 : students }
     if (promo) counts.promoCode = promo.code
+    if (customDiscount) counts.discount = customDiscount
     const body = selected ? { userId: selected.id, ...counts } : { name: query.trim(), ...counts }
     if (time) body.startedAt = fromBakuInput(`${bakuDay()}T${time}`)
     setSaving(true)
@@ -655,16 +677,25 @@ function NewVisit({ onCreated, roomBusy }) {
   }
 
   const isRoom = kind === 'room'
+  const customDiscount = discountBody(discount)
   const canStart = (selected || query.trim().length > 0) && !(isRoom && roomBusy)
   const showResults = focused && !selected && query.trim().length >= 2
   // Əlavə seçimlərdə nə seçilib — bağlı olanda da görünsün
   const extrasSummary = [
     !isRoom && students > 0 && (people > 1 ? `${students} tələbə` : 'tələbə'),
     promo && `${promo.code} −${promo.percent}%`,
+    customDiscount && `endirim ${discountLabel(customDiscount.type, customDiscount.value)}`,
     time && `${time}-dan`,
   ].filter(Boolean)
   // Başlanğıc məbləğ (ilk saat) — admin müştəriyə dərhal deyə bilsin
-  const firstHour = visitPrice(pricing, 0, { kind, people, students: isRoom ? 0 : students, promoPercent: promo?.percent })
+  const firstHour = visitPrice(pricing, 0, {
+    kind,
+    people,
+    students: isRoom ? 0 : students,
+    promoPercent: promo?.percent,
+    discountType: customDiscount?.type,
+    discountValue: customDiscount?.value,
+  })
 
   return (
     <form onSubmit={start} className={card} noValidate>
@@ -773,19 +804,20 @@ function NewVisit({ onCreated, roomBusy }) {
         className="mt-3 w-full flex items-center gap-2 text-left text-[0.85rem] font-bold text-inkdim hover:text-ink"
       >
         <PiCaretDownBold size={14} className={`transition-transform ${extrasOpen ? 'rotate-180' : ''}`} />
-        {isRoom ? 'Promokod, başlama saatı' : 'Tələbə, promokod, başlama saatı'}
+        {isRoom ? 'Promokod, endirim, başlama saatı' : 'Tələbə, promokod, endirim, başlama saatı'}
         {!extrasOpen && extrasSummary.length > 0 && (
           <span className="ml-auto text-primary truncate">{extrasSummary.join(' · ')}</span>
         )}
       </button>
       {extrasOpen && (
         <div className="mt-3 flex flex-col gap-3.5 pl-1">
-          {!isRoom && studentDiscount.percent > 0 && (
+          {!isRoom && studentTiers(studentDiscount).length > 0 && (
             <StudentField id="visit-students" people={people} value={students} onChange={setStudents} discount={studentDiscount} />
           )}
           <div>
             <PromoField id="visit-promo" value={promo} onChange={setPromo} />
           </div>
+          <DiscountField id="visit-discount" value={discount} onChange={setDiscount} error={error?.fields?.['discount.value']} />
           <div>
             <Label htmlFor="visit-time" hint="boş qalsa — indi">
               Başlama saatı
@@ -905,7 +937,9 @@ function PromoField({ id, value, onChange }) {
 
 // Tələbə endirimi: tək nəfərdə "Tələbədir" qutusu, qrupda "neçəsi tələbədir" sayğacı
 function StudentField({ id, people, value, onChange, discount }) {
-  const rule = `−${discount.percent}%, ${discount.minHours} saat və çox qalanda`
+  // "2 saat −10%, 3+ saat −20%" — son pillə "və çox" deməkdir
+  const tiers = studentTiers(discount)
+  const rule = tiers.map((tier, i) => `${tier.minHours}${i === tiers.length - 1 ? '+' : ''} saat −${tier.percent}%`).join(', ')
   if (people === 1) {
     return (
       <label htmlFor={id} className="flex items-center gap-2.5 cursor-pointer select-none rounded-xl border-2 border-ink/10 px-3.5 py-2.5">
@@ -929,6 +963,56 @@ function StudentField({ id, people, value, onChange, discount }) {
       </Label>
       <PeopleStepper id={id} value={value} onChange={onChange} min={0} max={people} />
     </>
+  )
+}
+
+// Xüsusi endirim: rəqəm + faiz/manat seçimi. Boş qalsa — endirim yoxdur.
+// Tələbə endirimi və promokodla cəmlənmir — hansı çoxdursa, o tətbiq olunur.
+function DiscountField({ id, value, onChange, error }) {
+  const isPercent = value.type === 'percent'
+  return (
+    <div>
+      <Label htmlFor={id} hint="könüllü · ən böyük endirim tətbiq olunur">
+        Xüsusi endirim
+      </Label>
+      <div className="flex gap-2">
+        <div className="flex-1 min-w-0">
+          <TextInput
+            id={id}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            max={isPercent ? 100 : undefined}
+            step={isPercent ? 1 : 0.5}
+            placeholder={isPercent ? 'məs. 15' : 'məs. 2'}
+            value={value.value}
+            onChange={(e) => onChange({ ...value, value: e.target.value })}
+            error={error}
+            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+        </div>
+        <div className="inline-flex shrink-0 self-start bg-ink/5 rounded-xl p-1 gap-1" role="group" aria-label="Endirimin növü">
+          {[
+            ['percent', '%', 'Faizlə'],
+            ['amount', '₼', 'Manatla'],
+          ].map(([type, label, title]) => (
+            <button
+              key={type}
+              type="button"
+              title={title}
+              aria-label={title}
+              aria-pressed={value.type === type}
+              onClick={() => onChange({ ...value, type })}
+              className={`w-10 h-[34px] rounded-lg font-bold transition-colors ${
+                value.type === type ? 'bg-card shadow text-ink' : 'text-inkdim hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -983,6 +1067,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     kind: visit.kind,
     students: visit.students,
     promo: visit.promoCode ? { code: visit.promoCode, percent: visit.promoPercent } : null,
+    discount: visit.discountValue ? { type: visit.discountType, value: String(visit.discountValue) } : EMPTY_DISCOUNT,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -992,7 +1077,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     e.preventDefault()
     setSaving(true)
     setError(null)
-    const body = { startedAt: fromBakuInput(form.startedAt), note: form.note.trim() || null, people: form.people, ...(visit.endedAt ? { kind: form.kind } : {}), students: form.kind === 'room' ? 0 : form.students, promoCode: form.promo?.code ?? null }
+    const body = { startedAt: fromBakuInput(form.startedAt), note: form.note.trim() || null, people: form.people, ...(visit.endedAt ? { kind: form.kind } : {}), students: form.kind === 'room' ? 0 : form.students, promoCode: form.promo?.code ?? null, discount: discountBody(form.discount) }
     if (!visit.user) body.name = form.name
     if (visit.endedAt && form.endedAt) body.endedAt = fromBakuInput(form.endedAt)
     if (visit.endedAt && form.paymentMethod) body.paymentMethod = form.paymentMethod
@@ -1054,7 +1139,15 @@ function EditVisit({ visit, onCancel, onSaved }) {
           <PromoField id={`promo-${visit.id}`} value={form.promo} onChange={(promo) => setForm({ ...form, promo })} />
           {fieldErrors.promoCode && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.promoCode}</p>}
         </div>
-        {form.kind !== 'room' && studentDiscount.percent > 0 && (
+        <div className="sm:col-span-2">
+          <DiscountField
+            id={`discount-${visit.id}`}
+            value={form.discount}
+            onChange={(discount) => setForm({ ...form, discount })}
+            error={fieldErrors['discount.value']}
+          />
+        </div>
+        {form.kind !== 'room' && studentTiers(studentDiscount).length > 0 && (
           <div className="sm:col-span-2">
             <StudentField
               id={`students-${visit.id}`}

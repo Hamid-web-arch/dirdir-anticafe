@@ -137,6 +137,7 @@ export default {
     capText: 'После {hours} часов цена не меняется, сколько бы вы ни оставались.',
     student: 'Мы студенты',
     studentHint: 'Скидка {percent}% при посещении от {hours} часов. Нужен студенческий билет.',
+    studentHintTiers: 'Скидка {shortPercent}% за {short} часа, {longPercent}% — от {long} часов. Нужен студенческий билет.',
     studentTooShort: 'Скидка действует от {hours} часов — добавьте время.',
     promo: 'Промокод',
     promoPlaceholder: 'Введите код',

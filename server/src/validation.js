@@ -395,6 +395,20 @@ const visitKind = z.enum(['hall', 'room'], { error: 'Seansın növünü seç: ü
 
 const visitTime = (label) => z.coerce.date({ error: `${label} düzgün deyil.` })
 
+// Admin verən xüsusi endirim: faizlə (1–100) və ya manatla
+const visitDiscount = z
+  .object({
+    type: z.enum(['percent', 'amount'], { error: 'Endirimin növünü seç: faiz və ya manat.' }),
+    value: z
+      .number({ error: 'Endirimi yaz.' })
+      .positive('Endirim 0-dan böyük olmalıdır.')
+      .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Ən çox 2 onluq rəqəm (məs. 2.50).'),
+  })
+  .superRefine((d, ctx) => {
+    if (d.type === 'percent' && d.value > 100) ctx.addIssue({ code: 'custom', path: ['value'], message: 'Faiz ən çox 100 ola bilər.' })
+    if (d.type === 'amount' && d.value > 1000) ctx.addIssue({ code: 'custom', path: ['value'], message: 'Ən çox 1000 ₼.' })
+  })
+
 // Ya qeydiyyatlı istifadəçi (userId), ya da yalnız ad. startedAt yazılmasa — indi.
 export const visitCreateSchema = z
   .object({
@@ -404,6 +418,7 @@ export const visitCreateSchema = z
     people: visitPeople.optional(),
     students: visitStudents.optional(),
     promoCode: promoCodeValue.optional(),
+    discount: visitDiscount.optional(),
     startedAt: visitTime('Başlama vaxtı').optional(),
     note: visitNote.optional(),
   })
@@ -419,6 +434,7 @@ export const visitUpdateSchema = z.object({
   kind: visitKind.optional(),
   students: visitStudents.optional(),
   promoCode: promoCodeValue.nullable().optional(),
+  discount: visitDiscount.nullable().optional(), // null — sil
   name: visitName.optional(),
   startedAt: visitTime('Başlama vaxtı').optional(),
   endedAt: visitTime('Bitmə vaxtı').optional(),

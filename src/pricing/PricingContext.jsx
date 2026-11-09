@@ -10,7 +10,8 @@ const cache = {
   get: () => {
     try {
       const value = JSON.parse(localStorage.getItem(CACHE_KEY))
-      return value?.hall && value?.room && value?.studentDiscount ? value : null
+      // Köhnə formada saxlanmış tələbə endirimi ({ percent, minHours }) — keşi işlətmirik
+      return value?.hall && value?.room && value?.studentDiscount?.long ? value : null
     } catch {
       return null
     }

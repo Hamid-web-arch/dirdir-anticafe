@@ -15,8 +15,9 @@ export const DEFAULT_PRICING = {
     smallGroup: { maxPeople: 2, firstHour: 15, nextHour: 10 },
     group: { perHour: 20, includedPeople: 5, extraPerPerson: 2 },
   },
-  // Tələbə endirimi (yalnız zalda): minHours saat və daha çox qalanda percent faiz.
-  studentDiscount: { percent: 20, minHours: 3 },
+  // Tələbə endirimi (yalnız zalda), iki pillə: short.minHours saat qalanda short.percent faiz,
+  // long.minHours saat və daha çox qalanda long.percent faiz (1 saatda endirim yoxdur).
+  studentDiscount: { short: { minHours: 2, percent: 10 }, long: { minHours: 3, percent: 20 } },
 }
 
 const SETTING_KEY = 'pricing'
@@ -34,6 +35,15 @@ const people = (label, min, max) =>
     .int(`${label} tam ədəd olmalıdır.`)
     .min(min, `${label} ən az ${min} ola bilər.`)
     .max(max, `${label} ən çox ${max} ola bilər.`)
+
+const studentTier = z.object({
+  minHours: z
+    .number({ error: 'Saatı yaz.' })
+    .min(1, 'Ən az 1 saat.')
+    .max(12)
+    .refine((n) => Number.isInteger(n * 2), 'Yarım saatlıq addımla yaz (məs. 2.5).'),
+  percent: people('Endirim faizi', 0, 100),
+})
 
 export const pricingSchema = z
   .object({
@@ -60,14 +70,11 @@ export const pricingSchema = z
           .max(1000),
       }),
     }),
-    studentDiscount: z.object({
-      percent: people('Endirim faizi', 0, 100),
-      minHours: z
-        .number({ error: 'Minimum saatı yaz.' })
-        .min(0)
-        .max(12)
-        .refine((n) => Number.isInteger(n * 2), 'Yarım saatlıq addımla yaz (məs. 2.5).'),
-    }),
+    // Köhnə saxlanmış tək pilləli qayda ({ percent, minHours }) yeni pilləli standart qaydaya keçirilir
+    studentDiscount: z.preprocess(
+      (v) => (v && typeof v === 'object' && !('long' in v) ? DEFAULT_PRICING.studentDiscount : v),
+      z.object({ short: studentTier, long: studentTier }),
+    ),
   })
   .superRefine((p, ctx) => {
     if (p.hall.cap < p.hall.firstHour) {
@@ -78,6 +85,13 @@ export const pricingSchema = z
         code: 'custom',
         path: ['room', 'smallGroup', 'maxPeople'],
         message: 'Kiçik qrup otağın tutumundan az olmalıdır.',
+      })
+    }
+    if (p.studentDiscount.long.minHours <= p.studentDiscount.short.minHours) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['studentDiscount', 'long', 'minHours'],
+        message: '2-ci pillənin saatı 1-ci pillədən çox olmalıdır.',
       })
     }
     const { includedPeople } = p.room.group

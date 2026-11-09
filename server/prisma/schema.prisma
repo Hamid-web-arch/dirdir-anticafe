@@ -204,6 +204,8 @@ model Visit {
   people        Int       @default(1)
   promoCode     String? // tətbiq olunan promokod
   promoPercent  Int? // kodun o anki faizi (kod sonra dəyişsə/silinsə də seansın endirimi qalır) // neçə nəfər (qrup bir nəfərin adına yazılır; məbləğ nəfər başına × say)
+  discountType  String? // admin verən xüsusi endirim: percent (faiz) | amount (manat)
+  discountValue Decimal?  @db.Decimal(8, 2)
   startedAt     DateTime
   endedAt       DateTime? // boşdursa seans davam edir
   minutes       Int? // bitəndə: qalma müddəti (dəqiqə)
