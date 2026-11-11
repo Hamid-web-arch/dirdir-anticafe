@@ -158,13 +158,15 @@ function waitText(until, t) {
   return t('wheel.waitMinutes', { minutes })
 }
 
+// null — yüklənir; { failed: true } — server cavab vermədi; yoxsa { enabled, periodDays, prizes, me }
 function useWheelState(token) {
-  const [state, setState] = useState(null) // { enabled, periodDays, prizes, me }
+  const [state, setState] = useState(null)
   const reload = useCallback(
     () =>
       api('/wheel', { token })
         .then(setState)
-        .catch(() => setState((s) => s ?? { enabled: false })),
+        // Əvvəl yüklənibsə, köhnə məlumat qalır
+        .catch(() => setState((s) => (s?.prizes ? s : { failed: true }))),
     [token],
   )
   useEffect(() => {
@@ -176,7 +178,7 @@ function useWheelState(token) {
 export default function GiftWheel() {
   const { t } = useI18n()
   const { pathname } = useLocation()
-  const { user, token } = useAuth()
+  const { token } = useAuth()
   const [state, setState, reload] = useWheelState(token)
   const [open, setOpen] = useState(false)
   const [raised, setRaised] = useState(false) // telefonda hesablayıcının aşağı zolağı açıqdır
@@ -187,8 +189,9 @@ export default function GiftWheel() {
     return () => window.removeEventListener('dirdir:bottom-bar', onBar)
   }, [])
 
-  // Admin paneldə və adminlərə göstərmirik; çarx söndürülübsə — düymə də yoxdur
-  if (!apiEnabled || pathname.startsWith('/admin') || user?.role === 'ADMIN' || !state?.enabled) return null
+  // Düymə dərhal görünür — serverin cavabını gözləmir (Render-in pulsuz serveri yatıbsa, cavab ~30–60 san. çəkir).
+  // Yalnız admin çarxı söndürübsə gizlənir. Admin paneldə göstərilmir.
+  if (!apiEnabled || pathname.startsWith('/admin') || state?.enabled === false) return null
 
   return (
     <>
@@ -218,8 +221,63 @@ export default function GiftWheel() {
           {t('wheel.label')}
         </button>
       </div>
-      {open && <WheelModal state={state} setState={setState} reload={reload} onClose={() => setOpen(false)} />}
+      {open &&
+        (state?.prizes ? (
+          <WheelModal state={state} setState={setState} reload={reload} onClose={() => setOpen(false)} />
+        ) : (
+          <WheelLoading
+            failed={state?.failed}
+            onRetry={() => {
+              setState(null)
+              reload()
+            }}
+            onClose={() => setOpen(false)}
+          />
+        ))}
     </>
+  )
+}
+
+// Server hələ cavab verməyib (yatmış serverin oyanması ~30–60 san.) və ya cavab gəlmədi
+function WheelLoading({ failed, onRetry, onClose }) {
+  const { t } = useI18n()
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6">
+      <div className="absolute inset-0 bg-night/70 backdrop-blur-sm" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('wheel.title')}
+        className="gift-modal relative w-full sm:max-w-[440px] bg-card text-ink rounded-t-[28px] sm:rounded-[28px] shadow-lift px-6 py-10 text-center"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('wheel.close')}
+          className="absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-inkdim hover:bg-ink/5"
+        >
+          <PiXBold size={16} />
+        </button>
+        <MiniWheel className={`w-24 h-24 mx-auto mb-4 ${failed ? '' : 'animate-spin'}`} />
+        <p className="font-display font-bold text-[1.2rem] mb-1">{t('wheel.title')}</p>
+        {failed ? (
+          <>
+            <p className="text-inkdim text-[0.9rem] mb-4">{t('wheel.failed')}</p>
+            <button type="button" onClick={onRetry} className="px-6 py-3 rounded-full font-bold bg-primary text-white">
+              {t('wheel.retry')}
+            </button>
+          </>
+        ) : (
+          <p className="text-inkdim text-[0.9rem]">{t('wheel.loading')}</p>
+        )}
+      </div>
+    </div>
   )
 }
 

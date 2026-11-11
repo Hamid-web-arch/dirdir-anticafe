@@ -1719,3 +1719,57 @@ describe('email ilə təsdiq', () => {
     assert.equal(asRegister.status, 400)
   })
 })
+
+describe('beh (əvvəlcədən ödəniş)', () => {
+  it('beh öz üsulunda, qalıq bitəndə seçilən üsulda sayılır; düzəltmək və silmək olur', async () => {
+    const adminToken = await createAdmin()
+    const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+
+    const bad = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ name: 'Leyla', deposit: { amount: 0, method: 'cash' } })
+    assert.equal(bad.status, 400)
+    assert.ok(bad.body.error.fields['deposit.amount'])
+
+    // Kino otağı, 2 nəfər, 1 saat = 15₼; beh 10₼ nağd, qalıq 5₼ kartla
+    const { body } = await api
+      .post('/api/admin/visits')
+      .set(bearer(adminToken))
+      .send({ name: 'Leyla', kind: 'room', people: 2, deposit: { amount: 10, method: 'cash' }, startedAt: minutesAgo(60) })
+    assert.equal(body.visit.deposit, 10)
+    assert.equal(body.visit.depositMethod, 'cash')
+    const end = await api.post(`/api/admin/visits/${body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    assert.equal(end.body.visit.amount, 15) // beh məbləği dəyişmir
+
+    const day = end.body.visit.day
+    const days = await api.get('/api/admin/visits/days').set(bearer(adminToken))
+    const row = days.body.days.find((d) => d.day === day)
+    assert.equal(row.total, 15)
+    assert.equal(row.cash, 10)
+    assert.equal(row.card, 5)
+
+    const stats = await api.get(`/api/admin/stats?view=daily&month=${day.slice(0, 7)}`).set(bearer(adminToken))
+    assert.equal(stats.body.totals.cash, 10)
+    assert.equal(stats.body.totals.card, 5)
+
+    // Beh kartla olubsa — hamısı kart; beh silinəndə — hamısı bitəndə seçilən üsulda
+    const fixed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ deposit: { amount: 10, method: 'card' } })
+    assert.equal(fixed.body.visit.depositMethod, 'card')
+    let after = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === day)
+    assert.equal(after.cash, 0)
+    assert.equal(after.card, 15)
+    const removed = await api.patch(`/api/admin/visits/${body.visit.id}`).set(bearer(adminToken)).send({ deposit: null })
+    assert.equal(removed.body.visit.deposit, null)
+    after = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === day)
+    assert.equal(after.card, 15)
+
+    // Beh məbləğdən çoxdursa — fərq qaytarılır (mənfi qalıq)
+    const { paymentSplit } = await import('../src/visits.js')
+    assert.deepEqual(
+      paymentSplit({ endedAt: new Date(), amount: 8, deposit: 10, depositMethod: 'cash', paymentMethod: 'cash' }),
+      { cash: 8, card: 0, other: 0 },
+    )
+    assert.deepEqual(
+      paymentSplit({ endedAt: new Date(), amount: 8, deposit: 10, depositMethod: 'card', paymentMethod: 'cash' }),
+      { cash: -2, card: 10, other: 0 },
+    )
+  })
+})

@@ -92,6 +92,9 @@ export default {
     waitDays: '{days} д {hours} ч',
     waitHours: '{hours} ч {minutes} мин',
     waitMinutes: '{minutes} мин',
+    loading: 'Готовим колесо… Если сервер просыпается, это займёт немного времени.',
+    failed: 'Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.',
+    retry: 'Попробовать снова',
   },
 
   highlights: {

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { requirePermission } from '../permissions.js'
-import { bakuDay, publicVisit } from '../visits.js'
+import { bakuDay, publicVisit, paymentSplit } from '../visits.js'
 import { statsQuerySchema, exportQuerySchema } from '../validation.js'
 
 // Statistika: Günün hesabatındakı seanslar günlük (bir ayın günləri) və ya aylıq (bir ilin ayları) üzrə.
@@ -34,7 +34,7 @@ adminStatsRouter.get('/stats', async (req, res) => {
 
   const visits = await prisma.visit.findMany({
     where: { day: { startsWith: period } },
-    select: { day: true, people: true, amount: true, paymentMethod: true, kind: true, endedAt: true },
+    select: { day: true, people: true, amount: true, paymentMethod: true, deposit: true, depositMethod: true, kind: true, endedAt: true },
   })
   for (const v of visits) {
     const b = buckets.get(view === 'daily' ? v.day : v.day.slice(0, 7))
@@ -44,9 +44,11 @@ adminStatsRouter.get('/stats', async (req, res) => {
     if (!v.endedAt || v.amount == null) continue
     const amount = Number(v.amount)
     b.total += amount
-    if (v.paymentMethod === 'cash') b.cash += amount
-    else if (v.paymentMethod === 'card') b.card += amount
-    else b.other += amount
+    // Beh öz üsulunda, qalıq bitəndə seçilən üsulda
+    const split = paymentSplit(v)
+    b.cash += split.cash
+    b.card += split.card
+    b.other += split.other
     b[v.kind === 'room' ? 'room' : 'hall'] += amount
   }
 

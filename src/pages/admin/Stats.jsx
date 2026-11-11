@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { useAdminApi, card, Button, ErrorBox, Spinner, Label, TextInput } from './ui.jsx'
 import { canSee, SECTIONS } from './sections.js'
-import { downloadCsv, openPrintWindow, printReport, dayText } from './exportReport.js'
+import { downloadCsv, downloadPdf, dayText } from './exportReport.js'
 
 // Statistika: Günün hesabatındakı seanslar günlük (ayın günləri) və aylıq (ilin ayları) üzrə.
 // Rənglər index.css-dəki --chart-* (rəng korluğu yoxlamasından keçib, qaranlıq rejimdə ayrıca).
@@ -422,7 +422,7 @@ function periodRange(view, period) {
   return { from: `${period}-01`, to: `${period}-${pad(new Date(Date.UTC(y, m, 0)).getUTCDate())}` }
 }
 
-// Yükləmə: göstərilən ay/il və ya istənilən tarix aralığı — PDF (çap) və ya Excel (CSV)
+// Yükləmə: göstərilən ay/il və ya istənilən tarix aralığı — PDF və ya Excel (CSV), hər ikisi fayl kimi birbaşa yüklənir
 function ExportPanel({ view, period, today }) {
   const request = useAdminApi()
   const shown = periodRange(view, period)
@@ -437,20 +437,14 @@ function ExportPanel({ view, period, today }) {
 
   const run = async (format) => {
     setError(null)
-    // PDF pəncərəsi klik anında açılmalıdır, yoxsa brauzer bloklayır
-    const win = format === 'pdf' ? openPrintWindow() : null
     setBusy(format)
     try {
       const { visits } = await request(`/admin/stats/export?from=${from}&to=${to}`)
-      if (format === 'pdf') {
-        if (!printReport(win, { title, subtitle, visits, mode: from === to ? 'day' : 'range' })) {
-          setError({ message: 'Brauzer yeni pəncərəni blokladı — bu sayt üçün pop-up-lara icazə ver.' })
-        }
-      } else {
-        downloadCsv({ filename: `dirdir-hesabat-${from}${from === to ? '' : `_${to}`}`, visits })
-      }
+      const filename = `dirdir-hesabat-${from}${from === to ? '' : `_${to}`}`
+      // Hər ikisi fayl kimi birbaşa yüklənir (çap pəncərəsi yoxdur)
+      if (format === 'pdf') await downloadPdf({ filename, title, subtitle, visits, mode: from === to ? 'day' : 'range' })
+      else downloadCsv({ filename, visits })
     } catch (err) {
-      win?.close()
       setError(err)
     } finally {
       setBusy(null)
@@ -494,7 +488,7 @@ function ExportPanel({ view, period, today }) {
         </Button>
       </div>
       <p className="text-[0.78rem] text-inkdim">
-        PDF: hesabat yeni pəncərədə açılır — çap pəncərəsində "PDF kimi saxla" seç. Excel: hər seans bir sətir, tarix ilə; faylı Excel və ya Google Sheets açır.
+        PDF: fayl birbaşa yüklənir (Yükləmələr qovluğuna). Excel: hər seans bir sətir, tarix ilə; faylı Excel və ya Google Sheets açır.
       </p>
     </section>
   )

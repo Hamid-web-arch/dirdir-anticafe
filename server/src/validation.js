@@ -410,6 +410,16 @@ const visitKind = z.enum(['hall', 'room'], { error: 'Seansın növünü seç: ü
 
 const visitTime = (label) => z.coerce.date({ error: `${label} düzgün deyil.` })
 
+// Beh: əvvəlcədən alınan məbləğ və ödəniş üsulu (nağd / kart)
+const visitDeposit = z.object({
+  amount: z
+    .number({ error: 'Behin məbləğini yaz.' })
+    .positive('Beh 0-dan böyük olmalıdır.')
+    .max(1000, 'Ən çox 1000 ₼.')
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Ən çox 2 onluq rəqəm (məs. 10.50).'),
+  method: z.enum(['cash', 'card'], { error: 'Behin ödəniş üsulunu seç: nağd və ya kart.' }),
+})
+
 // Admin verən xüsusi endirim: faizlə (1–100) və ya manatla
 const visitDiscount = z
   .object({
@@ -434,6 +444,7 @@ export const visitCreateSchema = z
     students: visitStudents.optional(),
     promoCode: promoCodeValue.optional(),
     discount: visitDiscount.optional(),
+    deposit: visitDeposit.optional(),
     startedAt: visitTime('Başlama vaxtı').optional(),
     note: visitNote.optional(),
   })
@@ -450,6 +461,7 @@ export const visitUpdateSchema = z.object({
   students: visitStudents.optional(),
   promoCode: promoCodeValue.nullable().optional(),
   discount: visitDiscount.nullable().optional(), // null — sil
+  deposit: visitDeposit.nullable().optional(), // null — sil
   name: visitName.optional(),
   startedAt: visitTime('Başlama vaxtı').optional(),
   endedAt: visitTime('Bitmə vaxtı').optional(),

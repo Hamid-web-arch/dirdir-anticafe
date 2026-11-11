@@ -22,6 +22,7 @@ import {
   PiStudentBold,
   PiTicketBold,
   PiTagBold,
+  PiHandCoinsBold,
   PiTrashBold,
   PiUserCircleCheckBold,
   PiUsersBold,
@@ -29,7 +30,7 @@ import {
   PiFilePdfBold,
   PiFileXlsBold,
 } from 'react-icons/pi'
-import { downloadCsv, openPrintWindow, printReport, dayText } from './exportReport.js'
+import { downloadCsv, downloadPdf, dayText } from './exportReport.js'
 import { usePricing } from '../../pricing/PricingContext.jsx'
 import {
   visitPrice,
@@ -43,6 +44,7 @@ import {
   toBakuInput,
   fromBakuInput,
   studentTiers,
+  paymentSplit,
 } from '../../pricing/visitPrice.js'
 import { formatAzDate } from '../../i18n/index.jsx'
 import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, Spinner } from './ui.jsx'
@@ -60,6 +62,15 @@ const discountBody = (d) => {
 }
 // Tətbiq olunan endirimin adı (cəmlənmir — ən böyüyü)
 const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim' }
+// Beh formada: { amount: '', method: 'cash' | 'card' }
+const EMPTY_DEPOSIT = { amount: '', method: 'cash' }
+// Formadakı beh → serverə; boşdursa və ya 0-dırsa — beh yoxdur (null)
+const depositBody = (d) => {
+  const amount = Number(String(d.amount).replace(',', '.'))
+  return String(d.amount).trim() !== '' && amount > 0 ? { amount, method: d.method } : null
+}
+// Bir neçə seansın pulu ödəniş üsuluna görə (beh öz üsulunda, qalıq bitəndə seçilən üsulda)
+const sumSplit = (visits, method) => round2(visits.reduce((s, v) => s + paymentSplit(v)[method], 0))
 // "−15%" və ya "−2₼"
 const discountLabel = (type, value) => (type === 'amount' ? `−${money(value)}` : `−${value}%`)
 
@@ -86,6 +97,7 @@ export default function AdminDailyReport() {
   const [data, setData] = useState(null) // { day, today, visits }
   const [error, setError] = useState(null)
   const [daysVersion, setDaysVersion] = useState(0) // tarixçəni yeniləmək üçün
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [toast, notify] = useToast()
   const requested = params.get('gun')
 
@@ -144,7 +156,7 @@ export default function AdminDailyReport() {
   const roomBusy = active.find((v) => v.kind === 'room')
   const peopleCount = visits.reduce((sum, v) => sum + v.people, 0)
   const endedTotal = round2(ended.reduce((sum, v) => sum + v.amount, 0))
-  const paidBy = (method) => round2(ended.filter((v) => v.paymentMethod === method).reduce((sum, v) => sum + v.amount, 0))
+  const paidBy = (method) => sumSplit(ended, method)
   const total = round2(endedTotal + active.reduce((sum, v) => sum + liveAmount(v), 0))
 
   return (
@@ -163,15 +175,24 @@ export default function AdminDailyReport() {
               <Button
                 variant="outline"
                 size="sm"
-                title="PDF kimi yüklə"
-                onClick={() =>
-                  printReport(openPrintWindow(), {
-                    title: 'Günün hesabatı',
-                    subtitle: dayText(data.day),
-                    visits: data.visits,
-                    mode: 'day',
-                  })
-                }
+                title="PDF faylı kimi yüklə"
+                loading={pdfBusy}
+                onClick={async () => {
+                  setPdfBusy(true)
+                  try {
+                    await downloadPdf({
+                      filename: `dirdir-hesabat-${data.day}`,
+                      title: 'Günün hesabatı',
+                      subtitle: dayText(data.day),
+                      visits: data.visits,
+                      mode: 'day',
+                    })
+                  } catch (err) {
+                    setError(err)
+                  } finally {
+                    setPdfBusy(false)
+                  }
+                }}
               >
                 <PiFilePdfBold size={16} /> PDF
               </Button>
@@ -282,9 +303,8 @@ function Toast({ toast }) {
 // Davam edən seansda "Çıxış" yerində canlı saat, Nağd/Kart yerində canlı məbləğ.
 function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify }) {
   const th = 'px-3 py-2.5 text-[0.78rem] font-bold whitespace-nowrap border-b-2 border-brand-orange/40'
-  const paid = (method) =>
-    round2(visits.filter((v) => v.endedAt && v.paymentMethod === method).reduce((s, v) => s + v.amount, 0))
-  const unknown = round2(visits.filter((v) => v.endedAt && !PAYMENT[v.paymentMethod]).reduce((s, v) => s + v.amount, 0))
+  const paid = (method) => sumSplit(visits, method)
+  const unknown = sumSplit(visits, 'other')
   const live = round2(
     visits.filter((v) => !v.endedAt).reduce((s, v) => s + visitPrice(pricing, visitMinutes(v.startedAt, now), v).amount, 0),
   )
@@ -397,12 +417,22 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
     )
   }
 
-  // Bitmiş seansın məbləği ödəniş üsulunun sütununda; üsul qeyd olunmayıbsa — Nağd sütununda "?" ilə
-  const paidIn = (method) => {
-    if (visit.paymentMethod === method) return money(visit.amount)
-    if (method === 'cash' && !PAYMENT[visit.paymentMethod]) return <span title="Ödəniş üsulu qeyd olunmayıb">{money(visit.amount)} ?</span>
-    return ''
-  }
+  // Bitmiş seansın pulu ödəniş üsullarının sütunlarında (beh öz üsulunda, qalıq bitəndə seçilən üsulda);
+  // üsulu qeyd olunmayan hissə — Nağd sütununda "?" ilə
+  const split = paymentSplit(visit)
+  const paidIn = (method) => (
+    <>
+      {split[method] !== 0 && money(split[method])}
+      {method === 'cash' && split.other !== 0 && (
+        <span title="Ödəniş üsulu qeyd olunmayıb" className="block">
+          {money(split.other)} ?
+        </span>
+      )}
+    </>
+  )
+  // Bitəndə ödəniləcək: məbləğ − beh (mənfidirsə — müştəriyə qaytarılır)
+  const deposit = Number(visit.deposit ?? 0)
+  const due = round2(amount - deposit)
   const iconBtn = 'p-1.5 rounded-lg text-inkdim hover:text-ink hover:bg-ink/5 disabled:opacity-40'
 
   return (
@@ -482,7 +512,8 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
         full(
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[0.88rem] font-bold mr-1">
-              {visit.name} · ödəniş: <span className="text-primary">{money(amount)}</span>
+              {visit.name} · {deposit > 0 ? `cəmi ${money(amount)} · beh ${money(deposit)} · ` : ''}
+              {due >= 0 ? 'ödəniş' : 'qaytarılmalı'}: <span className="text-primary">{money(Math.abs(due))}</span>
             </span>
             {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
               <Button
@@ -494,7 +525,8 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
                   act(
                     `/admin/visits/${visit.id}/end`,
                     { method: 'POST', body: { paymentMethod: method } },
-                    (v) => `${visit.name} — seans bitdi: ${money(v.amount)} · ${label}`,
+                    (v) =>
+                      `${visit.name} — seans bitdi: ${money(v.amount)}${deposit > 0 ? ` (beh ${money(deposit)}, qalıq ${money(round2(v.amount - deposit))} · ${label})` : ` · ${label}`}`,
                   )
                 }
               >
@@ -537,6 +569,11 @@ function VisitBadges({ visit, inTable }) {
       {visit.promoCode && (
         <span className={`${badge} text-brand-pink-deep bg-brand-pink-soft`}>
           <PiTicketBold size={13} /> {visit.promoCode} −{visit.promoPercent}%
+        </span>
+      )}
+      {visit.deposit > 0 && (
+        <span className={`${badge} text-brand-teal-deep bg-brand-teal-soft`} title="Əvvəlcədən alınan məbləğ">
+          <PiHandCoinsBold size={13} /> Beh {money(visit.deposit)} · {PAYMENT[visit.depositMethod]?.label.toLowerCase() ?? '?'}
         </span>
       )}
       {visit.discountValue > 0 && (
@@ -611,6 +648,7 @@ function NewVisit({ onCreated, roomBusy }) {
   const [students, setStudents] = useState(0)
   const [promo, setPromo] = useState(null) // { code, percent }
   const [discount, setDiscount] = useState(EMPTY_DISCOUNT)
+  const [deposit, setDeposit] = useState(EMPTY_DEPOSIT)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -651,6 +689,7 @@ function NewVisit({ onCreated, roomBusy }) {
     setStudents(0)
     setPromo(null)
     setDiscount(EMPTY_DISCOUNT)
+    setDeposit(EMPTY_DEPOSIT)
     setKind('hall')
     setExtrasOpen(false)
     document.getElementById('visit-name')?.focus()
@@ -662,6 +701,7 @@ function NewVisit({ onCreated, roomBusy }) {
     const counts = { kind, people, students: kind === 'room' ? 0 : students }
     if (promo) counts.promoCode = promo.code
     if (customDiscount) counts.discount = customDiscount
+    if (depositBody(deposit)) counts.deposit = depositBody(deposit)
     const body = selected ? { userId: selected.id, ...counts } : { name: query.trim(), ...counts }
     if (time) body.startedAt = fromBakuInput(`${bakuDay()}T${time}`)
     setSaving(true)
@@ -685,6 +725,7 @@ function NewVisit({ onCreated, roomBusy }) {
     !isRoom && students > 0 && (people > 1 ? `${students} tələbə` : 'tələbə'),
     promo && `${promo.code} −${promo.percent}%`,
     customDiscount && `endirim ${discountLabel(customDiscount.type, customDiscount.value)}`,
+    depositBody(deposit) && `beh ${money(depositBody(deposit).amount)}`,
     time && `${time}-dan`,
   ].filter(Boolean)
   // Başlanğıc məbləğ (ilk saat) — admin müştəriyə dərhal deyə bilsin
@@ -808,7 +849,7 @@ function NewVisit({ onCreated, roomBusy }) {
         className="mt-3 w-full flex items-center gap-2 text-left text-[0.85rem] font-bold text-inkdim hover:text-ink"
       >
         <PiCaretDownBold size={14} className={`transition-transform ${extrasOpen ? 'rotate-180' : ''}`} />
-        {isRoom ? 'Promokod, endirim, başlama saatı' : 'Tələbə, promokod, endirim, başlama saatı'}
+        {isRoom ? 'Beh, promokod, endirim, başlama saatı' : 'Beh, tələbə, promokod, endirim, başlama saatı'}
         {!extrasOpen && extrasSummary.length > 0 && (
           <span className="ml-auto text-primary truncate">{extrasSummary.join(' · ')}</span>
         )}
@@ -822,6 +863,7 @@ function NewVisit({ onCreated, roomBusy }) {
             <PromoField id="visit-promo" value={promo} onChange={setPromo} />
           </div>
           <DiscountField id="visit-discount" value={discount} onChange={setDiscount} error={error?.fields?.['discount.value']} />
+          <DepositField id="visit-deposit" value={deposit} onChange={setDeposit} error={error?.fields?.['deposit.amount']} />
           <div>
             <Label htmlFor="visit-time" hint="boş qalsa — indi">
               Başlama saatı
@@ -1018,6 +1060,49 @@ function StudentField({ id, people, value, onChange, discount }) {
   )
 }
 
+// Beh: əvvəlcədən alınan məbləğ + nağd/kart. Seans bitəndə yalnız qalıq ödənilir.
+function DepositField({ id, value, onChange, error }) {
+  return (
+    <div>
+      <Label htmlFor={id} hint="könüllü · bitəndə qalıq ödənilir">
+        Beh
+      </Label>
+      <div className="flex gap-2">
+        <div className="relative flex-1 min-w-0">
+          <TextInput
+            id={id}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.5"
+            placeholder="məs. 10"
+            value={value.amount}
+            onChange={(e) => onChange({ ...value, amount: e.target.value })}
+            error={error}
+            className="pr-9 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+          <span className="absolute right-3.5 top-[0.7rem] text-[0.85rem] font-bold text-inkdim pointer-events-none">₼</span>
+        </div>
+        <div className="inline-flex shrink-0 self-start bg-ink/5 rounded-xl p-1 gap-1" role="group" aria-label="Behin ödəniş üsulu">
+          {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
+            <button
+              key={method}
+              type="button"
+              aria-pressed={value.method === method}
+              onClick={() => onChange({ ...value, method })}
+              className={`inline-flex items-center gap-1 px-2.5 h-[34px] rounded-lg font-bold text-[0.82rem] transition-colors ${
+                value.method === method ? 'bg-card shadow text-ink' : 'text-inkdim hover:text-ink'
+              }`}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Xüsusi endirim: rəqəm + faiz/manat seçimi. Boş qalsa — endirim yoxdur.
 // Tələbə endirimi və promokodla cəmlənmir — hansı çoxdursa, o tətbiq olunur.
 function DiscountField({ id, value, onChange, error }) {
@@ -1120,6 +1205,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     students: visit.students,
     promo: visit.promoCode ? { code: visit.promoCode, percent: visit.promoPercent } : null,
     discount: visit.discountValue ? { type: visit.discountType, value: String(visit.discountValue) } : EMPTY_DISCOUNT,
+    deposit: visit.deposit ? { amount: String(visit.deposit), method: visit.depositMethod ?? 'cash' } : EMPTY_DEPOSIT,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -1129,7 +1215,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     e.preventDefault()
     setSaving(true)
     setError(null)
-    const body = { startedAt: fromBakuInput(form.startedAt), note: form.note.trim() || null, people: form.people, ...(visit.endedAt ? { kind: form.kind } : {}), students: form.kind === 'room' ? 0 : form.students, promoCode: form.promo?.code ?? null, discount: discountBody(form.discount) }
+    const body = { startedAt: fromBakuInput(form.startedAt), note: form.note.trim() || null, people: form.people, ...(visit.endedAt ? { kind: form.kind } : {}), students: form.kind === 'room' ? 0 : form.students, promoCode: form.promo?.code ?? null, discount: discountBody(form.discount), deposit: depositBody(form.deposit) }
     if (!visit.user) body.name = form.name
     if (visit.endedAt && form.endedAt) body.endedAt = fromBakuInput(form.endedAt)
     if (visit.endedAt && form.paymentMethod) body.paymentMethod = form.paymentMethod
@@ -1197,6 +1283,14 @@ function EditVisit({ visit, onCancel, onSaved }) {
             value={form.discount}
             onChange={(discount) => setForm({ ...form, discount })}
             error={fieldErrors['discount.value']}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <DepositField
+            id={`deposit-${visit.id}`}
+            value={form.deposit}
+            onChange={(deposit) => setForm({ ...form, deposit })}
+            error={fieldErrors['deposit.amount']}
           />
         </div>
         {form.kind !== 'room' && studentTiers(studentDiscount).length > 0 && (

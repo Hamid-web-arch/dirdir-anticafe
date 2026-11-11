@@ -1,6 +1,7 @@
-// Hesabatı yükləmək: PDF (çap pəncərəsi → "PDF kimi saxla") və Excel (CSV).
-// PDF brauzerin çapı ilə yaradılır — Azərbaycan hərfləri (ə, ğ, ş) heç bir şrift faylı olmadan düzgün çıxır.
-import { bakuTime } from '../../pricing/visitPrice.js'
+// Hesabatı yükləmək: PDF və Excel (CSV) — hər ikisi düyməyə basan kimi fayl kimi yüklənir.
+// PDF brauzerdə pdfmake ilə yaradılır (çap pəncərəsi yoxdur). Kitabxana böyükdür — yalnız PDF istənəndə yüklənir.
+// Onun Roboto şriftində Azərbaycan hərfləri (ə, ğ, ş, ı) və ₼ var.
+import { bakuTime, paymentSplit } from '../../pricing/visitPrice.js'
 import { formatAzDate } from '../../i18n/index.jsx'
 
 const round2 = (n) => Math.round(n * 100) / 100
@@ -8,18 +9,22 @@ const money = (n) => `${n.toFixed(2)} ₼`
 const dayText = (day) => formatAzDate(`${day}T12:00:00`, { day: 'numeric', month: 'long', year: 'numeric' })
 const duration = (m) => (m == null ? '' : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`)
 const PLACE = { hall: 'Zal', room: 'Kino' }
+const METHOD = { cash: 'nağd', card: 'kart' }
 
+// Endirimlər və beh — müştərinin adının altında qısa qeyd
 const discountText = (v) => {
   const parts = []
   if (v.students > 0 && v.kind !== 'room') parts.push(v.people > 1 ? `${v.students} tələbə` : 'tələbə')
   if (v.promoCode) parts.push(`${v.promoCode} −${v.promoPercent}%`)
   if (v.discountValue > 0) parts.push(`endirim −${v.discountValue}${v.discountType === 'amount' ? ' ₼' : '%'}`)
+  if (v.deposit > 0) parts.push(`beh ${money(v.deposit)} (${METHOD[v.depositMethod] ?? '?'})`)
   return parts.join(', ')
 }
 
-// Bir seansın cədvəl sətri (PDF və Excel üçün eyni)
+// Bir seansın cədvəl sətri (PDF və Excel üçün eyni). Pul ödəniş üsullarına bölünür: beh öz üsulunda, qalıq — bitəndə.
 function sessionRow(v) {
   const done = Boolean(v.endedAt)
+  const split = paymentSplit(v)
   return {
     day: v.day,
     name: v.name,
@@ -28,9 +33,9 @@ function sessionRow(v) {
     start: bakuTime(v.startedAt),
     end: done ? bakuTime(v.endedAt) : 'davam edir',
     duration: duration(v.minutes),
-    cash: done && v.paymentMethod === 'cash' ? v.amount : null,
-    card: done && v.paymentMethod === 'card' ? v.amount : null,
-    other: done && v.paymentMethod !== 'cash' && v.paymentMethod !== 'card' ? v.amount : null,
+    cash: done && split.cash !== 0 ? split.cash : null,
+    card: done && split.card !== 0 ? split.card : null,
+    other: done && split.other !== 0 ? split.other : null,
     discount: discountText(v),
     note: v.note ?? '',
   }
@@ -38,7 +43,7 @@ function sessionRow(v) {
 
 function totalsOf(visits) {
   const done = visits.filter((v) => v.endedAt)
-  const by = (m) => round2(done.filter((v) => v.paymentMethod === m).reduce((s, v) => s + v.amount, 0))
+  const by = (m) => round2(done.reduce((s, v) => s + paymentSplit(v)[m], 0))
   const total = round2(done.reduce((s, v) => s + v.amount, 0))
   return { people: visits.reduce((s, v) => s + v.people, 0), sessions: visits.length, cash: by('cash'), card: by('card'), total }
 }
@@ -50,6 +55,15 @@ function daySummary(visits) {
   return [...days.entries()].map(([day, list]) => ({ day, ...totalsOf(list) }))
 }
 
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 // ---------- Excel (CSV) ----------
 // Ayırıcı ";" və onluq vergül — Azərbaycan/rus dilli Excel-də sütunlara düzgün bölünür; BOM — hərflər düzgün görünsün.
 const cell = (value) => {
@@ -59,7 +73,7 @@ const cell = (value) => {
 }
 
 export function downloadCsv({ filename, visits }) {
-  const header = ['Tarix', 'Müştəri', 'Say', 'Yer', 'Giriş', 'Çıxış', 'Müddət', 'Nağd', 'Kart', 'Üsulsuz', 'Endirim', 'Qeyd']
+  const header = ['Tarix', 'Müştəri', 'Say', 'Yer', 'Giriş', 'Çıxış', 'Müddət', 'Nağd', 'Kart', 'Üsulsuz', 'Endirim / beh', 'Qeyd']
   const lines = [header.map(cell).join(';')]
   for (const v of visits) {
     const r = sessionRow(v)
@@ -67,108 +81,159 @@ export function downloadCsv({ filename, visits }) {
   }
   const t = totalsOf(visits)
   lines.push(['Cəmi', '', t.people, '', '', '', '', t.cash, t.card, round2(t.total - t.cash - t.card) || null, '', ''].map(cell).join(';'))
-
-  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = Object.assign(document.createElement('a'), { href: url, download: `${filename}.csv` })
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  saveBlob(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${filename}.csv`)
 }
 
-// ---------- PDF (çap) ----------
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+// ---------- PDF ----------
+const ORANGE = '#fbb040'
+const GREY = '#5B6A62'
+const LINE = '#c9d3cd'
+
+const th = (text, alignment) => ({ text, bold: true, fillColor: ORANGE, alignment })
+const tf = (text, alignment, extra = {}) => ({ text, bold: true, fillColor: '#f3f5f4', alignment, ...extra })
 const num = (n) => (n == null ? '' : money(n))
 
 function sessionsTable(visits, withDate) {
   const t = totalsOf(visits)
-  const rows = visits
-    .map((v) => {
-      const r = sessionRow(v)
-      return `<tr>
-        ${withDate ? `<td>${esc(dayText(r.day))}</td>` : ''}
-        <td><b>${esc(r.name)}</b>${r.discount ? `<div class="sub">${esc(r.discount)}</div>` : ''}${r.note ? `<div class="sub"><i>${esc(r.note)}</i></div>` : ''}</td>
-        <td class="r">${r.people}</td><td>${r.place}</td><td>${r.start}</td><td>${esc(r.end)}</td><td>${r.duration}</td>
-        <td class="r">${num(r.cash ?? r.other)}${r.other != null ? ' ?' : ''}</td><td class="r">${num(r.card)}</td>
-      </tr>`
-    })
-    .join('')
-  return `<table>
-    <thead><tr>${withDate ? '<th>Tarix</th>' : ''}<th>Müştəri</th><th class="r">Say</th><th>Yer</th><th>Giriş</th><th>Çıxış</th><th>Müddət</th><th class="r">Nağd</th><th class="r">Kart</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="${withDate ? 9 : 8}" class="empty">Qeyd yoxdur</td></tr>`}</tbody>
-    <tfoot><tr><td${withDate ? ' colspan="2"' : ''}>Cəmi</td><td class="r">${t.people}</td><td colspan="4"></td><td class="r">${money(t.cash)}</td><td class="r">${money(t.card)}</td></tr></tfoot>
-  </table>`
+  const header = [
+    ...(withDate ? [th('Tarix')] : []),
+    th('Müştəri'),
+    th('Say', 'right'),
+    th('Yer'),
+    th('Giriş'),
+    th('Çıxış'),
+    th('Müddət'),
+    th('Nağd', 'right'),
+    th('Kart', 'right'),
+  ]
+  const rows = visits.map((v) => {
+    const r = sessionRow(v)
+    const nameCell = {
+      stack: [
+        { text: r.name, bold: true },
+        ...(r.discount ? [{ text: r.discount, fontSize: 7.5, color: GREY }] : []),
+        ...(r.note ? [{ text: r.note, fontSize: 7.5, color: GREY, italics: true }] : []),
+      ],
+    }
+    // Üsulu qeyd olunmayan pul — Nağd sütununda "?" ilə
+    const cash = [num(r.cash), r.other != null ? `${money(r.other)} ?` : ''].filter(Boolean).join('\n')
+    return [
+      ...(withDate ? [dayText(r.day)] : []),
+      nameCell,
+      { text: String(r.people), alignment: 'right' },
+      r.place,
+      r.start,
+      r.end,
+      r.duration,
+      { text: cash, alignment: 'right' },
+      { text: num(r.card), alignment: 'right' },
+    ]
+  })
+  const columns = header.length
+  const body = [
+    header,
+    ...(rows.length ? rows : [[{ text: 'Qeyd yoxdur', colSpan: columns, alignment: 'center', color: GREY }, ...Array(columns - 1).fill('')]]),
+    [
+      tf('Cəmi', undefined, withDate ? { colSpan: 2 } : {}),
+      ...(withDate ? [''] : []),
+      tf(String(t.people), 'right'),
+      tf('', undefined, { colSpan: 4 }),
+      '',
+      '',
+      '',
+      tf(money(t.cash), 'right'),
+      tf(money(t.card), 'right'),
+    ],
+  ]
+  return {
+    table: {
+      headerRows: 1,
+      dontBreakRows: true,
+      widths: [...(withDate ? [62] : []), '*', 24, 30, 32, 44, 36, 52, 52],
+      body,
+    },
+    layout: { hLineColor: LINE, vLineColor: LINE, paddingTop: () => 3, paddingBottom: () => 3 },
+  }
 }
 
 function summaryTable(visits) {
-  const rows = daySummary(visits)
   const t = totalsOf(visits)
-  return `<table class="summary">
-    <thead><tr><th>Gün</th><th class="r">Müştəri</th><th class="r">Seans</th><th class="r">Nağd</th><th class="r">Kart</th><th class="r">Cəmi</th></tr></thead>
-    <tbody>${rows
-      .map((d) => `<tr><td>${esc(dayText(d.day))}</td><td class="r">${d.people}</td><td class="r">${d.sessions}</td><td class="r">${money(d.cash)}</td><td class="r">${money(d.card)}</td><td class="r"><b>${money(d.total)}</b></td></tr>`)
-      .join('')}</tbody>
-    <tfoot><tr><td>Cəmi</td><td class="r">${t.people}</td><td class="r">${t.sessions}</td><td class="r">${money(t.cash)}</td><td class="r">${money(t.card)}</td><td class="r">${money(t.total)}</td></tr></tfoot>
-  </table>`
+  return {
+    table: {
+      headerRows: 1,
+      widths: ['*', 50, 40, 60, 60, 64],
+      body: [
+        [th('Gün'), th('Müştəri', 'right'), th('Seans', 'right'), th('Nağd', 'right'), th('Kart', 'right'), th('Cəmi', 'right')],
+        ...daySummary(visits).map((d) => [
+          dayText(d.day),
+          { text: String(d.people), alignment: 'right' },
+          { text: String(d.sessions), alignment: 'right' },
+          { text: money(d.cash), alignment: 'right' },
+          { text: money(d.card), alignment: 'right' },
+          { text: money(d.total), alignment: 'right', bold: true },
+        ]),
+        [tf('Cəmi'), tf(String(t.people), 'right'), tf(String(t.sessions), 'right'), tf(money(t.cash), 'right'), tf(money(t.card), 'right'), tf(money(t.total), 'right')],
+      ],
+    },
+    layout: { hLineColor: LINE, vLineColor: LINE },
+  }
 }
 
-const STYLE = `
-  @page { size: A4; margin: 14mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Inter, Arial, sans-serif; color: #1D2B24; font-size: 11px; margin: 0; }
-  h1 { font-size: 18px; margin: 0 0 2px; }
-  h2 { font-size: 13px; margin: 18px 0 6px; }
-  .meta { color: #5B6A62; margin-bottom: 12px; }
-  .kpis { display: flex; gap: 8px; margin: 10px 0 4px; }
-  .kpi { border: 1px solid #d9e2dc; border-radius: 6px; padding: 6px 10px; flex: 1; }
-  .kpi span { display: block; color: #5B6A62; font-size: 10px; }
-  .kpi b { font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #c9d3cd; padding: 4px 6px; text-align: left; vertical-align: top; }
-  thead th { background: #fbb040; font-weight: 700; }
-  tfoot td { font-weight: 700; background: #f3f5f4; }
-  .r { text-align: right; white-space: nowrap; }
-  .sub { color: #5B6A62; font-size: 9.5px; }
-  .empty { text-align: center; color: #5B6A62; padding: 14px; }
-  tr { page-break-inside: avoid; }
-  .hint { position: fixed; top: 0; left: 0; right: 0; background: #1D2B24; color: #fff; padding: 8px 14px; font-size: 12px; }
-  @media print { .hint { display: none; } }
-`
-
-// Yeni pəncərəni KLİK ANINDA açmaq lazımdır (sonra açılsa brauzer bloklayır) — məlumat sonra yazılır.
-export function openPrintWindow() {
-  const w = window.open('', '_blank')
-  if (w) w.document.write('<p style="font-family:sans-serif;padding:20px">Hesabat hazırlanır…</p>')
-  return w
+function kpis(t) {
+  const box = (label, value) => ({
+    stack: [
+      { text: label, fontSize: 8, color: GREY },
+      { text: value, fontSize: 12, bold: true },
+    ],
+  })
+  return {
+    table: {
+      widths: ['*', '*', '*', '*', '*'],
+      body: [[box('Gəlir', money(t.total)), box('Nağd', money(t.cash)), box('Kart', money(t.card)), box('Müştəri', String(t.people)), box('Seans', String(t.sessions))]],
+    },
+    layout: { hLineColor: LINE, vLineColor: LINE, paddingLeft: () => 8, paddingTop: () => 5, paddingBottom: () => 5 },
+    margin: [0, 8, 0, 10],
+  }
 }
 
-export function printReport(w, { title, subtitle, visits, mode }) {
-  if (!w) return false
+let pdfMakeLoading = null
+function loadPdfMake() {
+  pdfMakeLoading ??= Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')]).then(([lib, fonts]) => {
+    const pdfMake = lib.default ?? lib
+    const vfsModule = fonts.default ?? fonts
+    pdfMake.vfs = vfsModule.pdfMake?.vfs ?? vfsModule.vfs ?? vfsModule
+    return pdfMake
+  })
+  return pdfMakeLoading
+}
+
+// mode: 'day' — bir günün seansları; 'range' — əvvəlcə günlər üzrə cəm, sonra bütün seanslar
+export async function downloadPdf({ filename, title, subtitle, visits, mode }) {
+  const pdfMake = await loadPdfMake()
   const t = totalsOf(visits)
-  const kpis = `<div class="kpis">
-    <div class="kpi"><span>Gəlir</span><b>${money(t.total)}</b></div>
-    <div class="kpi"><span>Nağd</span><b>${money(t.cash)}</b></div>
-    <div class="kpi"><span>Kart</span><b>${money(t.card)}</b></div>
-    <div class="kpi"><span>Müştəri</span><b>${t.people}</b></div>
-    <div class="kpi"><span>Seans</span><b>${t.sessions}</b></div>
-  </div>`
-  const body =
-    mode === 'day'
-      ? sessionsTable(visits, false)
-      : `<h2>Günlər üzrə</h2>${summaryTable(visits)}<h2>Bütün seanslar</h2>${sessionsTable(visits, true)}`
-  w.document.open()
-  w.document.write(`<!doctype html><html lang="az"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head>
-    <body>
-      <div class="hint">PDF kimi saxlamaq üçün çap pəncərəsində "Printer" → "PDF kimi saxla" (Save as PDF) seç.</div>
-      <h1>DırDır Anticafe — ${esc(title)}</h1>
-      <div class="meta">${esc(subtitle)} · Hazırlanıb: ${esc(formatAzDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit' }))}</div>
-      ${kpis}
-      ${body}
-      <script>window.onload = () => setTimeout(() => window.print(), 200)</script>
-    </body></html>`)
-  w.document.close()
-  return true
+  const made = formatAzDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit' })
+  const doc = {
+    pageSize: 'A4',
+    pageMargins: [36, 36, 36, 40],
+    info: { title: `DırDır Anticafe — ${title}` },
+    defaultStyle: { font: 'Roboto', fontSize: 8.5, color: '#1D2B24' },
+    footer: (page, pages) => ({ text: `${page} / ${pages}`, alignment: 'center', fontSize: 7.5, color: GREY, margin: [0, 12, 0, 0] }),
+    content: [
+      { text: `DırDır Anticafe — ${title}`, fontSize: 15, bold: true },
+      { text: `${subtitle} · Hazırlanıb: ${made}`, color: GREY, margin: [0, 2, 0, 0] },
+      kpis(t),
+      ...(mode === 'day'
+        ? [sessionsTable(visits, false)]
+        : [
+            { text: 'Günlər üzrə', fontSize: 11, bold: true, margin: [0, 4, 0, 6] },
+            summaryTable(visits),
+            { text: 'Bütün seanslar', fontSize: 11, bold: true, margin: [0, 14, 0, 6] },
+            sessionsTable(visits, true),
+          ]),
+    ],
+  }
+  const blob = await new Promise((resolve) => pdfMake.createPdf(doc).getBlob(resolve))
+  saveBlob(blob, `${filename}.pdf`)
 }
 
 export { dayText }

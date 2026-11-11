@@ -87,6 +87,9 @@ export default {
     waitDays: '{days} d {hours} h',
     waitHours: '{hours} h {minutes} min',
     waitMinutes: '{minutes} min',
+    loading: 'Getting the wheel ready… It may take a moment if the server is waking up.',
+    failed: "Couldn't reach the server. Check your connection and try again.",
+    retry: 'Try again',
   },
 
   highlights: {

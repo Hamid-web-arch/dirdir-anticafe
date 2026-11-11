@@ -4,7 +4,7 @@ import { requireAuth, requireAdmin } from '../auth.js'
 import { HttpError } from '../middleware/error.js'
 import { requirePermission } from '../permissions.js'
 import { getPricing } from '../pricing.js'
-import { bakuDay, visitMinutes, visitPrice, publicVisit } from '../visits.js'
+import { bakuDay, visitMinutes, visitPrice, publicVisit, paymentSplit } from '../visits.js'
 import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema } from '../validation.js'
 
 // Günün hesabatı: admin hər gələn müştərinin seansını başladır və bitirir.
@@ -72,6 +72,8 @@ async function closing(startedAt, endedAt, visit) {
 
 // Xüsusi endirim → bazadakı sahələr (null — endirim yoxdur)
 const discountFields = (discount) => ({ discountType: discount?.type ?? null, discountValue: discount?.value ?? null })
+// Beh → bazadakı sahələr (null — beh yoxdur)
+const depositFields = (deposit) => ({ deposit: deposit?.amount ?? null, depositMethod: deposit?.method ?? null })
 
 async function findVisit(id) {
   const visit = await prisma.visit.findUnique({ where: { id } })
@@ -88,26 +90,30 @@ adminVisitsRouter.get('/visits', async (req, res) => {
 })
 
 // Tarixçə: qeyd olan günlər (yenidən köhnəyə) — müştəri sayı (nəfərlərin cəmi), bitmiş seansların cəmi, nağd və kart ayrıca
+// Beh öz üsulunda, qalıq bitəndə seçilən üsulda sayılır (paymentSplit)
 adminVisitsRouter.get('/visits/days', async (req, res) => {
-  const rows = await prisma.visit.groupBy({
-    by: ['day', 'paymentMethod'],
-    _sum: { amount: true, people: true },
+  const rows = await prisma.visit.findMany({
+    select: { day: true, people: true, amount: true, endedAt: true, paymentMethod: true, deposit: true, depositMethod: true },
     orderBy: { day: 'desc' },
   })
+  const round2 = (n) => Math.round(n * 100) / 100
   const days = new Map()
-  for (const r of rows) {
-    const d = days.get(r.day) ?? { day: r.day, count: 0, total: 0, cash: 0, card: 0 }
-    const sum = Number(r._sum.amount ?? 0)
-    d.count += r._sum.people ?? 0
-    d.total = Math.round((d.total + sum) * 100) / 100
-    if (r.paymentMethod === 'cash' || r.paymentMethod === 'card') d[r.paymentMethod] = Math.round((d[r.paymentMethod] + sum) * 100) / 100
-    days.set(r.day, d)
+  for (const v of rows) {
+    const d = days.get(v.day) ?? { day: v.day, count: 0, total: 0, cash: 0, card: 0 }
+    d.count += v.people
+    if (v.endedAt && v.amount != null) {
+      const split = paymentSplit(v)
+      d.total = round2(d.total + Number(v.amount))
+      d.cash = round2(d.cash + split.cash)
+      d.card = round2(d.card + split.card)
+    }
+    days.set(v.day, d)
   }
   res.json({ days: [...days.values()].slice(0, 120) })
 })
 
 adminVisitsRouter.post('/visits', async (req, res) => {
-  const { userId, name, kind = 'hall', people = 1, students: rawStudents = 0, promoCode, discount, startedAt = new Date(), note } =
+  const { userId, name, kind = 'hall', people = 1, students: rawStudents = 0, promoCode, discount, deposit, startedAt = new Date(), note } =
     visitCreateSchema.parse(req.body)
   const promo = promoCode ? await promoFor(promoCode) : {}
   const students = studentsFor({ kind, people, students: rawStudents })
@@ -133,6 +139,7 @@ adminVisitsRouter.post('/visits', async (req, res) => {
       students,
       ...promo,
       ...discountFields(discount),
+      ...depositFields(deposit),
       startedAt,
       note: note || null,
       createdById: req.user.id,
@@ -157,7 +164,8 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
 
 // Səhv düzəltmək: ad, növ, nəfər sayı, qeyd, başlama/bitmə vaxtı. Bitmiş seansda məbləğ yenidən hesablanır.
 adminVisitsRouter.patch('/visits/:id', async (req, res) => {
-  const { name, kind, people, students, promoCode, discount, startedAt, endedAt, note, paymentMethod } = visitUpdateSchema.parse(req.body)
+  const { name, kind, people, students, promoCode, discount, deposit, startedAt, endedAt, note, paymentMethod } =
+    visitUpdateSchema.parse(req.body)
   const visit = await findVisit(req.params.id)
   if ((endedAt || paymentMethod) && !visit.endedAt) {
     throw new HttpError(400, 'VALIDATION', 'Seansı bitirmək üçün "Bitir" düyməsini işlət.')
@@ -191,6 +199,8 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
   const nextDiscount =
     discount !== undefined ? discountFields(discount) : { discountType: visit.discountType, discountValue: visit.discountValue }
   if (discount !== undefined) Object.assign(data, nextDiscount)
+  // Beh məbləği dəyişmir — yalnız nağd/kart bölgüsünü dəyişir
+  if (deposit !== undefined) Object.assign(data, depositFields(deposit))
   if (paymentMethod) data.paymentMethod = paymentMethod
   if (startedAt) {
     assertNotFuture(startedAt, 'startedAt', 'Başlama vaxtı')

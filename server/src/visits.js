@@ -97,6 +97,23 @@ export function studentPercent(studentDiscount, hours) {
   return 0
 }
 
+// Bitmiş seansın pulu ödəniş üsullarına görə: beh öz üsuluna, qalıq (məbləğ − beh) bitəndə seçilən üsula.
+// Qalıq mənfi ola bilər (beh məbləğdən çox — fərq müştəriyə qaytarılır). Üsulu bilinməyən — "other".
+// Saytdakı src/pricing/visitPrice.js → paymentSplit ilə eynidir.
+export function paymentSplit(v) {
+  const split = { cash: 0, card: 0, other: 0 }
+  if (!v.endedAt || v.amount == null) return split
+  const amount = Number(v.amount)
+  const deposit = Number(v.deposit ?? 0)
+  const add = (method, value) => {
+    split[method === 'cash' || method === 'card' ? method : 'other'] += value
+  }
+  if (deposit > 0) add(v.depositMethod, deposit)
+  add(v.paymentMethod, amount - deposit)
+  for (const key of Object.keys(split)) split[key] = Math.round(split[key] * 100) / 100
+  return split
+}
+
 // Klientə qaytarılan seans
 export const publicVisit = (v) => ({
   id: v.id,
@@ -109,6 +126,8 @@ export const publicVisit = (v) => ({
   promoPercent: v.promoPercent,
   discountType: v.discountType,
   discountValue: v.discountValue == null ? null : Number(v.discountValue),
+  deposit: v.deposit == null ? null : Number(v.deposit),
+  depositMethod: v.depositMethod,
   user: v.user ? { id: v.user.id, firstName: v.user.firstName, lastName: v.user.lastName, phone: v.user.phone } : null,
   startedAt: v.startedAt,
   endedAt: v.endedAt,

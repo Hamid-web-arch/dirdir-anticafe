@@ -90,6 +90,9 @@ export default {
     waitDays: '{days} gün {hours} saat',
     waitHours: '{hours} saat {minutes} dəq',
     waitMinutes: '{minutes} dəq',
+    loading: 'Çarx hazırlanır… Server oyanırsa, bir az çəkə bilər.',
+    failed: 'Serverə qoşulmaq olmadı. İnterneti yoxla və yenidən cəhd et.',
+    retry: 'Yenidən cəhd et',
   },
 
   highlights: {

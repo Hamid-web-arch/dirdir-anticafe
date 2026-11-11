@@ -87,6 +87,22 @@ export function studentPercent(studentDiscount, hours) {
   return 0
 }
 
+// Bitmiş seansın pulu ödəniş üsullarına görə: beh öz üsuluna, qalıq (məbləğ − beh) bitəndə seçilən üsula.
+// Qalıq mənfi ola bilər (beh çox alınıb — fərq qaytarılır). Üsulu bilinməyən — "other".
+// server/src/visits.js → paymentSplit ilə eynidir.
+export function paymentSplit(v) {
+  const split = { cash: 0, card: 0, other: 0 }
+  if (!v.endedAt || v.amount == null) return split
+  const deposit = Number(v.deposit ?? 0)
+  const add = (method, value) => {
+    split[method === 'cash' || method === 'card' ? method : 'other'] += value
+  }
+  if (deposit > 0) add(v.depositMethod, deposit)
+  add(v.paymentMethod, Number(v.amount) - deposit)
+  for (const key of Object.keys(split)) split[key] = Math.round(split[key] * 100) / 100
+  return split
+}
+
 // Faizi 0 olmayan tələbə endirimi pillələri, qısadan uzuna: [{ minHours, percent }]
 export const studentTiers = (studentDiscount) => [studentDiscount?.short, studentDiscount?.long].filter((tier) => tier?.percent > 0)
 
