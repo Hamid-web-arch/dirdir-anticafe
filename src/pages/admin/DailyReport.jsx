@@ -355,7 +355,7 @@ function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify
               </tr>
             ) : (
               visits.map((v) => (
-                <VisitTableRow key={v.id} visit={v} now={now} pricing={pricing} onChange={onChange} onDelete={onDelete} notify={notify} />
+                <VisitTableRow key={v.id} tone={rowTone(visits, v)} visit={v} now={now} pricing={pricing} onChange={onChange} onDelete={onDelete} notify={notify} />
               ))
             )}
           </tbody>
@@ -380,8 +380,16 @@ function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify
   )
 }
 
+// Sifariş sətrinin fonu: davam edən sifarişlər növbə ilə iki fərqli rəngdə (yan-yana olanlar qarışmasın),
+// bitənlər — hamısı eyni sakit rəngdə
+function rowTone(visits, visit) {
+  if (visit.endedAt) return 'bg-ink/[0.035]'
+  const index = visits.filter((v) => !v.endedAt).indexOf(visit)
+  return index % 2 === 0 ? 'bg-brand-teal-soft/60' : 'bg-brand-purple-soft/60'
+}
+
 // Cədvəlin bir sətri. "Bitir" basılanda altında ödəniş seçimi, "Düzəlt" basılanda düzəliş forması açılır.
-function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
+function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, notify }) {
   const request = useAdminApi()
   const [editing, setEditing] = useState(false)
   const [ending, setEnding] = useState(false) // "Bitir" basılıb — ödəniş üsulu soruşulur
@@ -455,14 +463,14 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
 
   return (
     <>
-      <tr className={isActive ? 'bg-brand-teal-soft/50' : 'hover:bg-ink/[0.02]'}>
+      <tr className={tone}>
         <td className={td}>
           <div className="font-bold">{visit.name}</div>
           <div className="flex flex-wrap gap-1 mt-0.5 empty:hidden">
             <VisitBadges visit={visit} inTable />
           </div>
           {grouped && <div className="text-[0.75rem] text-inkdim mt-0.5">{personsSummary(visit.persons)}</div>}
-          {!grouped && price.discount > 0 && (
+          {price.discount > 0 && (
             <div className="text-[0.72rem] text-inkdim mt-0.5">
               {price.clubDiscount > 0 && price.discountSource !== 'club'
                 ? `${DISCOUNT_SOURCE[price.discountSource]} −${money(round2(price.discount - price.clubDiscount))} · DırDır Club −${money(price.clubDiscount)}`
@@ -528,13 +536,7 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           </span>
         </td>
       </tr>
-      {grouped && (
-        <tr className={isActive ? 'bg-brand-teal-soft/50' : ''}>
-          <td colSpan={8} className="px-3 pb-3 pt-0 border-b border-ink/10">
-            <PersonsLine visit={visit} shares={isActive ? price.persons : null} price={price} />
-          </td>
-        </tr>
-      )}
+      {grouped && <PersonRows visit={visit} shares={isActive ? price.persons : null} tone={tone} />}
       {ending &&
         isActive &&
         visit.persons?.length > 1 &&
@@ -1505,10 +1507,12 @@ function personLabel(persons, i) {
   return `Qonaq ${persons.slice(0, i + 1).filter((x) => !x.user && !x.userId).length}`
 }
 
-// Qrup sifarişidirmi (nəfərlərin siyahısı göstərilir)? Tək qonaqlı köhnə tip sifarişdə — yox.
+// Nəfərlərin siyahısı göstərilsinmi? Sifarişdə üzv varsa və ya nəfərlər fərqli üsulla ödəyibsə — bəli.
+// Yalnız qonaqlardan ibarət, eyni üsulla ödənən sifarişdə siyahı lazım deyil ("3 nəfər: 3 qonaq" kifayətdir).
 function hasPersonsList(visit) {
   const persons = visit.persons ?? []
-  return persons.length > 1 || (persons.length === 1 && Boolean(persons[0].user))
+  if (persons.some((p) => p.user)) return true
+  return new Set(persons.map((p) => p.paymentMethod).filter(Boolean)).size > 1
 }
 
 // "7 nəfər: 4 üzv + 3 qonaq"
@@ -1519,63 +1523,56 @@ function personsSummary(persons) {
   return `${persons.length} nəfər: ${parts.join(' + ')}`
 }
 
-// Sifarişin nəfərləri — sətrin altında kiçik kartlar: ad, kod, status, pay və ödəniş üsulu.
-// Davam edəndə — canlı paylar (shares), bitəndə — saxlanmış paylar və ödəniş üsulları.
-function PersonsLine({ visit, shares, price }) {
+// Sifarişin nəfərləri — cədvəldə sifarişin altında hər nəfər öz sətrində: ad, kod, status solda,
+// payı isə Nağd və ya Kart sütununda (davam edəndə — canlı pay). Sifarişlə eyni fon rəngində.
+function PersonRows({ visit, shares, tone }) {
   const persons = visit.persons ?? []
-  return (
-    <div className="rounded-xl bg-bg/70 border border-ink/10 p-2">
-      <ul className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
-        {persons.map((p, i) => {
-          const share = shares ? shares[i]?.share : p.amount
-          const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
-          const method = !shares && p.paymentMethod ? PAYMENT[p.paymentMethod] : null
-          const MethodIcon = method?.icon
-          return (
-            <li key={p.id} className="flex items-center gap-2 bg-card rounded-lg px-2.5 py-1.5 min-w-0">
-              {p.user ? (
-                <PiUserCircleCheckBold size={18} className="text-brand-teal-deep shrink-0" />
-              ) : (
-                <PiUsersBold size={18} className="text-inkdim shrink-0" />
-              )}
-              <div className="flex-1 min-w-0 leading-tight">
-                <div className={`flex items-center gap-1 text-[0.85rem] ${p.user ? 'font-bold' : 'text-inkdim'}`}>
-                  <span className="truncate" title={personLabel(persons, i)}>{personLabel(persons, i)}</span>
-                  {p.student && <PiStudentBold size={14} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
-                </div>
-                {(p.user?.customerCode || (p.club && percent > 0) || p.student) && (
-                  <div className="text-[0.72rem] text-inkdim truncate">
-                    {[p.user?.customerCode, p.student && 'tələbə'].filter(Boolean).join(' · ')}
-                    {p.club && percent > 0 && (
-                      <span className="font-bold text-brand-orange-deep">
-                        {p.user?.customerCode || p.student ? ' · ' : ''}
-                        {p.club.name} −{percent}%
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="shrink-0 text-right leading-tight">
-                {share != null && <div className="font-display font-bold tabular-nums text-[0.95rem]">{money(share)}</div>}
-                {method && (
-                  <div className={`inline-flex items-center gap-0.5 text-[0.7rem] font-bold ${p.paymentMethod === 'card' ? 'text-brand-cyan-deep' : 'text-brand-teal-deep'}`}>
-                    <MethodIcon size={11} /> {method.label.toLowerCase()}
-                  </div>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-      {price?.discount > 0 && (
-        <div className="text-[0.72rem] text-inkdim mt-1.5 px-1">
-          Endirim: {price.clubDiscount > 0 && price.discountSource !== 'club'
-            ? `${DISCOUNT_SOURCE[price.discountSource]} −${money(round2(price.discount - price.clubDiscount))} · DırDır Club −${money(price.clubDiscount)}`
-            : `${DISCOUNT_SOURCE[price.discountSource]} −${money(price.discount)}`}
-        </div>
-      )}
-    </div>
-  )
+  return persons.map((p, i) => {
+    const last = i === persons.length - 1
+    const td = `px-3 py-1 align-top ${last ? 'pb-2.5 border-b border-ink/10' : ''}`
+    const share = shares ? shares[i]?.share : p.amount
+    const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
+    const amountIn = (method) =>
+      share != null && (p.paymentMethod === method || (method === 'cash' && !p.paymentMethod)) ? (
+        <>
+          {money(share)}
+          {!p.paymentMethod && <span title="Ödəniş üsulu qeyd olunmayıb"> ?</span>}
+        </>
+      ) : null
+    return (
+      <tr key={p.id} className={`${tone} text-[0.82rem]`}>
+        <td className={`${td} pl-6`}>
+          <div className="flex items-center gap-1.5">
+            {p.user ? (
+              <PiUserCircleCheckBold size={15} className="text-brand-teal-deep shrink-0" />
+            ) : (
+              <PiUsersBold size={15} className="text-inkdim shrink-0" />
+            )}
+            <span className={`whitespace-nowrap ${p.user ? 'font-semibold' : 'text-inkdim'}`}>{personLabel(persons, i)}</span>
+            {p.user?.customerCode && <span className="text-inkdim text-[0.75rem] whitespace-nowrap">{p.user.customerCode}</span>}
+            {p.student && <PiStudentBold size={14} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
+            {p.club && percent > 0 && (
+              <span className="text-[0.72rem] font-bold text-brand-orange-deep whitespace-nowrap">
+                {p.club.name} −{percent}%
+              </span>
+            )}
+          </div>
+        </td>
+        <td className={td} colSpan={4} />
+        {shares ? (
+          <td colSpan={2} className={`${td} text-right font-semibold`}>
+            {share != null && money(share)}
+          </td>
+        ) : (
+          <>
+            <td className={`${td} text-right`}>{amountIn('cash')}</td>
+            <td className={`${td} text-right`}>{amountIn('card')}</td>
+          </>
+        )}
+        <td className={td} />
+      </tr>
+    )
+  })
 }
 
 // Sifarişi bitirmək: hər nəfərin payı və onun ödəniş üsulu (nağd/kart). "Hamısı nağd/kart" — birdən seçmək.
