@@ -360,6 +360,7 @@ export default {
     title: 'DırDır Club',
     visits: { one: '{count} visit in the last {months} months', other: '{count} visits in the last {months} months' },
     discounts: 'Hall −{hall}% · Cinema room −{room}%',
+    minHours: ' · when you stay {hours} h or more',
     next: 'Next status — {icon} {name}: {count} more visits',
     top: "You're at the top status! 🎉",
     given: 'DırDır gave you the {name} status 🎉 Keep coming to climb even higher.',

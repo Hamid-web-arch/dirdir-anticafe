@@ -24,7 +24,8 @@ export const visitMinutes = (startedAt, endedAt = new Date()) =>
 // Promokod (zal və kino otağı): bütün məbləğdən promoPercent faiz.
 // Xüsusi endirim (admin verir, zal və kino otağı): bütün məbləğdən discountValue faiz (discountType 'percent')
 // və ya discountValue manat ('amount', məbləğdən çox ola bilməz).
-// DırDır Club status endirimi (club — seans başlayanda yazılan status): kino otağında bütün qiymətə, zalda müştərinin
+// DırDır Club status endirimi (club — seans başlayanda yazılan status; seans club.minHours saatdan qısadırsa — yoxdur):
+// kino otağında bütün qiymətə, zalda müştərinin
 // öz payına (club.group — bütün qrupa). Endirimlər cəmlənmir — hansı çoxdursa, o; club.stack olanda status endirimi
 // digərinin üstünə gəlir. discountSource: 'student' | 'promo' | 'custom' | 'club' | null; clubDiscount — status payı.
 // Üçüncü parametr seansın özü ola bilər: visitPrice(pricing, minutes, visit).
@@ -58,7 +59,8 @@ export function visitPrice(
     const discount = round2(Math.min(total, other.discount + clubOff))
     return { discount, discountSource: other.discountSource ?? 'club', clubDiscount: round2(discount - other.discount) }
   }
-  const clubPercent = club ? (kind === 'room' ? club.roomPercent : club.hallPercent) ?? 0 : 0
+  // Status endirimi yalnız seans club.minHours saat (hesablanan vaxt) və çox olanda
+  const clubPercent = club && hours >= (club.minHours ?? 0) ? ((kind === 'room' ? club.roomPercent : club.hallPercent) ?? 0) : 0
 
   if (kind === 'room') {
     const { smallGroup, group } = room

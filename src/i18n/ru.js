@@ -365,6 +365,7 @@ export default {
     title: 'DırDır Club',
     visits: { one: '{count} визит за последние {months} мес.', few: '{count} визита за последние {months} мес.', many: '{count} визитов за последние {months} мес.', other: '{count} визита за последние {months} мес.' },
     discounts: 'Зал −{hall}% · Кинозал −{room}%',
+    minHours: ' · от {hours} ч',
     next: 'Следующий статус — {icon} {name}: ещё {count} визит(а)',
     top: 'У тебя самый высокий статус! 🎉',
     given: 'DırDır подарил тебе статус «{name}» 🎉 Приходи чаще, чтобы подняться выше.',

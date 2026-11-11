@@ -24,6 +24,7 @@ export const DEFAULT_CLUB = {
       minVisits: 0,
       hallPercent: 5,
       roomPercent: 5,
+      minHours: 2, // endirim bu qədər saat oturanda aktiv olur
       benefits: [text('Ad günü üstünlüyü'), text('Dost dəvəti və xüsusi kampaniyalarda iştirak')],
       gifts: [],
     },
@@ -35,6 +36,7 @@ export const DEFAULT_CLUB = {
       minVisits: 9,
       hallPercent: 10,
       roomPercent: 10,
+      minHours: 2, // endirim bu qədər saat oturanda aktiv olur
       benefits: [
         text('Tanış statusunun bütün üstünlükləri'),
         text('Ad günü üstünlüyü'),
@@ -51,6 +53,7 @@ export const DEFAULT_CLUB = {
       minVisits: 15,
       hallPercent: 15,
       roomPercent: 15,
+      minHours: 2, // endirim bu qədər saat oturanda aktiv olur
       benefits: [
         text('Qonaq statusunun bütün üstünlükləri'),
         text('Ləğv olunan kino otağı rezervlərindən 1 saatı hədiyyə kimi götürmək imkanı'),
@@ -66,6 +69,7 @@ export const DEFAULT_CLUB = {
       minVisits: 25,
       hallPercent: 20,
       roomPercent: 20,
+      minHours: 2, // endirim bu qədər saat oturanda aktiv olur
       benefits: [
         text('Sakin statusunun bütün üstünlükləri'),
         text('Ləğv olunan rezervlər barədə hamıdan əvvəl xəbər'),
@@ -105,6 +109,13 @@ const tierSchema = z.object({
   minVisits: z.number({ error: 'Ziyarət həddini yaz.' }).int('Tam ədəd olmalıdır.').min(0).max(1000),
   hallPercent: percent('Zal endirimini'),
   roomPercent: percent('Kino otağı endirimini'),
+  // Status endirimi seans bu qədər saat (hesablanan vaxt) olanda aktiv olur. Köhnə ayarlarda yoxdur — 2 saat.
+  minHours: z
+    .number({ error: 'Saatı yaz.' })
+    .min(0, 'Mənfi ola bilməz.')
+    .max(12, 'Ən çox 12 saat.')
+    .refine((n) => Number.isInteger(n * 2), 'Yarım saatlıq addımla yaz (məs. 1.5).')
+    .default(2),
   benefits: z.array(localized('Üstünlüyü', 160)).max(20, 'Ən çox 20 üstünlük.'),
   gifts: z.array(localized('Hədiyyəni', 160)).max(20, 'Ən çox 20 hədiyyə.'),
 })
@@ -227,7 +238,16 @@ function statusFrom(club, days, user = null) {
     realVisits,
     // Admin verdiyi status (bonus hələ sayılırsa)
     given: bonus ? { key: bonus.tierKey, name: given?.name ?? null, bonus: bonus.bonus, until: bonus.until, setAt: bonus.setAt } : null,
-    tier: { key: tier.key, index, name: tier.name, icon: tier.icon, color: tier.color, hallPercent: tier.hallPercent, roomPercent: tier.roomPercent },
+    tier: {
+      key: tier.key,
+      index,
+      name: tier.name,
+      icon: tier.icon,
+      color: tier.color,
+      hallPercent: tier.hallPercent,
+      roomPercent: tier.roomPercent,
+      minHours: tier.minHours,
+    },
     next: next ? { key: next.key, name: next.name, icon: next.icon, minVisits: next.minVisits, needed: next.minVisits - visits } : null,
     // Hazırkı statusda qalmaq üçün lazım olan ziyarət sayı (birinci statusda — 0)
     keepVisits: tier.minVisits,
@@ -287,6 +307,7 @@ export async function clubSnapshot(userId) {
     name: tier.name.az,
     hallPercent: tier.hallPercent,
     roomPercent: tier.roomPercent,
+    minHours: tier.minHours, // seans bu qədər saat olmasa, endirim tətbiq olunmur
     stack: club.combine === 'stack',
     group: club.group,
   }

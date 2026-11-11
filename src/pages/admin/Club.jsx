@@ -20,7 +20,7 @@ const ICONS = ['👋', '☕', '🛋️', '🏠', '⭐', '👑', '🎲', '🎬', 
 const COLOR_NAMES = { teal: 'Yaşıl', purple: 'Bənövşəyi', orange: 'Narıncı', pink: 'Çəhrayı', yellow: 'Sarı', cyan: 'Mavi' }
 
 // Formada rəqəmlər mətn kimi saxlanır (sahəni boşaltmaq olsun), göndərəndə rəqəmə çevrilir
-const NUMBER_FIELDS = ['minVisits', 'hallPercent', 'roomPercent']
+const NUMBER_FIELDS = ['minVisits', 'hallPercent', 'roomPercent', 'minHours']
 const lang3 = (x) => ({ az: x?.az ?? '', en: x?.en ?? '', ru: x?.ru ?? '' })
 const toForm = (club) => ({
   ...club,
@@ -119,6 +119,7 @@ export default function AdminClub() {
           minVisits: String(Number(last?.minVisits ?? 0) + 10),
           hallPercent: last?.hallPercent ?? '0',
           roomPercent: last?.roomPercent ?? '0',
+          minHours: last?.minHours ?? '2',
           benefits: [],
           gifts: [],
         },
@@ -176,6 +177,9 @@ export default function AdminClub() {
                 <div className="mt-2 flex flex-wrap gap-1">
                   <span className="text-[0.72rem] font-bold px-2 py-0.5 rounded-full bg-card">Zal −{tier.hallPercent || 0}%</span>
                   <span className="text-[0.72rem] font-bold px-2 py-0.5 rounded-full bg-card">Kino −{tier.roomPercent || 0}%</span>
+                </div>
+                <div className="text-[0.72rem] font-semibold text-inkdim mt-1.5">
+                  {Number(tier.minHours) > 0 ? `Endirim ${tier.minHours} saatdan` : 'Endirim istənilən müddətə'}
                 </div>
                 <div className="text-[0.72rem] text-inkdim mt-1.5">
                   {tier.benefits.length} üstünlük · {tier.gifts.length} hədiyyə
@@ -297,7 +301,7 @@ function TierEditor({ tier, index, range, maxPercent, errors, onChange, onClose,
   const tabHasError = (name) =>
     Object.keys(errors).some((k) =>
       name === 'main'
-        ? /^tiers\.\d+\.(name|minVisits|hallPercent|roomPercent)/.test(k) && k.startsWith(`tiers.${index}.`)
+        ? /^tiers\.\d+\.(name|minVisits|hallPercent|roomPercent|minHours)/.test(k) && k.startsWith(`tiers.${index}.`)
         : k.startsWith(`tiers.${index}.${name}`),
     )
 
@@ -368,6 +372,12 @@ function TierEditor({ tier, index, range, maxPercent, errors, onChange, onClose,
                 <SmallNumber id={`tier-room-${index}`} value={tier.roomPercent} onChange={(roomPercent) => onChange({ roomPercent })} unit="%" error={err('roomPercent')} />
               </Sentence>
             </div>
+            <Sentence
+              label="Endirim neçə saat oturanda aktiv olsun?"
+              hint="Seans bundan qısadırsa, status endirimi tətbiq olunmur. 0 yazsan — istənilən müddətə."
+            >
+              <SmallNumber id={`tier-hours-${index}`} value={tier.minHours} onChange={(minHours) => onChange({ minHours })} unit="saat" step="0.5" error={err('minHours')} />
+            </Sentence>
             <p className="text-[0.78rem] text-inkdim">Endirim ən çox {maxPercent}% ola bilər (Ümumi qaydalarda dəyişir).</p>
           </div>
         )}
@@ -460,17 +470,18 @@ function Sentence({ label, hint, children }) {
   )
 }
 
-function SmallNumber({ id, value, onChange, unit, error }) {
+function SmallNumber({ id, value, onChange, unit, error, step = '1' }) {
   return (
     <div className="w-[150px]">
       <div className="relative">
         <TextInput
           id={id}
           type="number"
-          inputMode="numeric"
+          inputMode={step === '1' ? 'numeric' : 'decimal'}
           min="0"
+          step={step}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value.replace(',', '.'))}
           error={error}
           className="pr-16 text-[1.05rem] font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />

@@ -365,6 +365,7 @@ export default {
     title: 'DırDır Club',
     visits: { one: 'Son {months} ayda {count} ziyarət', other: 'Son {months} ayda {count} ziyarət' },
     discounts: 'Zal −{hall}% · Kino otağı −{room}%',
+    minHours: ' · {hours} saat və çox oturanda',
     next: 'Növbəti status — {icon} {name}: daha {count} ziyarət',
     top: 'Ən yüksək statusdasan! 🎉',
     given: 'DırDır sənə {name} statusunu hədiyyə edib 🎉 Gəldikcə daha da yüksəlirsən.',

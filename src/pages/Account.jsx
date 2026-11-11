@@ -475,6 +475,7 @@ function ClubCard() {
         {(tier.hallPercent > 0 || tier.roomPercent > 0) && (
           <p className={`inline-flex mt-4 px-3 py-1.5 rounded-full bg-card font-bold text-[0.9rem] ${style.text}`}>
             {t('club.discounts', { hall: tier.hallPercent, room: tier.roomPercent })}
+            {tier.minHours > 0 && t('club.minHours', { hours: tier.minHours })}
           </p>
         )}
 
@@ -546,6 +547,7 @@ function ClubCard() {
                       </div>
                       <p className={`text-[0.82rem] font-bold ${s.text} mb-1.5`}>
                         {t('club.discounts', { hall: tr.hallPercent, room: tr.roomPercent })}
+                        {tr.minHours > 0 && t('club.minHours', { hours: tr.minHours })}
                       </p>
                       <ul className="text-[0.8rem] text-inkdim flex flex-col gap-0.5">
                         {[...items(tr.benefits), ...items(tr.gifts).map((g) => `🎁 ${g}`)].map((line, j) => (

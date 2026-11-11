@@ -75,6 +75,7 @@ function ClubTag({ club, kind = 'hall' }) {
     <span className={`inline-flex items-center gap-1 text-[0.7rem] font-bold px-2 py-0.5 rounded-full ${style.soft} ${style.text}`}>
       {tier.icon} {tier.name.az}
       {percent > 0 && ` · −${percent}%`}
+      {percent > 0 && tier.minHours > 0 && ` (${tier.minHours} saatdan)`}
     </span>
   )
 }
