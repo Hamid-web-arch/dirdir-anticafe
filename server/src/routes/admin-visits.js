@@ -8,6 +8,7 @@ import { getPricing } from '../pricing.js'
 import { bakuDay, visitMinutes, visitPrice, publicVisit, paymentSplit } from '../visits.js'
 import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema } from '../validation.js'
 import { clubSnapshot } from '../club.js'
+import { prizeEffect, spinExpired } from '../wheel.js'
 
 // Günün hesabatı: admin hər gələn sifarişi (seansı) başladır və bitirir.
 // Bir sifarişdə bir neçə nəfər ola bilər: DırDır Club üzvləri (hər biri öz statusu ilə) və qonaqlar.
@@ -90,6 +91,35 @@ async function loadMembers(list) {
   const users = await prisma.user.findMany({ where: { id: { in: ids } } })
   if (users.length !== ids.length) throw new HttpError(404, 'NOT_FOUND', 'İstifadəçi tapılmadı.')
   return new Map(users.map((u) => [u.id, u]))
+}
+
+// Hədiyyə çarxının hədiyyəsi nəfərə endirim kimi: üzvün özünün olmalı, istifadə olunmamış, vaxtı keçməmiş,
+// başqa sifarişdə seçilməmiş və endirim növündə (faiz / pulsuz vaxt). → hədiyyənin təsiri (VisitPerson.gift)
+async function giftFor(spinId, userId, visitId = null) {
+  const spin = await prisma.wheelSpin.findUnique({ where: { id: spinId }, include: { visitPerson: true } })
+  const fail = (message) => {
+    throw new HttpError(400, 'VALIDATION', message, { fields: { persons: message } })
+  }
+  if (!spin || !userId || spin.userId !== userId) fail('Hədiyyə bu üzvə aid deyil.')
+  if (spin.visitPerson && spin.visitPerson.visitId !== visitId) fail('Bu hədiyyə artıq başqa sifarişdə istifadə olunub.')
+  if (spin.usedAt && !spin.visitPerson) fail('Bu hədiyyə artıq istifadə olunub.')
+  if (spinExpired(spin) && !spin.visitPerson) fail('Bu hədiyyənin istifadə müddəti bitib.')
+  const effect = prizeEffect(spin.prize)
+  if (effect.kind === 'gift') fail('Bu hədiyyə endirim deyil — onu "Verildi" ilə ver.')
+  return { ...effect, label: spin.prize }
+}
+
+// Hədiyyələrin "istifadə olunub" vəziyyəti sifarişə görə: bitmiş sifarişdədirsə — istifadə olunub,
+// davam edən sifarişdədirsə və ya sifarişdən çıxarılıbsa — yenə istifadə oluna bilər
+async function syncSpins(tx, spinIds, adminId) {
+  for (const id of new Set(spinIds.filter(Boolean))) {
+    const person = await tx.visitPerson.findUnique({ where: { spinId: id }, include: { visit: true } })
+    const endedAt = person?.visit.endedAt
+    await tx.wheelSpin.update({
+      where: { id },
+      data: endedAt ? { usedAt: endedAt, usedById: adminId } : { usedAt: null, usedById: null },
+    })
+  }
 }
 
 // Köhnə forma ({ userId, people, students }) → nəfərlər: üzv birinci, qalanları qonaq; tələbələr əvvəldən
@@ -184,7 +214,11 @@ adminVisitsRouter.post('/visits', async (req, res) => {
   const { name, kind = 'hall', promoCode, discount, deposit, startedAt = new Date(), note } = body
   const promo = promoCode ? await promoFor(promoCode) : {}
   if (!body.persons) studentsFor({ kind, people: body.people ?? 1, students: body.students ?? 0 })
-  const list = (body.persons ?? legacyPersons(body)).map((p) => ({ userId: p.userId ?? null, student: kind !== 'room' && Boolean(p.student) }))
+  const list = (body.persons ?? legacyPersons(body)).map((p) => ({
+    userId: p.userId ?? null,
+    student: kind !== 'room' && Boolean(p.student),
+    spinId: p.spinId ?? null,
+  }))
   assertNotFuture(startedAt, 'startedAt', 'Başlama vaxtı')
   if (kind === 'room') await assertRoom({ people: list.length })
 
@@ -192,7 +226,13 @@ adminVisitsRouter.post('/visits', async (req, res) => {
   await assertMembersFree([...members.keys()])
   // DırDır Club: hər üzvün indiki statusu və endirimi onun sətrinə yazılır
   const persons = []
-  for (const p of list) persons.push({ ...p, club: p.userId ? await clubSnapshot(p.userId) : null })
+  for (const p of list) {
+    persons.push({
+      ...p,
+      club: p.userId ? await clubSnapshot(p.userId) : null,
+      gift: p.spinId ? await giftFor(p.spinId, p.userId) : null,
+    })
+  }
 
   const firstMember = persons.find((p) => p.userId)
   const customerName = name || (firstMember ? fullName(members.get(firstMember.userId)) : 'Qonaq')
@@ -212,7 +252,14 @@ adminVisitsRouter.post('/visits', async (req, res) => {
       note: note || null,
       createdById: req.user.id,
       persons: {
-        create: persons.map((p, i) => ({ position: i, userId: p.userId, student: p.student, club: p.club ?? undefined })),
+        create: persons.map((p, i) => ({
+          position: i,
+          userId: p.userId,
+          student: p.student,
+          club: p.club ?? undefined,
+          spinId: p.spinId,
+          gift: p.gift ?? undefined,
+        })),
       },
     },
     include: withUser,
@@ -236,15 +283,17 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
     if (methods.some((m) => !m)) {
       throw new HttpError(400, 'VALIDATION', 'Hər nəfər üçün ödəniş üsulunu seç: nağd və ya kart.', { fields: { payments: 'Hər nəfər üçün ödəniş üsulunu seç.' } })
     }
-    await prisma.$transaction([
-      prisma.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: commonMethod(methods) } }),
-      ...visit.persons.map((p, i) =>
-        prisma.visitPerson.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: commonMethod(methods) } })
+      for (const [i, p] of visit.persons.entries()) {
+        await tx.visitPerson.update({
           where: { id: p.id },
           data: { amount: shares[i].share, discount: shares[i].discount, paymentMethod: methods[i] },
-        }),
-      ),
-    ])
+        })
+      }
+      // Hədiyyələr indi "istifadə olunub"
+      await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
+    })
   }
   res.json({ visit: publicVisit(await loadVisit(visit.id)) })
 })
@@ -285,7 +334,12 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     for (const p of body.persons) {
       const old = p.id ? existing.get(p.id) : null
       const sameMember = old && (old.userId ?? null) === (p.userId ?? null)
+      // Hədiyyə: yazılmayıbsa — köhnəsi qalır (eyni üzvdürsə), null — götürülür, id — yoxlanıb tətbiq olunur
+      const spinId = p.spinId !== undefined ? p.spinId : sameMember ? (old.spinId ?? null) : null
+      const keepGift = sameMember && spinId && spinId === old.spinId
       nextPersons.push({
+        spinId,
+        gift: !spinId ? null : keepGift ? old.gift : await giftFor(spinId, p.userId ?? null, visit.id),
         id: sameMember ? old.id : null,
         userId: p.userId ?? null,
         student: nextKind !== 'room' && Boolean(p.student),
@@ -299,7 +353,7 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     // azalanda əvvəlcə sondakı qonaqlar çıxır; tələbə sayı — ilk N nəfər tələbə
     nextPersons = visit.persons.map((p) => ({ ...p }))
     const target = people ?? nextPersons.length
-    while (nextPersons.length < target) nextPersons.push({ id: null, userId: null, student: false, club: null, paymentMethod: null })
+    while (nextPersons.length < target) nextPersons.push({ id: null, userId: null, student: false, club: null, paymentMethod: null, spinId: null, gift: null })
     while (nextPersons.length > target) {
       const guest = nextPersons.findLastIndex((p) => !p.userId)
       nextPersons.splice(guest >= 0 ? guest : nextPersons.length - 1, 1)
@@ -377,16 +431,22 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     if (!grouped) return
     const keep = new Set(nextPersons.map((p) => p.id).filter(Boolean))
     await tx.visitPerson.deleteMany({ where: { visitId: visit.id, id: { notIn: [...keep] } } })
+    // Hədiyyələr əvvəlcə köhnə nəfərlərdən ayrılır (eyni hədiyyə başqa nəfərə keçə bilsin)
+    const spinIds = [...visit.persons.map((p) => p.spinId), ...nextPersons.map((p) => p.spinId)]
+    await tx.visitPerson.updateMany({ where: { visitId: visit.id, spinId: { not: null } }, data: { spinId: null } })
     for (const [i, p] of nextPersons.entries()) {
       const fields = {
         position: i,
         student: p.student,
+        spinId: p.spinId ?? null,
+        gift: p.gift ?? Prisma.DbNull,
         paymentMethod: visit.endedAt ? p.paymentMethod : null,
         ...(shares ? { amount: shares[i].share, discount: shares[i].discount } : {}),
       }
       if (p.id) await tx.visitPerson.update({ where: { id: p.id }, data: fields })
       else await tx.visitPerson.create({ data: { ...fields, visitId: visit.id, userId: p.userId, club: p.club ?? undefined } })
     }
+    await syncSpins(tx, spinIds, req.user.id)
   })
   res.json({ visit: publicVisit(await loadVisit(visit.id)) })
 })
@@ -398,15 +458,21 @@ adminVisitsRouter.post('/visits/:id/resume', async (req, res) => {
   const memberIds = [...new Set([visit.userId, ...visit.persons.map((p) => p.userId)].filter(Boolean))]
   await assertMembersFree(memberIds, visit.id)
   if (visit.kind === 'room') await assertRoom({ people: visit.people })
-  await prisma.$transaction([
-    prisma.visit.update({ where: { id: visit.id }, data: { endedAt: null, minutes: null, amount: null, paymentMethod: null } }),
-    prisma.visitPerson.updateMany({ where: { visitId: visit.id }, data: { amount: null, discount: null, paymentMethod: null } }),
-  ])
+  await prisma.$transaction(async (tx) => {
+    await tx.visit.update({ where: { id: visit.id }, data: { endedAt: null, minutes: null, amount: null, paymentMethod: null } })
+    await tx.visitPerson.updateMany({ where: { visitId: visit.id }, data: { amount: null, discount: null, paymentMethod: null } })
+    // Hədiyyələr yenidən gözləyir — sifariş bitəndə istifadə olunacaq
+    await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
+  })
   res.json({ visit: publicVisit(await loadVisit(visit.id)) })
 })
 
 adminVisitsRouter.delete('/visits/:id', async (req, res) => {
-  await findVisit(req.params.id)
-  await prisma.visit.delete({ where: { id: req.params.id } })
+  const visit = await findVisit(req.params.id)
+  // Silinən sifarişin hədiyyələri müştəriyə qayıdır
+  await prisma.$transaction(async (tx) => {
+    await tx.visit.delete({ where: { id: visit.id } })
+    await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
+  })
   res.status(204).end()
 })

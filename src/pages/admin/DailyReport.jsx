@@ -7,6 +7,7 @@ import {
   PiCaretDownBold,
   PiCaretLeftBold,
   PiCaretRightBold,
+  PiCheckBold,
   PiCheckCircleFill,
   PiClockBold,
   PiCoinsBold,
@@ -63,7 +64,17 @@ const discountBody = (d) => {
   return String(d.value).trim() !== '' && value > 0 ? { type: d.type, value } : null
 }
 // Tətbiq olunan endirimin adı (cəmlənmir — ən böyüyü)
-const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim', club: 'DırDır Club', mixed: 'endirimlər' }
+const DISCOUNT_SOURCE = {
+  student: 'tələbə endirimi',
+  promo: 'promokod',
+  custom: 'xüsusi endirim',
+  club: 'DırDır Club',
+  gift: 'hədiyyə çarxı',
+  mixed: 'endirimlər',
+}
+
+// Hədiyyə bu yerdə (zal / kino) işləyirmi
+const giftFits = (effect, kind) => effect && effect.kind !== 'gift' && (!effect.only || effect.only === kind)
 
 // Müştərinin DırDır Club statusu: "☕ Qonaq · −10%" (axtarışda və seçiləndə)
 function ClubTag({ club, kind = 'hall' }) {
@@ -381,9 +392,9 @@ function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify
 }
 
 // Sifariş sətrinin fonu: davam edən sifarişlər növbə ilə iki fərqli rəngdə (yan-yana olanlar qarışmasın),
-// bitənlər — hamısı eyni sakit rəngdə
+// bitənlər — ağ fonda
 function rowTone(visits, visit) {
-  if (visit.endedAt) return 'bg-ink/[0.035]'
+  if (visit.endedAt) return 'bg-card'
   const index = visits.filter((v) => !v.endedAt).indexOf(visit)
   return index % 2 === 0 ? 'bg-brand-teal-soft/60' : 'bg-brand-purple-soft/60'
 }
@@ -771,14 +782,20 @@ function NewVisit({ onCreated, roomBusy }) {
 
   // Sifarişin nəfərləri: əvvəl üzvlər, sonra qonaqlar
   const persons = [
-    ...members.map((m) => ({ userId: m.user.id, student: !isRoom && m.student, club: m.user.club?.tier ?? null })),
+    ...members.map((m) => ({
+      userId: m.user.id,
+      student: !isRoom && m.student,
+      club: m.user.club?.tier ?? null,
+      spinId: m.spin && giftFits(m.spin.effect, kind) ? m.spin.id : null,
+      gift: m.spin && giftFits(m.spin.effect, kind) ? m.spin.effect : null,
+    })),
     ...Array.from({ length: guests }, (_, i) => ({ userId: null, student: !isRoom && i < guestStudents, club: null })),
   ]
 
   const start = async (e) => {
     e.preventDefault()
     setError(null)
-    const body = { kind, persons: persons.map(({ userId, student }) => ({ userId, student })) }
+    const body = { kind, persons: persons.map(({ userId, student, spinId }) => ({ userId, student, ...(spinId ? { spinId } : {}) })) }
     if (members.length === 0) body.name = query.trim()
     if (promo) body.promoCode = promo.code
     if (customDiscount) body.discount = customDiscount
@@ -852,7 +869,12 @@ function NewVisit({ onCreated, roomBusy }) {
                   <PiXBold size={14} />
                 </button>
               </div>
-              <UserGifts userId={m.user.id} />
+              <UserGifts
+                userId={m.user.id}
+                kind={kind}
+                selectedId={m.spin?.id ?? null}
+                onUse={(spin) => setMembers((list) => list.map((x) => (x.user.id === m.user.id ? { ...x, spin } : x)))}
+              />
             </div>
           ))}
         </div>
@@ -1000,9 +1022,10 @@ function NewVisit({ onCreated, roomBusy }) {
   )
 }
 
-// Seçilmiş qeydiyyatlı müştərinin hədiyyə çarxından qazanıb hələ almadığı hədiyyələr.
-// Hədiyyəni verəndə "Verildi" — siyahıdan çıxır (Hədiyyə çarxı bölməsində tarixçə qalır).
-function UserGifts({ userId }) {
+// Seçilmiş üzvün hədiyyə çarxından qazanıb hələ istifadə etmədiyi hədiyyələr.
+// Endirim hədiyyəsi (faiz / pulsuz vaxt) — "İstifadə et": bu sifarişdə onun payına tətbiq olunur, sifariş bitəndə
+// "istifadə olunub" olur. Sadə hədiyyə (çay, desert…) — "Verildi" basılır, siyahıdan çıxır.
+function UserGifts({ userId, kind, selectedId, onUse }) {
   const request = useAdminApi()
   const [spins, setSpins] = useState([])
   const [busyId, setBusyId] = useState(null)
@@ -1010,7 +1033,7 @@ function UserGifts({ userId }) {
   useEffect(() => {
     let cancelled = false
     request(`/admin/wheel/spins?status=unused&userId=${encodeURIComponent(userId)}`)
-      .then((d) => !cancelled && setSpins(d.spins))
+      .then((d) => !cancelled && setSpins(d.spins.filter((s) => !s.reserved)))
       .catch(() => !cancelled && setSpins([]))
     return () => {
       cancelled = true
@@ -1035,15 +1058,31 @@ function UserGifts({ userId }) {
     <div className="mt-2 rounded-xl border-2 border-dashed border-primary/40 bg-brand-orange-soft px-3.5 py-2.5">
       <p className="text-[0.8rem] font-bold text-brand-orange-deep mb-1.5">🎁 Hədiyyə çarxından qazandığı hədiyyə var:</p>
       <ul className="flex flex-col gap-1.5">
-        {spins.map((s) => (
-          <li key={s.id} className="flex items-center gap-2">
-            <span className="flex-1 min-w-0 font-bold text-[0.9rem] truncate">{s.prize.az}</span>
-            <Button variant="dark" size="sm" loading={busyId === s.id} onClick={() => give(s)}>
-              Verildi
-            </Button>
-          </li>
-        ))}
+        {spins.map((s) => {
+          const selected = selectedId === s.id
+          const fits = giftFits(s.effect, kind)
+          return (
+            <li key={s.id} className="flex flex-wrap items-center gap-2">
+              <span className="flex-1 min-w-[120px]">
+                <span className="block font-bold text-[0.9rem]">{s.prize.az}</span>
+                {s.expiresAt && <span className="block text-[0.72rem] text-inkdim">{formatAzDate(s.expiresAt, { day: 'numeric', month: 'long' })} tarixinədək</span>}
+              </span>
+              {s.effect?.kind === 'gift' ? (
+                <Button variant="dark" size="sm" loading={busyId === s.id} onClick={() => give(s)}>
+                  Verildi
+                </Button>
+              ) : fits ? (
+                <Button variant={selected ? 'primary' : 'dark'} size="sm" onClick={() => onUse?.(selected ? null : s)}>
+                  {selected ? <><PiCheckBold size={13} /> Tətbiq olunur</> : 'İstifadə et'}
+                </Button>
+              ) : (
+                <span className="text-[0.75rem] font-bold text-inkdim">{s.effect?.only === 'room' ? 'yalnız kino otağında' : 'yalnız zalda'}</span>
+              )}
+            </li>
+          )
+        })}
       </ul>
+      {selectedId && <p className="text-[0.72rem] text-inkdim mt-1.5">Endirim onun payına tətbiq olunur, sifariş bitəndə hədiyyə istifadə olunmuş sayılır.</p>}
     </div>
   )
 }
@@ -1323,7 +1362,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     discount: visit.discountValue ? { type: visit.discountType, value: String(visit.discountValue) } : EMPTY_DISCOUNT,
     deposit: visit.deposit ? { amount: String(visit.deposit), method: visit.depositMethod ?? 'cash' } : EMPTY_DEPOSIT,
     // Nəfərli sifariş: [{ id, userId, user, student, paymentMethod }]
-    persons: (visit.persons ?? []).map((p) => ({ id: p.id, userId: p.userId, user: p.user, student: p.student, paymentMethod: p.paymentMethod })),
+    persons: (visit.persons ?? []).map((p) => ({ id: p.id, userId: p.userId, user: p.user, student: p.student, paymentMethod: p.paymentMethod, gift: p.gift })),
   })
   const grouped = form.persons.length > 0
   const [saving, setSaving] = useState(false)
@@ -1554,6 +1593,11 @@ function PersonRows({ visit, shares, tone }) {
             {p.club && percent > 0 && (
               <span className="text-[0.72rem] font-bold text-brand-orange-deep whitespace-nowrap">
                 {p.club.name} −{percent}%
+              </span>
+            )}
+            {p.gift && (
+              <span className="text-[0.72rem] font-bold text-brand-purple-deep whitespace-nowrap" title="Hədiyyə çarxından">
+                🎁 {p.gift.label?.az ?? 'hədiyyə'}
               </span>
             )}
           </div>

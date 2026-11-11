@@ -439,6 +439,8 @@ const visitPerson = z.object({
   id: z.string().trim().min(1).max(40).optional(),
   userId: z.string().trim().min(1).max(40).nullable().optional(),
   student: z.boolean().optional(),
+  // Hədiyyə çarxının hədiyyəsi bu nəfərə endirim kimi (null — götür; yazılmasa — olduğu kimi qalır)
+  spinId: z.string().trim().min(1).max(40).nullable().optional(),
 })
 const visitPersons = z.array(visitPerson).min(1, 'Sifarişdə ən az bir nəfər olmalıdır.').max(50, 'Ən çox 50 nəfər.')
 

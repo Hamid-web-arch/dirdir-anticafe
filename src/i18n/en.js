@@ -89,6 +89,8 @@ export default {
     waitMinutes: '{minutes} min',
     loading: 'Getting the wheel ready… It may take a moment if the server is waking up.',
     failed: "Couldn't reach the server. Check your connection and try again.",
+    hasGift: 'Use the gift you won first — then you can spin again.',
+    validFor: 'The gift is valid for {days} days.',
     retry: 'Try again',
   },
 
@@ -383,6 +385,8 @@ export default {
     giftsTitle: 'My gifts',
     giftsHint: 'To get your gift, tell us your customer code at the café.',
     giftWaiting: 'Waiting',
+    giftExpired: 'Expired',
+    giftUntil: 'until {date}',
     giftUsed: 'Used',
     newsletterTitle: "Notifications",
     newsletterOn: "We'll message you about tournaments, discounts and news.",

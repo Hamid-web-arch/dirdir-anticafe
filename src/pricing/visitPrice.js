@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 // DırDır Club status endirimi (club — seans başlayanda yazılan status; seans club.minHours saatdan qısadırsa — yoxdur):
 // kino otağında bütün qiymətə, zalda müştərinin
 // öz payına (club.group — bütün qrupa). Endirimlər cəmlənmir — hansı çoxdursa, o; club.stack olanda status endirimi
-// digərinin üstünə gəlir. discountSource: 'student' | 'promo' | 'custom' | 'club' | null; clubDiscount — status payı.
+// digərinin üstünə gəlir. discountSource: 'student' | 'promo' | 'custom' | 'club' | 'gift' | null; clubDiscount — status payı.
 // Üçüncü parametr seansın özü ola bilər: visitPrice(pricing, minutes, visit).
 export function visitPrice(
   pricing,
@@ -57,6 +57,13 @@ export function visitPrice(
     const other = best(options)
     const discount = round2(Math.min(total, other.discount + clubOff))
     return { discount, discountSource: other.discountSource ?? 'club', clubDiscount: round2(discount - other.discount) }
+  }
+  // Hədiyyə çarxının hədiyyəsi zalda: faiz — payın faizi, pulsuz dəqiqələr — ilk saatın qiyməti ilə (paydan çox olmur)
+  const giftOff = (gift, base) => {
+    if (!gift || gift.only === 'room') return 0
+    if (gift.kind === 'percent') return round2((base * Math.min(Number(gift.value) || 0, 100)) / 100)
+    if (gift.kind === 'minutes') return round2(Math.min(base, (hall.firstHour * (Number(gift.value) || 0)) / 60))
+    return 0
   }
   // Status endirimi yalnız seans club.minHours saat (hesablanan vaxt) və çox olanda
   const clubPercent = club && hours >= (club.minHours ?? 0) ? ((kind === 'room' ? club.roomPercent : club.hallPercent) ?? 0) : 0
@@ -123,6 +130,8 @@ export function visitPrice(
   // - zal: payı nəfər başı qiymətdir; ondan nəfərin ən böyük endirimi çıxılır — öz statusu (2 saat şərti ilə),
   //   tələbədirsə tələbə endirimi, promokod, xüsusi endirim (manatla olanda sifarişin endirimi nəfərlərə bərabər bölünür);
   // - kino otağı: qrupdakı ən yüksək statusun endirimi bütün otağa, yekun məbləğ nəfərlərə bərabər bölünür.
+  // Hədiyyə çarxının hədiyyəsi (p.gift) də endirimlərdən biridir ('gift'), digərləri ilə yarışır (ən böyüyü):
+  // zalda — nəfərin öz payına (faiz və ya pulsuz dəqiqələr ilk saatın qiyməti ilə); kino otağında — faiz bütün otağa.
   function personsPrice() {
     const n = persons.length
     const promoPct = promoPercent ?? 0
@@ -143,10 +152,15 @@ export function visitPrice(
         .map((p) => p.club)
         .filter(Boolean)
         .reduce((a, c) => (clubPct(c, 'roomPercent') > clubPct(a, 'roomPercent') ? c : a), null)
+      const giftPct = persons.reduce(
+        (a, p) => (p.gift?.kind === 'percent' && p.gift.only !== 'hall' ? Math.max(a, Number(p.gift.value) || 0) : a),
+        0,
+      )
       const result = withClub(
         [
           ['promo', round2((raw * promoPct) / 100)],
           ['custom', customOff(raw)],
+          ['gift', round2((raw * Math.min(giftPct, 100)) / 100)],
         ],
         round2((raw * clubPct(top, 'roomPercent')) / 100),
         raw,
@@ -185,6 +199,7 @@ export function visitPrice(
             ['student', p.student ? round2((perPerson * percent) / 100) : 0],
             ['promo', round2((perPerson * promoPct) / 100)],
             ['custom', customEach],
+            ['gift', giftOff(p.gift, perPerson)],
           ],
           round2((perPerson * clubPct(personClub, 'hallPercent')) / 100),
           perPerson,

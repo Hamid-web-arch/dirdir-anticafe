@@ -8,6 +8,7 @@ import { prisma } from './db.js'
 export const DEFAULT_WHEEL = {
   enabled: true,
   periodDays: 7,
+  validDays: 7,
   prizes: [
     { label: { az: '10% endirim', en: '10% off', ru: 'Скидка 10%' }, chance: 30 },
     { label: { az: 'Pulsuz 30 dəq', en: 'Free 30 min', ru: '30 мин бесплатно' }, chance: 20 },
@@ -42,6 +43,13 @@ export const wheelSchema = z.object({
     .int('Gün sayı tam ədəd olmalıdır.')
     .min(1, 'Ən az 1 gün.')
     .max(365, 'Ən çox 365 gün.'),
+  // Qazanılan hədiyyədən neçə gün ərzində istifadə etmək olar
+  validDays: z
+    .number({ error: 'Gün sayını yaz.' })
+    .int('Gün sayı tam ədəd olmalıdır.')
+    .min(1, 'Ən az 1 gün.')
+    .max(365, 'Ən çox 365 gün.')
+    .default(7),
   prizes: z.array(prizeSchema).min(2, 'Çarxda ən az 2 hədiyyə olmalıdır.').max(10, 'Çarxda ən çox 10 hədiyyə ola bilər.'),
 })
 
@@ -83,4 +91,34 @@ export function nextSpinAt(lastSpinAt, periodDays, now = new Date()) {
 // Saytda göstərilən çarx — şanslar göstərilmir
 export const publicPrizes = (wheel) => wheel.prizes.map((p) => ({ label: p.label }))
 
-export const publicSpin = (s) => ({ id: s.id, prize: s.prize, createdAt: s.createdAt, usedAt: s.usedAt })
+// Hədiyyənin vaxtı keçibmi (istifadə olunmayıb və son tarix keçib)
+export const spinExpired = (s, now = new Date()) => !s.usedAt && Boolean(s.expiresAt) && new Date(s.expiresAt) <= now
+
+// Hədiyyə hələ istifadə oluna bilərmi (istifadə olunmayıb, vaxtı keçməyib)
+export const spinOpen = (s, now = new Date()) => !s.usedAt && !spinExpired(s, now)
+
+// Hədiyyənin hesaba təsiri — adından anlaşılır:
+// "15% endirim" → { kind: 'percent', value: 15 }; "Kino 25% endirim" → yalnız kino otağında;
+// "Pulsuz 30 dəq" / "Pulsuz 1 saat" → { kind: 'minutes', value: 30 | 60 } (zalda, ilk saatın qiyməti ilə);
+// qalanları (çay, desert…) → { kind: 'gift' } — hesaba təsir etmir, sadəcə verilir.
+export function prizeEffect(prize) {
+  const text = String(prize?.az ?? '').toLowerCase()
+  const room = /kino/.test(text)
+  const percent = text.match(/(\d+(?:[.,]\d+)?)\s*%/)
+  if (percent) return { kind: 'percent', value: Math.min(100, Number(percent[1].replace(',', '.'))), only: room ? 'room' : null }
+  const minutes = text.match(/(\d+)\s*(dəq|deq|dəqiqə)/)
+  if (minutes) return { kind: 'minutes', value: Number(minutes[1]), only: 'hall' }
+  const hours = text.match(/(\d+(?:[.,]\d+)?)\s*saat/)
+  if (hours) return { kind: 'minutes', value: Math.round(Number(hours[1].replace(',', '.')) * 60), only: 'hall' }
+  return { kind: 'gift', value: 0, only: null }
+}
+
+export const publicSpin = (s) => ({
+  id: s.id,
+  prize: s.prize,
+  createdAt: s.createdAt,
+  usedAt: s.usedAt,
+  expiresAt: s.expiresAt ?? null,
+  expired: spinExpired(s),
+  effect: prizeEffect(s.prize),
+})

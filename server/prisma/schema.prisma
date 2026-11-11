@@ -64,6 +64,9 @@ model WheelSpin {
   createdAt DateTime  @default(now())
   usedAt    DateTime? // doluysa — hədiyyə kafedə verilib
   usedById  String? // hansı admin verib
+  expiresAt DateTime? // bu vaxtdan sonra hədiyyədən istifadə etmək olmaz (çarxın validDays ayarı)
+  // Hədiyyə sifarişdə endirim kimi istifadə olunubsa (və ya davam edən sifarişdə gözləyirsə) — o nəfər
+  visitPerson VisitPerson?
 
   @@index([userId, createdAt])
   @@index([usedAt, createdAt])
@@ -295,6 +298,10 @@ model VisitPerson {
   amount        Decimal? @db.Decimal(8, 2) // bitəndə: bu nəfərin payı (endirimdən sonra)
   discount      Decimal? @db.Decimal(8, 2)
   paymentMethod String? // bitəndə: cash | card
+  // Hədiyyə çarxından qazanılan hədiyyə bu nəfərin payına tətbiq olunur (sifariş bitəndə "istifadə olunub" olur)
+  spinId        String?    @unique
+  spin          WheelSpin? @relation(fields: [spinId], references: [id], onDelete: SetNull)
+  gift          Json? // hədiyyənin təsiri o an: { kind: 'percent' | 'minutes', value, only: 'hall' | 'room' | null, label }
   createdAt     DateTime @default(now())
 
   @@index([visitId])

@@ -1522,9 +1522,22 @@ describe('hədiyyə çarxı', () => {
     assert.equal(state.body.me.spins.length, 1)
     assert.ok(state.body.me.nextSpinAt)
 
-    // Fırlatma 8 gün əvvəl olubsa — yenidən olar
+    // Hədiyyə 7 gün etibarlıdır
+    const days = (new Date(spin.body.spin.expiresAt) - Date.now()) / (24 * 3600 * 1000)
+    assert.ok(days > 6.9 && days <= 7, String(days))
+
+    // Fırlatma 8 gün əvvəl olub, amma hədiyyə hələ istifadə olunmayıb — yenisini qazanmaq olmaz
     await ctx.prisma.wheelSpin.updateMany({ data: { createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000) } })
+    const blocked = await api.post('/api/wheel/spin').set(bearer(user.token))
+    assert.equal(blocked.status, 409)
+    assert.equal(blocked.body.error.code, 'WHEEL_HAS_GIFT')
+    assert.equal((await api.get('/api/wheel').set(bearer(user.token))).body.me.openGift, true)
+
+    // Hədiyyənin vaxtı keçibsə — yenidən fırlatmaq olar; köhnə hədiyyə "vaxtı keçib" görünür
+    await ctx.prisma.wheelSpin.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } })
     assert.equal((await api.post('/api/wheel/spin').set(bearer(user.token))).status, 201)
+    const after = (await api.get('/api/wheel').set(bearer(user.token))).body.me
+    assert.equal(after.spins.filter((x) => x.expired).length, 1)
   })
 
   it('admin müddəti və hədiyyələri dəyişir, söndürür; hədiyyəni "istifadə olundu" qeyd edir', async () => {
@@ -1549,18 +1562,20 @@ describe('hədiyyə çarxı', () => {
 
     const spin = await api.post('/api/wheel/spin').set(bearer(user.token))
     assert.ok(['Çay', 'Kofe'].includes(spin.body.spin.prize.az))
-    // 1 günlük müddət: 25 saat əvvəlki fırlatmadan sonra yenidən olar
-    await ctx.prisma.wheelSpin.updateMany({ data: { createdAt: new Date(Date.now() - 25 * 3600 * 1000) } })
-    assert.equal((await api.post('/api/wheel/spin').set(bearer(user.token))).status, 201)
+    assert.equal(spin.body.spin.effect.kind, 'gift')
 
     // İstifadəçinin istifadə olunmamış hədiyyələri (Günün hesabatı) və "verildi" qeydi
     const unused = await api.get(`/api/admin/wheel/spins?status=unused&userId=${user.user.id}`).set(bearer(adminToken))
-    assert.equal(unused.body.spins.length, 2)
+    assert.equal(unused.body.spins.length, 1)
     assert.equal(unused.body.spins[0].user.customerCode, user.user.customerCode)
     const used = await api.patch(`/api/admin/wheel/spins/${unused.body.spins[0].id}`).set(bearer(adminToken)).send({ used: true })
     assert.ok(used.body.spin.usedAt)
     const left = await api.get(`/api/admin/wheel/spins?status=unused&userId=${user.user.id}`).set(bearer(adminToken))
-    assert.equal(left.body.spins.length, 1)
+    assert.equal(left.body.spins.length, 0)
+
+    // 1 günlük müddət: 25 saat əvvəlki fırlatmadan sonra (hədiyyə verilib) yenidən olar
+    await ctx.prisma.wheelSpin.updateMany({ data: { createdAt: new Date(Date.now() - 25 * 3600 * 1000) } })
+    assert.equal((await api.post('/api/wheel/spin').set(bearer(user.token))).status, 201)
 
     // Söndürüləndə fırlatmaq olmur
     await api.put('/api/admin/wheel').set(bearer(adminToken)).send({ ...saved.body.wheel, enabled: false })
@@ -2085,5 +2100,92 @@ describe('Günün hesabatı — bir sifarişdə bir neçə nəfər', () => {
     assert.equal(again.body.visit.amount, 12.25)
     assert.equal(again.body.visit.paymentMethod, 'mixed')
     assert.equal(again.body.visit.persons[1].paymentMethod, 'card')
+  })
+})
+
+describe('hədiyyə çarxının hədiyyəsi sifarişdə', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+  const giftOf = async (userId, az) =>
+    ctx.prisma.wheelSpin.create({ data: { userId, prize: { az }, expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000) } })
+
+  it('endirim hədiyyəsi nəfərin payına tətbiq olunur, sifariş bitəndə istifadə olunur, silinəndə geri qayıdır', async () => {
+    const adminToken = await createAdmin()
+    const aysel = (await register()).body
+    const gift = await giftOf(aysel.user.id, '20% endirim')
+    const start = (body) => api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), ...body })
+
+    const res = await start({ persons: [{ userId: aysel.user.id, spinId: gift.id }, {}] })
+    assert.equal(res.status, 201, JSON.stringify(res.body))
+    assert.equal(res.body.visit.persons[0].gift.kind, 'percent')
+    assert.equal(res.body.visit.persons[0].gift.value, 20)
+
+    // Eyni hədiyyə başqa sifarişdə istifadə olunmur
+    const kamal = (await register({ email: 'kamal@mail.com', phone: '0551112233', firstName: 'Kamal' })).body
+    const twice = await start({ persons: [{ userId: aysel.user.id, spinId: gift.id }] })
+    assert.equal(twice.status, 409) // üzv artıq davam edən sifarişdədir
+    const foreign = await start({ persons: [{ userId: kamal.user.id, spinId: gift.id }] })
+    assert.equal(foreign.status, 400)
+
+    // Admin siyahısında "davam edən sifarişdə"
+    const listed = await api.get(`/api/admin/wheel/spins?status=unused&userId=${aysel.user.id}`).set(bearer(adminToken))
+    assert.equal(listed.body.spins[0].reserved, true)
+
+    // 2 saat: 7₼ − 20% = 5.60; qonaq 7₼
+    const visit = res.body.visit
+    const end = await api.post(`/api/admin/visits/${visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    assert.deepEqual(end.body.visit.persons.map((p) => p.amount), [5.6, 7])
+    assert.ok((await ctx.prisma.wheelSpin.findUnique({ where: { id: gift.id } })).usedAt)
+
+    // Səhvən bitib — davam etdiriləndə hədiyyə yenə gözləyir
+    await api.post(`/api/admin/visits/${visit.id}/resume`).set(bearer(adminToken))
+    assert.equal((await ctx.prisma.wheelSpin.findUnique({ where: { id: gift.id } })).usedAt, null)
+
+    // Düzəlişdə hədiyyə götürülür
+    const edited = await api
+      .patch(`/api/admin/visits/${visit.id}`)
+      .set(bearer(adminToken))
+      .send({ persons: [{ id: visit.persons[0].id, userId: aysel.user.id, spinId: null }, { id: visit.persons[1].id }] })
+    assert.equal(edited.status, 200, JSON.stringify(edited.body))
+    assert.equal(edited.body.visit.persons[0].gift, null)
+    // ...və yenidən əlavə olunur
+    const back = await api
+      .patch(`/api/admin/visits/${visit.id}`)
+      .set(bearer(adminToken))
+      .send({ persons: [{ id: visit.persons[0].id, userId: aysel.user.id, spinId: gift.id }, { id: visit.persons[1].id }] })
+    assert.equal(back.body.visit.persons[0].gift.value, 20)
+
+    // Bitir, sonra sil — hədiyyə müştəriyə qayıdır
+    await api.post(`/api/admin/visits/${visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    assert.ok((await ctx.prisma.wheelSpin.findUnique({ where: { id: gift.id } })).usedAt)
+    assert.equal((await api.delete(`/api/admin/visits/${visit.id}`).set(bearer(adminToken))).status, 204)
+    assert.equal((await ctx.prisma.wheelSpin.findUnique({ where: { id: gift.id } })).usedAt, null)
+  })
+
+  it('pulsuz vaxt zalda ilk saatın qiyməti ilə; kino hədiyyəsi yalnız otaqda; sadə və vaxtı keçmiş hədiyyə tətbiq olunmur', async () => {
+    const adminToken = await createAdmin()
+    const aysel = (await register()).body
+    const start = (body, minutes = 120) =>
+      api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(minutes), ...body })
+    const finish = async (res) =>
+      (await api.post(`/api/admin/visits/${res.body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })).body.visit
+
+    // Pulsuz 1 saat: 2 saat (7₼) − ilk saatın qiyməti (4₼) = 3₼
+    const free = await giftOf(aysel.user.id, 'Pulsuz 1 saat')
+    const v1 = await finish(await start({ persons: [{ userId: aysel.user.id, spinId: free.id }] }))
+    assert.equal(v1.amount, 3)
+
+    // Kino 25% endirim zalda təsir etmir
+    const cinema = await giftOf(aysel.user.id, 'Kino 25% endirim')
+    const v2 = await finish(await start({ persons: [{ userId: aysel.user.id, spinId: cinema.id }] }))
+    assert.ok(v2.amount > 5.25, String(v2.amount)) // 7₼ − 25% olmadı (yalnız status endirimi ola bilər)
+
+    // Sadə hədiyyə və vaxtı keçmiş hədiyyə qəbul olunmur
+    const tea = await giftOf(aysel.user.id, 'Pulsuz çay')
+    assert.equal((await start({ persons: [{ userId: aysel.user.id, spinId: tea.id }] })).status, 400)
+    const old = await ctx.prisma.wheelSpin.create({
+      data: { userId: aysel.user.id, prize: { az: '10% endirim' }, expiresAt: new Date(Date.now() - 1000) },
+    })
+    assert.equal((await start({ persons: [{ userId: aysel.user.id, spinId: old.id }] })).status, 400)
   })
 })

@@ -597,20 +597,23 @@ function Gifts() {
       </p>
       <ul className="flex flex-col gap-2">
         {spins.map((s) => (
-          <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-ink/10 px-4 py-3 ${s.usedAt ? 'opacity-60' : ''}`}>
+          <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-ink/10 px-4 py-3 ${s.usedAt || s.expired ? 'opacity-60' : ''}`}>
             <span className="text-[1.3rem]" aria-hidden="true">
               🎁
             </span>
             <span className="flex-1 min-w-0">
-              <span className={`block font-bold ${s.usedAt ? 'line-through' : ''}`}>{pick(s.prize)}</span>
-              <span className="block text-[0.78rem] text-inkdim">{date(s.createdAt)}</span>
+              <span className={`block font-bold ${s.usedAt || s.expired ? 'line-through' : ''}`}>{pick(s.prize)}</span>
+              <span className="block text-[0.78rem] text-inkdim">
+                {date(s.createdAt)}
+                {!s.usedAt && !s.expired && s.expiresAt && ` · ${t('account.giftUntil', { date: date(s.expiresAt) })}`}
+              </span>
             </span>
             <span
               className={`shrink-0 text-[0.75rem] font-bold px-2.5 py-1 rounded-full ${
-                s.usedAt ? 'bg-ink/5 text-inkdim' : 'bg-brand-teal-soft text-brand-teal-deep'
+                s.usedAt || s.expired ? 'bg-ink/5 text-inkdim' : 'bg-brand-teal-soft text-brand-teal-deep'
               }`}
             >
-              {s.usedAt ? t('account.giftUsed') : t('account.giftWaiting')}
+              {s.usedAt ? t('account.giftUsed') : s.expired ? t('account.giftExpired') : t('account.giftWaiting')}
             </span>
           </li>
         ))}

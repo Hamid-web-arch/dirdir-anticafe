@@ -319,6 +319,8 @@ function WheelModal({ state, setState, reload, onClose }) {
 
   const me = state.me
   const waiting = me?.nextSpinAt && new Date(me.nextSpinAt) > new Date()
+  // İstifadə olunmamış hədiyyəsi var — ondan istifadə edənə qədər yenisini qazana bilməz
+  const hasGift = Boolean(me?.openGift) && mode !== 'done' && !waiting
   const labels = state.prizes.map((p) => pick(p.label))
   const period = state.periodDays === 7 ? t('wheel.weekly') : t('wheel.everyDays', { days: state.periodDays })
 
@@ -332,14 +334,14 @@ function WheelModal({ state, setState, reload, onClose }) {
       setState((s) => ({
         ...s,
         prizes: res.prizes,
-        me: { nextSpinAt: res.nextSpinAt, spins: [res.spin, ...(s.me?.spins ?? [])] },
+        me: { nextSpinAt: res.nextSpinAt, openGift: true, spins: [res.spin, ...(s.me?.spins ?? [])] },
       }))
       setWon(res.spin.prize)
       setTarget(res.index)
       setMode('landing')
     } catch (err) {
       setMode('idle')
-      if (err.code === 'WHEEL_WAIT') reload()
+      if (err.code === 'WHEEL_WAIT' || err.code === 'WHEEL_HAS_GIFT') reload()
       else setError(err)
     }
   }
@@ -374,7 +376,7 @@ function WheelModal({ state, setState, reload, onClose }) {
         <button
           type="button"
           onClick={spin}
-          disabled={busy || waiting || mode === 'done'}
+          disabled={busy || waiting || hasGift || mode === 'done'}
           aria-label={t('wheel.spin')}
           className="block mx-auto w-[260px] h-[260px] sm:w-[320px] sm:h-[320px] rounded-full outline-none focus-visible:ring-4 focus-visible:ring-primary/30 enabled:cursor-pointer enabled:hover:scale-[1.02] transition-transform"
         >
@@ -387,7 +389,7 @@ function WheelModal({ state, setState, reload, onClose }) {
               <PiConfettiBold size={30} className="mx-auto text-primary mb-1" />
               <p className="font-display font-bold text-[1.25rem] leading-tight">{t('wheel.won', { prize: pick(won) })}</p>
               <p className="text-[0.88rem] text-inkdim mt-1.5">
-                {t('wheel.claim', { code: user.customerCode })}
+                {t('wheel.claim', { code: user.customerCode })} {state.validDays ? t('wheel.validFor', { days: state.validDays }) : ''}
               </p>
               <Link
                 to="/hesabim"
@@ -416,6 +418,17 @@ function WheelModal({ state, setState, reload, onClose }) {
                   {t('wheel.login')}
                 </Link>
               </div>
+            </div>
+          ) : hasGift ? (
+            <div className="text-center">
+              <p className="font-bold text-inkdim">{t('wheel.hasGift')}</p>
+              <Link
+                to="/hesabim"
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 mt-3 px-5 py-2.5 rounded-full font-bold text-[0.88rem] bg-primary text-white"
+              >
+                <PiGiftBold size={16} /> {t('wheel.myPrizes')}
+              </Link>
             </div>
           ) : waiting ? (
             <div className="text-center">

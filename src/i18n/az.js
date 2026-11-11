@@ -92,6 +92,8 @@ export default {
     waitMinutes: '{minutes} dəq',
     loading: 'Çarx hazırlanır… Server oyanırsa, bir az çəkə bilər.',
     failed: 'Serverə qoşulmaq olmadı. İnterneti yoxla və yenidən cəhd et.',
+    hasGift: 'Əvvəlcə qazandığın hədiyyədən istifadə et — sonra çarxı yenidən fırlada bilərsən.',
+    validFor: 'Hədiyyə {days} gün etibarlıdır.',
     retry: 'Yenidən cəhd et',
   },
 
@@ -388,6 +390,8 @@ export default {
     giftsTitle: 'Hədiyyələrim',
     giftsHint: 'Hədiyyəni almaq üçün kafedə müştəri kodunu de.',
     giftWaiting: 'Gözləyir',
+    giftExpired: 'Vaxtı keçib',
+    giftUntil: '{date} tarixinədək',
     giftUsed: 'İstifadə olunub',
     newsletterTitle: "Bildirişlər",
     newsletterOn: "Turnirlər, endirimlər və yeniliklər barədə sənə yazacağıq.",

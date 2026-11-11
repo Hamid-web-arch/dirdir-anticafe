@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PiPlusBold, PiTrashBold, PiArrowCounterClockwiseBold, PiCheckCircleBold, PiGiftBold, PiCheckBold } from 'react-icons/pi'
 import { formatAzDate } from '../../i18n/index.jsx'
+import { prizeEffect, effectText } from '../../lib/prizeEffect.js'
 import { useAdminApi, card, Button, Label, TextInput, ErrorBox, Spinner, Empty, Checkbox, Select } from './ui.jsx'
 
 const formatDate = (iso) => formatAzDate(iso, { day: 'numeric', month: 'short', hour: '2-digit' })
@@ -9,11 +10,13 @@ const formatDate = (iso) => formatAzDate(iso, { day: 'numeric', month: 'short', 
 const toForm = (wheel) => ({
   enabled: wheel.enabled,
   periodDays: String(wheel.periodDays),
+  validDays: String(wheel.validDays ?? 7),
   prizes: wheel.prizes.map((p) => ({ label: { az: p.label.az, en: p.label.en ?? '', ru: p.label.ru ?? '' }, chance: String(p.chance) })),
 })
 const toBody = (form) => ({
   enabled: form.enabled,
   periodDays: Number(form.periodDays),
+  validDays: Number(form.validDays),
   prizes: form.prizes.map((p) => ({ label: p.label, chance: Number(p.chance) })),
 })
 
@@ -22,8 +25,10 @@ export default function AdminWheel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-inkdim">
-        Saytın sol aşağısındakı çarx. Yalnız qeydiyyatlı istifadəçilər fırlada bilir. Qazanılan hədiyyə istifadəçinin profilində görünür —
-        kafeyə gələndə müştəri kodunu deyir, siz hədiyyəni verib "Verildi" basırsınız (Günün hesabatında da görünür).
+        Saytın sol aşağısındakı çarx. Yalnız qeydiyyatlı istifadəçilər fırlada bilir. Qazanılan hədiyyə istifadəçinin profilində görünür
+        və müəyyən gün ərzində istifadə olunmalıdır; istifadə olunmamış hədiyyəsi olan yenisini qazana bilməz. Müştəri kafeyə gələndə
+        Günün hesabatında onu sifarişə əlavə edin: endirim hədiyyəsində "İstifadə et" basın — endirim onun payına tətbiq olunur;
+        sadə hədiyyədə (çay, desert…) — "Verildi".
       </p>
       <Settings />
       <Winners />
@@ -98,6 +103,25 @@ function Settings() {
             <span className="absolute right-3.5 top-[0.7rem] text-[0.85rem] font-bold text-inkdim pointer-events-none">gün</span>
           </div>
         </div>
+        <div className="w-full sm:w-[300px]">
+          <Label htmlFor="wheel-valid" hint="7 = bir həftə">
+            Hədiyyə neçə gün etibarlıdır
+          </Label>
+          <div className="relative">
+            <TextInput
+              id="wheel-valid"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="365"
+              value={form.validDays}
+              onChange={(e) => change({ ...form, validDays: e.target.value })}
+              error={fieldErrors.validDays}
+              className="pr-14"
+            />
+            <span className="absolute right-3.5 top-[0.7rem] text-[0.85rem] font-bold text-inkdim pointer-events-none">gün</span>
+          </div>
+        </div>
       </div>
 
       <div>
@@ -105,6 +129,8 @@ function Settings() {
         <p className="text-[0.82rem] text-inkdim mb-3">
           2–10 hədiyyə, adı ən çox 24 simvol (çarxa sığsın). <b>Şans</b> — nə qədər tez-tez düşəcəyi: məsələn 30 və 10 olan
           hədiyyələrdən birincisi 3 dəfə tez-tez düşür. İngilis və rus adı boş qalsa, azərbaycanca göstərilir.
+          Hesaba necə tətbiq olunacağı adından anlaşılır: "15% endirim" — faiz, "Kino 25% endirim" — yalnız kinoda,
+          "Pulsuz 30 dəq" / "Pulsuz 1 saat" — zalda pulsuz vaxt; başqa adlar (çay, desert…) — sadə hədiyyə.
         </p>
         <div className="flex flex-col gap-2">
           {form.prizes.map((p, i) => {
@@ -121,6 +147,7 @@ function Settings() {
                     onChange={(e) => setPrize(i, { label: { ...p.label, az: e.target.value } })}
                     error={err('label.az')}
                   />
+                  {p.label.az.trim() && <p className="text-[0.72rem] text-inkdim mt-0.5">→ {effectText(prizeEffect(p.label))}</p>}
                 </div>
                 <TextInput
                   aria-label={`${i + 1}-ci hədiyyə (en)`}
@@ -227,6 +254,7 @@ function Winners() {
           <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Göstər">
             <option value="unused">Verilməyənlər</option>
             <option value="used">Verilənlər</option>
+            <option value="expired">Vaxtı keçənlər</option>
             <option value="all">Hamısı</option>
           </Select>
         </div>
@@ -235,7 +263,9 @@ function Winners() {
       {spins === null ? (
         <Spinner />
       ) : spins.length === 0 ? (
-        <Empty>{status === 'unused' ? 'Verilməmiş hədiyyə yoxdur.' : 'Hələ heç kim qazanmayıb.'}</Empty>
+        <Empty>
+          {status === 'unused' ? 'Verilməmiş hədiyyə yoxdur.' : status === 'expired' ? 'Vaxtı keçən hədiyyə yoxdur.' : 'Hələ heç kim qazanmayıb.'}
+        </Empty>
       ) : (
         <ul className="flex flex-col gap-2">
           {spins.map((s) => (
@@ -251,6 +281,12 @@ function Winners() {
                     'silinmiş istifadəçi'
                   )}{' '}
                   · {formatDate(s.createdAt)}
+                  {!s.usedAt && s.expiresAt && (
+                    <span className={s.expired ? 'text-brand-pink-deep font-bold' : ''}>
+                      {' '}
+                      · {s.expired ? 'vaxtı keçib' : `${formatDate(s.expiresAt)} tarixinədək`}
+                    </span>
+                  )}
                 </span>
               </span>
               {s.usedAt ? (
@@ -260,6 +296,8 @@ function Winners() {
                     Geri al
                   </Button>
                 </>
+              ) : s.reserved ? (
+                <span className="text-[0.78rem] font-bold text-brand-orange-deep">Davam edən sifarişdə tətbiq olunur</span>
               ) : (
                 <Button variant="dark" size="sm" onClick={() => mark(s, true)}>
                   <PiCheckBold size={14} /> Verildi
