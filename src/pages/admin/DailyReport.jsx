@@ -463,7 +463,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
 
   return (
     <>
-      <tr className={tone}>
+      <tr className={`${tone} border-t-2 border-ink/20`}>
         <td className={td}>
           <div className="font-bold">{visit.name}</div>
           <div className="flex flex-wrap gap-1 mt-0.5 empty:hidden">
@@ -1541,8 +1541,8 @@ function PersonRows({ visit, shares, tone }) {
       ) : null
     return (
       <tr key={p.id} className={`${tone} text-[0.82rem]`}>
-        <td className={`${td} pl-6`}>
-          <div className="flex items-center gap-1.5">
+        <td colSpan={5} className={`${td} pl-6`}>
+          <div className="flex flex-wrap items-center gap-x-1.5">
             {p.user ? (
               <PiUserCircleCheckBold size={15} className="text-brand-teal-deep shrink-0" />
             ) : (
@@ -1558,7 +1558,6 @@ function PersonRows({ visit, shares, tone }) {
             )}
           </div>
         </td>
-        <td className={td} colSpan={4} />
         {shares ? (
           <td colSpan={2} className={`${td} text-right font-semibold`}>
             {share != null && money(share)}
@@ -1584,13 +1583,13 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
   const ready = persons.every((p) => methods[p.id])
 
   return (
-    <div className="flex flex-col gap-2 max-w-[560px] ml-auto">
+    <div className="flex flex-col gap-2 w-full max-w-[560px] ml-auto">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-bold text-[0.9rem]">
           {visit.name} · cəmi <span className="text-primary">{money(amount)}</span>
           {deposit > 0 && <span className="text-inkdim font-semibold"> · beh {money(deposit)} birinci nəfərin payından çıxılır</span>}
         </span>
-        <span className="inline-flex gap-1">
+        <span className="inline-flex flex-wrap gap-1">
           {Object.entries(PAYMENT).map(([method, { label }]) => (
             <Button key={method} variant="outline" size="sm" onClick={() => all(method)}>
               Hamısı {label.toLowerCase()}
@@ -1627,7 +1626,7 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
           )
         })}
       </ul>
-      <div className="flex justify-end gap-1.5">
+      <div className="flex flex-wrap justify-end gap-1.5">
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Ləğv et
         </Button>
