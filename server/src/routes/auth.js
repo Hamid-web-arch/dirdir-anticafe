@@ -25,7 +25,7 @@ import { canSendCodes } from '../mail.js'
 import { issueCode, checkCode, consumeCodes, latestCode, assertCanResend } from '../emailCodes.js'
 import { processImage, rawImage } from '../images.js'
 import { teamRank } from './competitions.js'
-import { publicVisit } from '../visits.js'
+import { publicVisit, publicPerson } from '../visits.js'
 
 export const authRouter = Router()
 
@@ -229,15 +229,28 @@ authRouter.get('/me/teams', requireAuth, async (req, res) => {
 })
 
 // Anticafedəki seanslarım: davam edən (varsa) + son ziyarətlər. Davam edənin məbləğini sayt canlı hesablayır.
+// Müştərinin seansları: öz adına olanlar və sifarişdə nəfər kimi olduğu seanslar.
+// mine — sifarişdə müştərinin öz sətri (payı, endirimi); ümumi məbləğ — amount.
 authRouter.get('/me/visits', requireAuth, async (req, res) => {
   const visits = await prisma.visit.findMany({
-    where: { userId: req.user.id },
+    where: { OR: [{ userId: req.user.id }, { persons: { some: { userId: req.user.id } } }] },
     orderBy: { startedAt: 'desc' },
     take: 50,
+    include: { persons: { orderBy: { position: 'asc' } } },
   })
+  const withMine = (v) => {
+    const mine = v.persons.find((p) => p.userId === req.user.id)
+    // Başqalarının adları göstərilmir — yalnız öz sətri
+    return {
+      ...publicVisit({ ...v, persons: [] }),
+      // Canlı payı hesablamaq üçün nəfərlər — adsız (yalnız status, tələbə, pay); mine — müştərinin öz sətri
+      persons: v.persons.map((p) => ({ ...publicPerson(p), userId: null, user: null, mine: p.userId === req.user.id })),
+      mine: mine ? publicPerson(mine) : null,
+    }
+  }
   const active = visits.find((v) => !v.endedAt)
   res.json({
-    active: active ? publicVisit(active) : null,
-    visits: visits.filter((v) => v.endedAt).map(publicVisit),
+    active: active ? withMine(active) : null,
+    visits: visits.filter((v) => v.endedAt).map(withMine),
   })
 })

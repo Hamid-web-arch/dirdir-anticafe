@@ -414,6 +414,8 @@ export default {
     history: 'История соревнований',
     visits: 'Мои визиты в антикафе',
     visitNow: 'Вы сейчас в антикафе',
+    visitMyShare: 'Твоя доля',
+    visitTotal: 'всего {amount}',
     visitRoom: 'Кинозал',
     visitStudent: 'студенческая скидка −{amount}',
     visitPromo: 'промокод {code} −{amount}',

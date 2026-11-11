@@ -434,9 +434,19 @@ const visitDiscount = z
     if (d.type === 'amount' && d.value > 1000) ctx.addIssue({ code: 'custom', path: ['value'], message: 'Ən çox 1000 ₼.' })
   })
 
-// Ya qeydiyyatlı istifadəçi (userId), ya da yalnız ad. startedAt yazılmasa — indi.
+// Sifarişdəki nəfər: Club üzvü (userId) və ya qonaq (userId yoxdur); id — mövcud nəfər (düzəlişdə)
+const visitPerson = z.object({
+  id: z.string().trim().min(1).max(40).optional(),
+  userId: z.string().trim().min(1).max(40).nullable().optional(),
+  student: z.boolean().optional(),
+})
+const visitPersons = z.array(visitPerson).min(1, 'Sifarişdə ən az bir nəfər olmalıdır.').max(50, 'Ən çox 50 nəfər.')
+
+// Nəfərlər (persons) — üzvlər və qonaqlar; köhnə forma: qeydiyyatlı istifadəçi (userId) və ya yalnız ad + nəfər sayı.
+// startedAt yazılmasa — indi.
 export const visitCreateSchema = z
   .object({
+    persons: visitPersons.optional(),
     userId: z.string().trim().min(1).max(40).optional(),
     name: visitName.optional(),
     kind: visitKind.optional(),
@@ -448,13 +458,25 @@ export const visitCreateSchema = z
     startedAt: visitTime('Başlama vaxtı').optional(),
     note: visitNote.optional(),
   })
-  .refine((v) => v.userId || v.name, { path: ['name'], message: 'Müştərinin adını yaz və ya qeydiyyatlı istifadəçini seç.' })
+  .refine((v) => v.userId || v.name || v.persons?.some((p) => p.userId), {
+    path: ['name'],
+    message: 'Müştərinin adını yaz və ya qeydiyyatlı istifadəçini seç.',
+  })
 
 const paymentMethod = z.enum(['cash', 'card'], { error: 'Ödəniş üsulunu seç: nağd və ya kart.' })
+// Hər nəfərin ödəniş üsulu: { nəfərinId: "cash" | "card" }
+const personPayments = z.record(z.string().min(1).max(40), paymentMethod)
 
-export const visitEndSchema = z.object({ paymentMethod })
+export const visitEndSchema = z
+  .object({ paymentMethod: paymentMethod.optional(), payments: personPayments.optional() })
+  .refine((v) => v.paymentMethod || (v.payments && Object.keys(v.payments).length), {
+    path: ['paymentMethod'],
+    message: 'Ödəniş üsulunu seç: nağd və ya kart.',
+  })
 
 export const visitUpdateSchema = z.object({
+  persons: visitPersons.optional(),
+  payments: personPayments.optional(),
   paymentMethod: paymentMethod.optional(),
   people: visitPeople.optional(),
   kind: visitKind.optional(),

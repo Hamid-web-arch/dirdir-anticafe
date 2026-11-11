@@ -51,6 +51,7 @@ model User {
   broadcasts    Broadcast[]
   visits        Visit[]          @relation("UserVisits")
   visitsLogged  Visit[]          @relation("VisitCreatedBy")
+  visitPersons  VisitPerson[]    @relation("VisitPersons")
   wheelSpins    WheelSpin[]
 }
 
@@ -244,6 +245,9 @@ model Visit {
   // DırDır Club: seans başlayanda müştərinin statusu və endirimi (sonra qaydalar dəyişsə də seansın endirimi qalır)
   // { tier, name, hallPercent, roomPercent, stack, group } — server/src/club.js
   club          Json?
+  // Sifarişdəki nəfərlər (üzvlər və qonaqlar) — hər birinin öz payı, endirimi və ödəniş üsulu.
+  // Köhnə seanslarda boşdur (onlar bir nəfərin adına yazılıb — userId, people, students).
+  persons       VisitPerson[]
   startedAt     DateTime
   endedAt       DateTime? // boşdursa seans davam edir
   minutes       Int? // bitəndə: qalma müddəti (dəqiqə)
@@ -275,4 +279,24 @@ model EmailCode {
 
   @@index([email, purpose])
   @@index([expiresAt])
+}
+
+// Sifarişdəki bir nəfər: DırDır Club üzvü (userId) və ya qonaq (userId boş).
+// Hər üzvə ziyarət yazılır və öz statusunun endirimi onun payına tətbiq olunur; hər kəs öz payını ayrıca ödəyir.
+model VisitPerson {
+  id            String   @id @default(cuid())
+  visitId       String
+  visit         Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  position      Int      @default(0) // sifarişdəki sıra
+  userId        String?
+  user          User?    @relation("VisitPersons", fields: [userId], references: [id], onDelete: SetNull)
+  student       Boolean  @default(false)
+  club          Json? // üzvün statusu seans başlayanda (server/src/club.js → clubSnapshot)
+  amount        Decimal? @db.Decimal(8, 2) // bitəndə: bu nəfərin payı (endirimdən sonra)
+  discount      Decimal? @db.Decimal(8, 2)
+  paymentMethod String? // bitəndə: cash | card
+  createdAt     DateTime @default(now())
+
+  @@index([visitId])
+  @@index([userId])
 }

@@ -414,6 +414,8 @@ export default {
     history: 'Yarış tarixçəsi',
     visits: 'Anticafe ziyarətlərim',
     visitNow: 'Hazırda anticafedəsən',
+    visitMyShare: 'Sənin payın',
+    visitTotal: 'ümumi {amount}',
     visitRoom: 'Kino otağı',
     visitStudent: 'tələbə endirimi −{amount}',
     visitPromo: 'promokod {code} −{amount}',

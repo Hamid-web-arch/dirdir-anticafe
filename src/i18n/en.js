@@ -409,6 +409,8 @@ export default {
     history: 'Competition history',
     visits: 'My anticafe visits',
     visitNow: "You're at the anticafe now",
+    visitMyShare: 'Your share',
+    visitTotal: 'total {amount}',
     visitRoom: 'Cinema room',
     visitStudent: 'student discount −{amount}',
     visitPromo: 'promo code {code} −{amount}',

@@ -1984,3 +1984,106 @@ describe('DırDır Club — admin status verir', () => {
     assert.equal(cleared.body.club.tier.key, 'qonaq')
   })
 })
+
+describe('Günün hesabatı — bir sifarişdə bir neçə nəfər', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+  // İki üzv: Aysel (Qonaq, 10%) və Kamal (Sakin, 15%) — statuslar admin tərəfindən verilir
+  async function setup() {
+    const adminToken = await createAdmin()
+    const aysel = (await register()).body
+    const kamal = (await register({ email: 'kamal@mail.com', phone: '0551112233', firstName: 'Kamal' })).body
+    await api.put(`/api/admin/club-members/${aysel.user.id}`).set(bearer(adminToken)).send({ tier: 'qonaq' })
+    await api.put(`/api/admin/club-members/${kamal.user.id}`).set(bearer(adminToken)).send({ tier: 'sakin' })
+    const start = (body, minutes = 120) => api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(minutes), ...body })
+    return { adminToken, aysel, kamal, start }
+  }
+
+  it('zal: hər nəfərin payı öz statusu ilə, hər kəs ayrıca ödəyir, hər üzvə ziyarət yazılır', async () => {
+    const { adminToken, aysel, kamal, start } = await setup()
+    const res = await start({ persons: [{ userId: aysel.user.id }, { userId: kamal.user.id }, {}, {}] })
+    assert.equal(res.status, 201, JSON.stringify(res.body))
+    const visit = res.body.visit
+    assert.equal(visit.people, 4)
+    assert.equal(visit.name, 'Aysel Məmmədova')
+    assert.equal(visit.persons.length, 4)
+    assert.equal(visit.persons[0].user.customerCode, aysel.user.customerCode)
+    assert.equal(visit.persons[1].club.tier, 'sakin')
+    assert.equal(visit.persons[2].userId, null)
+
+    // Ödəniş hər nəfər üçün lazımdır
+    const partial = await api.post(`/api/admin/visits/${visit.id}/end`).set(bearer(adminToken)).send({ payments: { [visit.persons[0].id]: 'card' } })
+    assert.equal(partial.status, 400)
+
+    // 2 saat: nəfər başı 7₼. Aysel −10% = 6.30 (kart), Kamal −15% = 5.95, qonaqlar 7 + 7 (nağd)
+    const payments = Object.fromEntries(visit.persons.map((p, i) => [p.id, i === 0 ? 'card' : 'cash']))
+    const end = await api.post(`/api/admin/visits/${visit.id}/end`).set(bearer(adminToken)).send({ payments })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    assert.deepEqual(end.body.visit.persons.map((p) => p.amount), [6.3, 5.95, 7, 7])
+    assert.equal(end.body.visit.amount, 26.25)
+    assert.equal(end.body.visit.paymentMethod, 'mixed')
+
+    const day = end.body.visit.day
+    const row = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === day)
+    assert.equal(row.card, 6.3)
+    assert.equal(row.cash, 19.95)
+
+    // Hər iki üzvə ziyarət yazılır (bonusun üstünə 1)
+    const status = async (token) => (await api.get('/api/club').set(bearer(token))).body.me
+    assert.equal((await status(aysel.token)).visits, 10)
+    assert.equal((await status(kamal.token)).visits, 16)
+
+    // Kabinetdə: öz payı və ümumi məbləğ
+    const mine = (await api.get('/api/auth/me/visits').set(bearer(kamal.token))).body.visits[0]
+    assert.equal(mine.mine.amount, 5.95)
+    assert.equal(mine.amount, 26.25)
+    assert.equal(mine.people, 4)
+  })
+
+  it('kino otağı: ən yüksək status bütün otağa, məbləğ bərabər bölünür; beh birinci nəfərdən çıxılır', async () => {
+    const { adminToken, aysel, kamal, start } = await setup()
+    const res = await start({
+      kind: 'room',
+      persons: [{ userId: aysel.user.id, student: true }, { userId: kamal.user.id }, {}],
+      deposit: { amount: 10, method: 'cash' },
+    })
+    const visit = res.body.visit
+    assert.equal(visit.persons[0].student, false) // kino otağında tələbə endirimi yoxdur
+    // 3 nəfər, 2 saat: 20₼ × 2 = 40₼; Kamal-ın 15%-i → 34₼; 11.33 + 11.33 + 11.34
+    const end = await api.post(`/api/admin/visits/${visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
+    assert.deepEqual(end.body.visit.persons.map((p) => p.amount), [11.33, 11.33, 11.34])
+    assert.equal(end.body.visit.amount, 34)
+    const row = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
+    assert.equal(row.cash, 10) // beh
+    assert.equal(row.card, 24)
+  })
+
+  it('eyni üzv iki dəfə və ya iki sifarişdə ola bilməz; düzəlişdə nəfər əlavə edib çıxarmaq olur', async () => {
+    const { adminToken, aysel, kamal, start } = await setup()
+    assert.equal((await start({ persons: [{ userId: aysel.user.id }, { userId: aysel.user.id }] })).status, 400)
+    const first = await start({ persons: [{ userId: aysel.user.id }] })
+    assert.equal(first.status, 201)
+    const busy = await start({ persons: [{ userId: kamal.user.id }, { userId: aysel.user.id }] })
+    assert.equal(busy.status, 409)
+
+    // Bitmiş sifarişə qonaq və Kamal əlavə olunur — məbləğ yenidən hesablanır, yenilər birincinin üsulunu alır
+    const id = first.body.visit.id
+    await api.post(`/api/admin/visits/${id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+    const persons = [{ id: first.body.visit.persons[0].id, userId: aysel.user.id }, {}, { userId: kamal.user.id }]
+    const edited = await api.patch(`/api/admin/visits/${id}`).set(bearer(adminToken)).send({ persons })
+    assert.equal(edited.status, 200, JSON.stringify(edited.body))
+    assert.deepEqual(edited.body.visit.persons.map((p) => p.amount), [6.3, 7, 5.95])
+    assert.equal(edited.body.visit.amount, 19.25)
+    assert.deepEqual(edited.body.visit.persons.map((p) => p.paymentMethod), ['cash', 'cash', 'cash'])
+
+    // Bir nəfərin ödənişini karta dəyiş, qonağı çıxar
+    const kamalRow = edited.body.visit.persons[2]
+    const again = await api
+      .patch(`/api/admin/visits/${id}`)
+      .set(bearer(adminToken))
+      .send({ persons: [edited.body.visit.persons[0], kamalRow].map((p) => ({ id: p.id, userId: p.userId })), payments: { [kamalRow.id]: 'card' } })
+    assert.equal(again.body.visit.people, 2)
+    assert.equal(again.body.visit.amount, 12.25)
+    assert.equal(again.body.visit.paymentMethod, 'mixed')
+    assert.equal(again.body.visit.persons[1].paymentMethod, 'card')
+  })
+})

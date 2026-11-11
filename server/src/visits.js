@@ -32,7 +32,16 @@ export const visitMinutes = (startedAt, endedAt = new Date()) =>
 export function visitPrice(
   pricing,
   minutes,
-  { people = 1, kind = 'hall', students = 0, promoPercent = 0, discountType = null, discountValue = null, club = null } = {},
+  {
+    people = 1,
+    kind = 'hall',
+    students = 0,
+    promoPercent = 0,
+    discountType = null,
+    discountValue = null,
+    club = null,
+    persons = null,
+  } = {},
 ) {
   const { hall, room, studentDiscount } = pricing
   const grace = hall.graceMinutes ?? 10
@@ -49,9 +58,9 @@ export function visitPrice(
   }
   // DırDır Club status endirimi (seansın club məlumatından). club.stack — digər endirimin üstünə gəlir,
   // yoxsa digərləri ilə yarışır (ən böyüyü). Cəmi heç vaxt məbləğdən çox olmur.
-  const withClub = (options, clubOff, total) => {
+  const withClub = (options, clubOff, total, clubInfo = club) => {
     if (!(clubOff > 0)) return { ...best(options), clubDiscount: 0 }
-    if (!club.stack) {
+    if (!clubInfo.stack) {
       const result = best([...options, ['club', clubOff]])
       return { ...result, clubDiscount: result.discountSource === 'club' ? result.discount : 0 }
     }
@@ -61,6 +70,9 @@ export function visitPrice(
   }
   // Status endirimi yalnız seans club.minHours saat (hesablanan vaxt) və çox olanda
   const clubPercent = club && hours >= (club.minHours ?? 0) ? ((kind === 'room' ? club.roomPercent : club.hallPercent) ?? 0) : 0
+
+  // Yeni seanslar: sifarişdə nəfərlər (üzvlər və qonaqlar) — hər nəfərin payı ayrıca hesablanır
+  if (persons?.length) return personsPrice()
 
   if (kind === 'room') {
     const { smallGroup, group } = room
@@ -116,6 +128,96 @@ export function visitPrice(
     amount: round2(subtotal - discount),
     capped: raw > hall.cap,
   }
+
+  // Hər nəfər öz payını ödəyir:
+  // - zal: payı nəfər başı qiymətdir; ondan nəfərin ən böyük endirimi çıxılır — öz statusu (2 saat şərti ilə),
+  //   tələbədirsə tələbə endirimi, promokod, xüsusi endirim (manatla olanda sifarişin endirimi nəfərlərə bərabər bölünür);
+  // - kino otağı: qrupdakı ən yüksək statusun endirimi bütün otağa, yekun məbləğ nəfərlərə bərabər bölünür.
+  function personsPrice() {
+    const n = persons.length
+    const promoPct = promoPercent ?? 0
+    const clubPct = (c, field) => (c && hours >= (c.minHours ?? 0) ? (c[field] ?? 0) : 0)
+    const sum = (list, key) => round2(list.reduce((s, x) => s + x[key], 0))
+    let shares
+    let perPerson = null
+    let capped = false
+    let percent = 0
+
+    if (kind === 'room') {
+      const { smallGroup, group } = room
+      const raw =
+        n <= smallGroup.maxPeople
+          ? smallGroup.firstHour + (hours - 1) * smallGroup.nextHour
+          : group.perHour * hours + Math.max(0, n - group.includedPeople) * group.extraPerPerson * hours
+      const top = persons
+        .map((p) => p.club)
+        .filter(Boolean)
+        .reduce((a, c) => (clubPct(c, 'roomPercent') > clubPct(a, 'roomPercent') ? c : a), null)
+      const result = withClub(
+        [
+          ['promo', round2((raw * promoPct) / 100)],
+          ['custom', customOff(raw)],
+        ],
+        round2((raw * clubPct(top, 'roomPercent')) / 100),
+        raw,
+        top,
+      )
+      // Bərabər bölgü; qəpik qalığı sonuncu nəfərdə
+      const total = round2(raw - result.discount)
+      const base = Math.floor((total / n) * 100) / 100
+      const off = Math.floor((result.discount / n) * 100) / 100
+      const clubOff = Math.floor((result.clubDiscount / n) * 100) / 100
+      shares = persons.map((p, i) => {
+        const last = i === n - 1
+        return {
+          share: last ? round2(total - base * (n - 1)) : base,
+          discount: last ? round2(result.discount - off * (n - 1)) : off,
+          discountSource: result.discountSource,
+          clubDiscount: last ? round2(result.clubDiscount - clubOff * (n - 1)) : clubOff,
+        }
+      })
+    } else {
+      const raw = hall.firstHour + (halfHours * hall.nextHour) / 2
+      perPerson = round2(Math.min(raw, hall.cap))
+      capped = raw > hall.cap
+      percent = studentPercent(studentDiscount, hours)
+      const customEach =
+        custom > 0 ? round2(discountType === 'amount' ? Math.min(custom / n, perPerson) : (perPerson * Math.min(custom, 100)) / 100) : 0
+      // Club ayarı "bütün qrupa": qonaqlar (statussuz nəfərlər) qrupdakı ən yüksək statuslu üzvün endirimini alır
+      const groupClub = persons
+        .map((p) => p.club)
+        .filter((c) => c?.group)
+        .reduce((a, c) => (clubPct(c, 'hallPercent') > clubPct(a, 'hallPercent') ? c : a), null)
+      shares = persons.map((p) => {
+        const personClub = p.club ?? groupClub
+        const result = withClub(
+          [
+            ['student', p.student ? round2((perPerson * percent) / 100) : 0],
+            ['promo', round2((perPerson * promoPct) / 100)],
+            ['custom', customEach],
+          ],
+          round2((perPerson * clubPct(personClub, 'hallPercent')) / 100),
+          perPerson,
+          personClub,
+        )
+        return { share: round2(perPerson - result.discount), ...result }
+      })
+    }
+
+    const sources = [...new Set(shares.map((s) => s.discountSource).filter(Boolean))]
+    return {
+      billedHours: hours,
+      perPerson,
+      discount: sum(shares, 'discount'),
+      discountSource: sources.length > 1 ? 'mixed' : (sources[0] ?? null),
+      clubDiscount: sum(shares, 'clubDiscount'),
+      studentEligible: kind !== 'room' && percent > 0 && persons.some((p) => p.student),
+      studentPercent: kind === 'room' ? 0 : percent,
+      amount: sum(shares, 'share'),
+      capped,
+      persons: shares,
+    }
+  }
 }
 
 // Tələbə endiriminin faizi qalma müddətinə görə: əvvəl uzun pillə, sonra qısa; heç birinə çatmırsa — 0
@@ -138,10 +240,31 @@ export function paymentSplit(v) {
     split[method === 'cash' || method === 'card' ? method : 'other'] += value
   }
   if (deposit > 0) add(v.depositMethod, deposit)
-  add(v.paymentMethod, amount - deposit)
+  // Sifarişdə nəfərlər varsa — hər nəfərin payı öz üsulunda; beh birinci nəfərin ödəməsindən çıxılır
+  if (v.persons?.some((p) => p.amount != null)) {
+    for (const p of v.persons) add(p.paymentMethod, Number(p.amount ?? 0))
+    if (deposit > 0) add(v.persons[0].paymentMethod, -deposit)
+  } else {
+    add(v.paymentMethod, amount - deposit)
+  }
   for (const key of Object.keys(split)) split[key] = Math.round(split[key] * 100) / 100
   return split
 }
+
+// Müştəri kodu: 1001 → "DD1001" (auth.js-dəki ilə eyni; dövri importdan qaçmaq üçün burada da)
+const codeOf = (no) => (no == null ? null : `DD${String(no).padStart(4, '0')}`)
+
+// Sifarişdəki bir nəfər: üzvdürsə adı və kodu ilə
+export const publicPerson = (p) => ({
+  id: p.id,
+  userId: p.userId ?? null,
+  user: p.user ? { id: p.user.id, firstName: p.user.firstName, lastName: p.user.lastName, phone: p.user.phone, customerCode: codeOf(p.user.customerNo) } : null,
+  student: p.student,
+  club: p.club ?? null,
+  amount: p.amount == null ? null : Number(p.amount),
+  discount: p.discount == null ? null : Number(p.discount),
+  paymentMethod: p.paymentMethod ?? null,
+})
 
 // Klientə qaytarılan seans
 export const publicVisit = (v) => ({
@@ -159,6 +282,8 @@ export const publicVisit = (v) => ({
   depositMethod: v.depositMethod,
   club: v.club ?? null,
   user: v.user ? { id: v.user.id, firstName: v.user.firstName, lastName: v.user.lastName, phone: v.user.phone } : null,
+  // Sifarişdəki nəfərlər (köhnə seanslarda boş siyahı)
+  persons: (v.persons ?? []).map(publicPerson),
   startedAt: v.startedAt,
   endedAt: v.endedAt,
   minutes: v.minutes,

@@ -22,6 +22,19 @@ const discountText = (v) => {
   return parts.join(', ')
 }
 
+// Sifarişin nəfərləri: "Aysel (DD1003) 6.30 kart; Kamal (DD1008) 5.95 nağd; Qonaq 7.00 nağd"
+const personsText = (v) => {
+  const persons = v.persons ?? []
+  if (persons.length === 0 || (persons.length === 1 && !persons[0].user)) return ''
+  return persons
+    .map((p) => {
+      const who = p.user ? `${p.user.firstName} ${p.user.lastName}${p.user.customerCode ? ` (${p.user.customerCode})` : ''}` : 'Qonaq'
+      const paid = p.amount != null ? ` ${money(p.amount)}${p.paymentMethod ? ` ${METHOD[p.paymentMethod] ?? ''}` : ''}` : ''
+      return `${who}${p.student ? ' (tələbə)' : ''}${paid}`
+    })
+    .join('; ')
+}
+
 // Bir seansın cədvəl sətri (PDF və Excel üçün eyni). Pul ödəniş üsullarına bölünür: beh öz üsulunda, qalıq — bitəndə.
 function sessionRow(v) {
   const done = Boolean(v.endedAt)
@@ -38,6 +51,7 @@ function sessionRow(v) {
     card: done && split.card !== 0 ? split.card : null,
     other: done && split.other !== 0 ? split.other : null,
     discount: discountText(v),
+    persons: personsText(v),
     note: v.note ?? '',
   }
 }
@@ -74,14 +88,14 @@ const cell = (value) => {
 }
 
 export function downloadCsv({ filename, visits }) {
-  const header = ['Tarix', 'Müştəri', 'Say', 'Yer', 'Giriş', 'Çıxış', 'Müddət', 'Nağd', 'Kart', 'Üsulsuz', 'Endirim / beh', 'Qeyd']
+  const header = ['Tarix', 'Müştəri', 'Say', 'Yer', 'Giriş', 'Çıxış', 'Müddət', 'Nağd', 'Kart', 'Üsulsuz', 'Endirim / beh', 'Nəfərlər', 'Qeyd']
   const lines = [header.map(cell).join(';')]
   for (const v of visits) {
     const r = sessionRow(v)
-    lines.push([r.day, r.name, r.people, r.place, r.start, r.end, r.duration, r.cash, r.card, r.other, r.discount, r.note].map(cell).join(';'))
+    lines.push([r.day, r.name, r.people, r.place, r.start, r.end, r.duration, r.cash, r.card, r.other, r.discount, r.persons, r.note].map(cell).join(';'))
   }
   const t = totalsOf(visits)
-  lines.push(['Cəmi', '', t.people, '', '', '', '', t.cash, t.card, round2(t.total - t.cash - t.card) || null, '', ''].map(cell).join(';'))
+  lines.push(['Cəmi', '', t.people, '', '', '', '', t.cash, t.card, round2(t.total - t.cash - t.card) || null, '', '', ''].map(cell).join(';'))
   saveBlob(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${filename}.csv`)
 }
 
@@ -113,6 +127,7 @@ function sessionsTable(visits, withDate) {
       stack: [
         { text: r.name, bold: true },
         ...(r.discount ? [{ text: r.discount, fontSize: 7.5, color: GREY }] : []),
+        ...(r.persons ? [{ text: r.persons, fontSize: 7.5, color: GREY }] : []),
         ...(r.note ? [{ text: r.note, fontSize: 7.5, color: GREY, italics: true }] : []),
       ],
     }

@@ -184,20 +184,25 @@ export function windowStartDay(club, now = new Date()) {
   return day > club.startDay ? day : club.startDay
 }
 
-// İstifadəçilərin sayılan ziyarət günləri: Map<userId, string[] (artan sıra ilə)>
+// İstifadəçilərin sayılan ziyarət günləri: Map<userId, string[] (artan sıra ilə)>.
+// Müştəri seansın sahibidir (köhnə seanslar — userId) və ya sifarişdəki nəfərlərdən biridir (persons).
 async function countedDays(userIds, club) {
-  const result = new Map(userIds.map((id) => [id, []]))
-  if (userIds.length === 0) return result
-  const visits = await prisma.visit.findMany({
-    where: { userId: { in: userIds }, endedAt: { not: null }, amount: { gt: 0 }, day: { gte: windowStartDay(club) } },
-    select: { userId: true, day: true },
-    orderBy: { day: 'asc' },
-  })
-  for (const v of visits) {
-    const days = result.get(v.userId)
-    if (days.at(-1) !== v.day) days.push(v.day)
+  const sets = new Map(userIds.map((id) => [id, new Set()]))
+  if (userIds.length > 0) {
+    const visits = await prisma.visit.findMany({
+      where: {
+        endedAt: { not: null },
+        amount: { gt: 0 },
+        day: { gte: windowStartDay(club) },
+        OR: [{ userId: { in: userIds } }, { persons: { some: { userId: { in: userIds } } } }],
+      },
+      select: { userId: true, day: true, persons: { select: { userId: true } } },
+    })
+    for (const v of visits) {
+      for (const id of new Set([v.userId, ...v.persons.map((p) => p.userId)])) sets.get(id)?.add(v.day)
+    }
   }
-  return result
+  return new Map([...sets.entries()].map(([id, days]) => [id, [...days].sort()]))
 }
 
 export const tierFor = (club, visits) => {

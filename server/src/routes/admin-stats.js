@@ -34,7 +34,17 @@ adminStatsRouter.get('/stats', async (req, res) => {
 
   const visits = await prisma.visit.findMany({
     where: { day: { startsWith: period } },
-    select: { day: true, people: true, amount: true, paymentMethod: true, deposit: true, depositMethod: true, kind: true, endedAt: true },
+    select: {
+      day: true,
+      people: true,
+      amount: true,
+      paymentMethod: true,
+      deposit: true,
+      depositMethod: true,
+      kind: true,
+      endedAt: true,
+      persons: { select: { amount: true, paymentMethod: true }, orderBy: { position: 'asc' } },
+    },
   })
   for (const v of visits) {
     const b = buckets.get(view === 'daily' ? v.day : v.day.slice(0, 7))
@@ -82,6 +92,7 @@ adminStatsRouter.get('/stats/export', async (req, res) => {
   const visits = await prisma.visit.findMany({
     where: { day: { gte: from, lte: to } },
     orderBy: [{ day: 'asc' }, { startedAt: 'asc' }],
+    include: { persons: { orderBy: { position: 'asc' }, include: { user: { select: { id: true, firstName: true, lastName: true, phone: true, customerNo: true } } } } },
   })
   res.json({ from, to, visits: visits.map(publicVisit) })
 })

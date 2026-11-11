@@ -63,7 +63,7 @@ const discountBody = (d) => {
   return String(d.value).trim() !== '' && value > 0 ? { type: d.type, value } : null
 }
 // Tətbiq olunan endirimin adı (cəmlənmir — ən böyüyü)
-const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim', club: 'DırDır Club' }
+const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim', club: 'DırDır Club', mixed: 'endirimlər' }
 
 // Müştərinin DırDır Club statusu: "☕ Qonaq · −10%" (axtarışda və seçiləndə)
 function ClubTag({ club, kind = 'hall' }) {
@@ -460,6 +460,7 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           <div className="flex flex-wrap gap-1 mt-0.5 empty:hidden">
             <VisitBadges visit={visit} inTable />
           </div>
+          <PersonsLine visit={visit} shares={isActive ? price.persons : null} />
           {price.discount > 0 && (
             <div className="text-[0.72rem] text-inkdim mt-0.5">
               {price.clubDiscount > 0 && price.discountSource !== 'club'
@@ -528,6 +529,23 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
       </tr>
       {ending &&
         isActive &&
+        visit.persons?.length > 1 &&
+        full(
+          <EndPersons
+            visit={visit}
+            shares={price.persons ?? []}
+            amount={amount}
+            busy={busy}
+            onCancel={() => setEnding(false)}
+            onEnd={(payments) =>
+              act(`/admin/visits/${visit.id}/end`, { method: 'POST', body: { payments } }, (v) => `${visit.name} — sifariş bitdi: ${money(v.amount)}`)
+            }
+          />,
+          'bg-brand-teal-soft/30',
+        )}
+      {ending &&
+        isActive &&
+        !(visit.persons?.length > 1) &&
         full(
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[0.88rem] font-bold mr-1">
@@ -580,7 +598,7 @@ function VisitBadges({ visit, inTable }) {
           <PiUsersBold size={13} /> {visit.people} nəfər
         </span>
       )}
-      {visit.students > 0 && !isRoom && (
+      {visit.students > 0 && !isRoom && !(visit.persons?.length > 1) && (
         <span className={`${badge} text-brand-cyan-deep bg-brand-cyan-soft`}>
           <PiStudentBold size={13} /> {visit.people > 1 ? `${visit.students} tələbə` : 'Tələbə'}
         </span>
@@ -590,7 +608,7 @@ function VisitBadges({ visit, inTable }) {
           <PiTicketBold size={13} /> {visit.promoCode} −{visit.promoPercent}%
         </span>
       )}
-      {visit.club && (
+      {visit.club && !visit.persons?.length && (
         <span className={`${badge} text-brand-orange-deep bg-brand-orange-soft`} title="DırDır Club statusu (seans başlayanda)">
           <PiCrownBold size={13} /> {visit.club.name} −{isRoom ? visit.club.roomPercent : visit.club.hallPercent}%
         </span>
@@ -605,7 +623,7 @@ function VisitBadges({ visit, inTable }) {
           <PiTagBold size={13} /> Endirim {discountLabel(visit.discountType, visit.discountValue)}
         </span>
       )}
-      {visit.user && (
+      {visit.user && !visit.persons?.length && (
         <span className={`${badge} text-brand-teal-deep bg-brand-teal-soft`} title="Saytda qeydiyyatı var — seans kabinetində görünür">
           <PiUserCircleCheckBold size={13} /> Qeydiyyatlı
         </span>
@@ -661,7 +679,8 @@ function DayPicker({ day, today, onChange }) {
   )
 }
 
-// Yeni müştəri: ad yazılır; qeydiyyatlı istifadəçi tapılarsa seçilir və seans onun kabinetində də görünür.
+// Yeni sifariş: Club üzvləri siyahıdan bir-bir əlavə olunur (hər birinin öz statusu və endirimi),
+// qeydiyyatsız qonaqlar sayla yazılır. Üzv yoxdursa — yazılan ad sifarişin adıdır (köhnə kimi).
 function NewVisit({ onCreated, roomBusy }) {
   const request = useAdminApi()
   const pricing = usePricing()
@@ -669,15 +688,15 @@ function NewVisit({ onCreated, roomBusy }) {
   const [focused, setFocused] = useState(false)
   const [extrasOpen, setExtrasOpen] = useState(false)
   const [kind, setKind] = useState('hall')
-  const [students, setStudents] = useState(0)
+  const [members, setMembers] = useState([]) // [{ user, student }]
+  const [guests, setGuests] = useState(1)
+  const [guestStudents, setGuestStudents] = useState(0)
   const [promo, setPromo] = useState(null) // { code, percent }
   const [discount, setDiscount] = useState(EMPTY_DISCOUNT)
   const [deposit, setDeposit] = useState(EMPTY_DEPOSIT)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
-  const [selected, setSelected] = useState(null)
-  const [people, setPeople] = useState(1)
   const [time, setTime] = useState('') // boşdursa — indi
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -685,7 +704,7 @@ function NewVisit({ onCreated, roomBusy }) {
   // Yazdıqca qeydiyyatlı istifadəçiləri axtarırıq (bir az gözləyib — hər hərfə sorğu getməsin)
   useEffect(() => {
     const q = query.trim()
-    if (selected || q.length < 2) {
+    if (q.length < 2) {
       setResults([])
       return
     }
@@ -702,15 +721,36 @@ function NewVisit({ onCreated, roomBusy }) {
       clearTimeout(id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, selected])
+  }, [query])
+
+  const isRoom = kind === 'room'
+  const people = members.length + guests
+  const customDiscount = discountBody(discount)
+
+  const addMember = (user) => {
+    if (!members.some((m) => m.user.id === user.id)) setMembers((list) => [...list, { user, student: false }])
+    // İlk üzv əlavə olunanda "1 qonaq" avtomatik sıfırlanır — qonaq varsa admin özü artırır
+    if (members.length === 0) setGuests(0)
+    setQuery('')
+    setResults([])
+  }
+  const removeMember = (id) => {
+    const rest = members.filter((m) => m.user.id !== id)
+    setMembers(rest)
+    if (rest.length === 0 && guests === 0) setGuests(1)
+  }
+  const setGuestCount = (n) => {
+    setGuests(n)
+    setGuestStudents((s) => Math.min(s, n))
+  }
 
   const reset = () => {
     setQuery('')
-    setSelected(null)
+    setMembers([])
     setResults([])
     setTime('')
-    setPeople(1)
-    setStudents(0)
+    setGuests(1)
+    setGuestStudents(0)
     setPromo(null)
     setDiscount(EMPTY_DISCOUNT)
     setDeposit(EMPTY_DEPOSIT)
@@ -719,14 +759,20 @@ function NewVisit({ onCreated, roomBusy }) {
     document.getElementById('visit-name')?.focus()
   }
 
+  // Sifarişin nəfərləri: əvvəl üzvlər, sonra qonaqlar
+  const persons = [
+    ...members.map((m) => ({ userId: m.user.id, student: !isRoom && m.student, club: m.user.club?.tier ?? null })),
+    ...Array.from({ length: guests }, (_, i) => ({ userId: null, student: !isRoom && i < guestStudents, club: null })),
+  ]
+
   const start = async (e) => {
     e.preventDefault()
     setError(null)
-    const counts = { kind, people, students: kind === 'room' ? 0 : students }
-    if (promo) counts.promoCode = promo.code
-    if (customDiscount) counts.discount = customDiscount
-    if (depositBody(deposit)) counts.deposit = depositBody(deposit)
-    const body = selected ? { userId: selected.id, ...counts } : { name: query.trim(), ...counts }
+    const body = { kind, persons: persons.map(({ userId, student }) => ({ userId, student })) }
+    if (members.length === 0) body.name = query.trim()
+    if (promo) body.promoCode = promo.code
+    if (customDiscount) body.discount = customDiscount
+    if (depositBody(deposit)) body.deposit = depositBody(deposit)
     if (time) body.startedAt = fromBakuInput(`${bakuDay()}T${time}`)
     setSaving(true)
     try {
@@ -740,141 +786,159 @@ function NewVisit({ onCreated, roomBusy }) {
     }
   }
 
-  const isRoom = kind === 'room'
-  const customDiscount = discountBody(discount)
-  const canStart = (selected || query.trim().length > 0) && !(isRoom && roomBusy)
-  const showResults = focused && !selected && query.trim().length >= 2
+  const tooMany = isRoom && people > room.maxPeople
+  const canStart = (members.length > 0 || query.trim().length > 0) && people > 0 && !(isRoom && roomBusy) && !tooMany
+  const showResults = focused && query.trim().length >= 2
+  const visibleResults = results.filter((u) => !members.some((m) => m.user.id === u.id))
   // Əlavə seçimlərdə nə seçilib — bağlı olanda da görünsün
   const extrasSummary = [
-    !isRoom && students > 0 && (people > 1 ? `${students} tələbə` : 'tələbə'),
+    !isRoom && guestStudents > 0 && `${guestStudents} tələbə qonaq`,
     promo && `${promo.code} −${promo.percent}%`,
     customDiscount && `endirim ${discountLabel(customDiscount.type, customDiscount.value)}`,
     depositBody(deposit) && `beh ${money(depositBody(deposit).amount)}`,
     time && `${time}-dan`,
   ].filter(Boolean)
-  // Başlanğıc məbləğ (ilk saat) — admin müştəriyə dərhal deyə bilsin
+  // Başlanğıc məbləğ (ilk saat) — admin müştəriyə dərhal deyə bilsin. Status endirimi 2 saatdan sonra başlayır.
   const firstHour = visitPrice(pricing, 0, {
     kind,
-    people,
-    students: isRoom ? 0 : students,
+    persons: people > 0 ? persons : [{ userId: null, student: false, club: null }],
     promoPercent: promo?.percent,
     discountType: customDiscount?.type,
     discountValue: customDiscount?.value,
-    club: selected?.club?.tier ?? null,
   })
 
   return (
     <form onSubmit={start} className={card} noValidate>
-      <h2 className="font-display font-bold text-[1.1rem] mb-3">Yeni müştəri</h2>
+      <h2 className="font-display font-bold text-[1.1rem] mb-3">Yeni sifariş</h2>
 
-      <Label htmlFor="visit-name" hint="qeydiyyatlıdırsa, siyahıdan seç">
-        Müştəri
-      </Label>
-      {selected ? (
-        <div className="flex items-center gap-2.5 bg-brand-teal-soft rounded-xl px-3.5 py-2.5">
-          <PiUserCircleCheckBold size={22} className="text-brand-teal-deep shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-bold truncate">
-              {selected.firstName} {selected.lastName}
-            </div>
-            <div className="text-[0.78rem] text-inkdim truncate">
-              <b className="text-ink">{selected.customerCode}</b> · Qeydiyyatlı · {selected.phone}
-            </div>
-            {selected.club && (
-              <div className="mt-1">
-                <ClubTag club={selected.club} kind={kind} />
-              </div>
-            )}
-          </div>
-          <button type="button" onClick={reset} aria-label="Seçimi ləğv et" className="p-1.5 rounded-full hover:bg-ink/10">
-            <PiXBold size={15} />
-          </button>
-        </div>
-      ) : null}
-      {selected && <UserGifts userId={selected.id} />}
-      {selected ? null : (
-        <div className="relative">
-          <PiMagnifyingGlassBold size={17} className="absolute left-3.5 top-[0.85rem] text-inkdim pointer-events-none" />
-          <TextInput
-            id="visit-name"
-            value={query}
-            maxLength={80}
-            autoComplete="off"
-            placeholder="Ad, telefon və ya müştəri kodu (DD1001)"
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            className="pl-10"
-          />
-          {/* Axtarış nəticələri — sahənin altında üzən siyahı (səhifəni itələmir) */}
-          {showResults && (
-            <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl border border-ink/10 bg-card shadow-xl overflow-hidden">
-              {results.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  // blur-dan əvvəl seçilsin (yoxsa siyahı bağlanıb klik itir)
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setSelected(u)}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-ink/5 border-b border-ink/5"
-                >
-                  <PiUserCircleCheckBold size={20} className="text-brand-teal-deep shrink-0" />
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-bold truncate">
-                      {u.firstName} {u.lastName}
-                    </span>
-                    <span className="block text-[0.78rem] text-inkdim truncate">
-                      <b className="text-ink">{u.customerCode}</b> · {u.phone} · {u.email}
-                    </span>
-                    {u.club && (
-                      <span className="block mt-0.5">
-                        <ClubTag club={u.club} />
-                      </span>
-                    )}
-                  </span>
+      {/* Üzvlər — hər biri öz statusu ilə */}
+      {members.length > 0 && (
+        <div className="flex flex-col gap-2 mb-2.5">
+          {members.map((m) => (
+            <div key={m.user.id}>
+              <div className="flex items-center gap-2.5 bg-brand-teal-soft rounded-xl px-3 py-2">
+                <PiUserCircleCheckBold size={20} className="text-brand-teal-deep shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold truncate text-[0.92rem]">
+                    {m.user.firstName} {m.user.lastName}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[0.75rem] text-inkdim">
+                    <b className="text-ink">{m.user.customerCode}</b>
+                    {m.user.club && <ClubTag club={m.user.club} kind={kind} />}
+                  </div>
+                </div>
+                {!isRoom && studentTiers(studentDiscount).length > 0 && (
+                  <label className="flex items-center gap-1 text-[0.75rem] font-bold text-inkdim cursor-pointer select-none" title="Tələbə endirimi">
+                    <input
+                      type="checkbox"
+                      checked={m.student}
+                      onChange={(e) => setMembers((list) => list.map((x) => (x.user.id === m.user.id ? { ...x, student: e.target.checked } : x)))}
+                      className="w-4 h-4 accent-[var(--color-primary)]"
+                    />
+                    <PiStudentBold size={15} />
+                  </label>
+                )}
+                <button type="button" onClick={() => removeMember(m.user.id)} aria-label="Sifarişdən çıxar" className="p-1.5 rounded-full hover:bg-ink/10">
+                  <PiXBold size={14} />
                 </button>
-              ))}
-              <div className="px-3.5 py-2.5 text-[0.8rem] text-inkdim bg-ink/[0.03]">
-                {searching
-                  ? 'Axtarılır…'
-                  : results.length
-                    ? `Siyahıda yoxdursa, "${query.trim()}" qeydiyyatsız müştəri kimi başladılacaq.`
-                    : `Qeydiyyatlı istifadəçi tapılmadı — "${query.trim()}" qeydiyyatsız müştəri kimi başladılacaq.`}
               </div>
+              <UserGifts userId={m.user.id} />
             </div>
-          )}
+          ))}
         </div>
       )}
 
+      <Label htmlFor="visit-name" hint={members.length ? 'daha bir üzv əlavə et' : 'qeydiyyatlıdırsa, siyahıdan seç'}>
+        {members.length ? 'Üzv əlavə et' : 'Müştəri'}
+      </Label>
+      <div className="relative">
+        <PiMagnifyingGlassBold size={17} className="absolute left-3.5 top-[0.85rem] text-inkdim pointer-events-none" />
+        <TextInput
+          id="visit-name"
+          value={query}
+          maxLength={80}
+          autoComplete="off"
+          placeholder={members.length ? 'Kod, ad və ya telefon' : 'Ad, telefon və ya müştəri kodu (DD1001)'}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+          className="pl-10"
+        />
+        {/* Axtarış nəticələri — sahənin altında üzən siyahı (səhifəni itələmir) */}
+        {showResults && (
+          <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl border border-ink/10 bg-card shadow-xl overflow-hidden">
+            {visibleResults.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                // blur-dan əvvəl seçilsin (yoxsa siyahı bağlanıb klik itir)
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addMember(u)}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-ink/5 border-b border-ink/5"
+              >
+                <PiUserCircleCheckBold size={20} className="text-brand-teal-deep shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-bold truncate">
+                    {u.firstName} {u.lastName}
+                  </span>
+                  <span className="block text-[0.78rem] text-inkdim truncate">
+                    <b className="text-ink">{u.customerCode}</b> · {u.phone} · {u.email}
+                  </span>
+                  {u.club && (
+                    <span className="block mt-0.5">
+                      <ClubTag club={u.club} />
+                    </span>
+                  )}
+                </span>
+                <PiPlusBold size={16} className="text-primary shrink-0" />
+              </button>
+            ))}
+            <div className="px-3.5 py-2.5 text-[0.8rem] text-inkdim bg-ink/[0.03]">
+              {searching
+                ? 'Axtarılır…'
+                : members.length
+                  ? visibleResults.length
+                    ? 'Üzvü seç — sifarişə əlavə olunacaq.'
+                    : 'Belə üzv tapılmadı. Qeydiyyatsız nəfəri aşağıda "Qonaq" sayına əlavə et.'
+                  : visibleResults.length
+                    ? `Siyahıda yoxdursa, "${query.trim()}" qeydiyyatsız müştəri kimi başladılacaq.`
+                    : `Qeydiyyatlı istifadəçi tapılmadı — "${query.trim()}" qeydiyyatsız müştəri kimi başladılacaq.`}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="mt-3.5 flex items-end gap-3">
         <div className="flex-1 min-w-0">
-          <KindToggle
-            short
-            value={kind}
-            onChange={(next) => {
-              setKind(next)
-              if (next === 'room') setPeople((n) => Math.min(n, room.maxPeople))
-            }}
-          />
+          <KindToggle short value={kind} onChange={setKind} />
         </div>
         <PeopleStepper
-          id="visit-people"
-          value={people}
+          id="visit-guests"
+          label={members.length ? 'Qonaq' : 'Nəfər'}
+          value={guests}
           compact
-          onChange={(n) => {
-            setPeople(n)
-            setStudents((s) => Math.min(s, n))
-          }}
-          max={isRoom ? room.maxPeople : 50}
+          onChange={setGuestCount}
+          min={members.length ? 0 : 1}
+          max={isRoom ? Math.max(0, room.maxPeople - members.length) : 50}
         />
       </div>
+      {members.length > 0 && (
+        <p className="text-[0.78rem] text-inkdim mt-1.5">
+          Cəmi <b className="text-ink">{people} nəfər</b>: {members.length} üzv{guests > 0 && ` + ${guests} qonaq`}. Hər kəs öz payını ödəyir, hər üzvə ziyarət yazılır.
+        </p>
+      )}
       {isRoom && roomBusy && (
         <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-2">
           Kino otağı məşğuldur — {roomBusy.name} adına seans davam edir.
         </p>
       )}
-      {isRoom && !roomBusy && <p className="text-[0.75rem] text-inkdim mt-1.5">Otaq qiyməti bütün qrup üçündür, ən çox {room.maxPeople} nəfər.</p>}
+      {tooMany && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-2">Kino otağına ən çox {room.maxPeople} nəfər sığır.</p>}
+      {isRoom && !roomBusy && !tooMany && (
+        <p className="text-[0.75rem] text-inkdim mt-1.5">
+          Otaq qiyməti bütün qrup üçündür (ən çox {room.maxPeople} nəfər) — ən yüksək statusun endirimi ilə, nəfərlərə bərabər bölünür.
+        </p>
+      )}
 
       {/* Az istifadə olunan seçimlər — bağlıdır ki, "Başlat" həmişə görünsün */}
       <button
@@ -891,8 +955,15 @@ function NewVisit({ onCreated, roomBusy }) {
       </button>
       {extrasOpen && (
         <div className="mt-3 flex flex-col gap-3.5 pl-1">
-          {!isRoom && studentTiers(studentDiscount).length > 0 && (
-            <StudentField id="visit-students" people={people} value={students} onChange={setStudents} discount={studentDiscount} />
+          {!isRoom && guests > 0 && studentTiers(studentDiscount).length > 0 && (
+            <StudentField
+              id="visit-students"
+              people={guests}
+              value={guestStudents}
+              onChange={setGuestStudents}
+              discount={studentDiscount}
+              label={members.length ? 'Qonaqlardan neçəsi tələbədir' : undefined}
+            />
           )}
           <div>
             <PromoField id="visit-promo" value={promo} onChange={setPromo} />
@@ -1065,7 +1136,7 @@ function PromoField({ id, value, onChange }) {
 }
 
 // Tələbə endirimi: tək nəfərdə "Tələbədir" qutusu, qrupda "neçəsi tələbədir" sayğacı
-function StudentField({ id, people, value, onChange, discount }) {
+function StudentField({ id, people, value, onChange, discount, label }) {
   // "2 saat −10%, 3+ saat −20%" — son pillə "və çox" deməkdir
   const tiers = studentTiers(discount)
   const rule = tiers.map((tier, i) => `${tier.minHours}${i === tiers.length - 1 ? '+' : ''} saat −${tier.percent}%`).join(', ')
@@ -1088,7 +1159,7 @@ function StudentField({ id, people, value, onChange, discount }) {
   return (
     <>
       <Label htmlFor={id} hint={rule}>
-        Neçəsi tələbədir
+        {label ?? 'Neçəsi tələbədir'}
       </Label>
       <PeopleStepper id={id} value={value} onChange={onChange} min={0} max={people} />
     </>
@@ -1190,7 +1261,7 @@ function DiscountField({ id, value, onChange, error }) {
 
 // Nəfər sayı: − 5 + (min–max)
 // compact — formada "Harada" ilə yanaşı: başlığı üstündə, kiçik düymələr
-function PeopleStepper({ id, value, onChange, min = 1, max = 50, compact }) {
+function PeopleStepper({ id, value, onChange, min = 1, max = 50, compact, label = 'Nəfər' }) {
   const set = (n) => onChange(Math.min(max, Math.max(min, Number.isFinite(n) ? Math.round(n) : min)))
   const size = compact ? 'w-9 h-[42px]' : 'w-11 h-11'
   const btn = `${size} shrink-0 rounded-xl border-2 border-ink/10 flex items-center justify-center hover:border-ink disabled:opacity-40`
@@ -1218,7 +1289,7 @@ function PeopleStepper({ id, value, onChange, min = 1, max = 50, compact }) {
   return (
     <div className="shrink-0">
       <label htmlFor={id} className="block text-[0.75rem] font-bold text-inkdim mb-1 text-center">
-        Nəfər
+        {label}
       </label>
       {stepper}
     </div>
@@ -1241,7 +1312,10 @@ function EditVisit({ visit, onCancel, onSaved }) {
     promo: visit.promoCode ? { code: visit.promoCode, percent: visit.promoPercent } : null,
     discount: visit.discountValue ? { type: visit.discountType, value: String(visit.discountValue) } : EMPTY_DISCOUNT,
     deposit: visit.deposit ? { amount: String(visit.deposit), method: visit.depositMethod ?? 'cash' } : EMPTY_DEPOSIT,
+    // Nəfərli sifariş: [{ id, userId, user, student, paymentMethod }]
+    persons: (visit.persons ?? []).map((p) => ({ id: p.id, userId: p.userId, user: p.user, student: p.student, paymentMethod: p.paymentMethod })),
   })
+  const grouped = form.persons.length > 0
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const field = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) })
@@ -1251,9 +1325,17 @@ function EditVisit({ visit, onCancel, onSaved }) {
     setSaving(true)
     setError(null)
     const body = { startedAt: fromBakuInput(form.startedAt), note: form.note.trim() || null, people: form.people, ...(visit.endedAt ? { kind: form.kind } : {}), students: form.kind === 'room' ? 0 : form.students, promoCode: form.promo?.code ?? null, discount: discountBody(form.discount), deposit: depositBody(form.deposit) }
-    if (!visit.user) body.name = form.name
+    if (!visit.user || grouped) body.name = form.name
     if (visit.endedAt && form.endedAt) body.endedAt = fromBakuInput(form.endedAt)
-    if (visit.endedAt && form.paymentMethod) body.paymentMethod = form.paymentMethod
+    if (grouped) {
+      // Nəfərlər siyahısı; köhnə forma sahələri (people, students, paymentMethod) göndərilmir
+      delete body.people
+      delete body.students
+      body.persons = form.persons.map((p) => ({ ...(p.id ? { id: p.id } : {}), userId: p.userId ?? null, student: form.kind !== 'room' && p.student }))
+      if (visit.endedAt) body.payments = Object.fromEntries(form.persons.filter((p) => p.id && p.paymentMethod).map((p) => [p.id, p.paymentMethod]))
+    } else if (visit.endedAt && form.paymentMethod) {
+      body.paymentMethod = form.paymentMethod
+    }
     try {
       const { visit: updated } = await request(`/admin/visits/${visit.id}`, { method: 'PATCH', body })
       onSaved(updated)
@@ -1269,9 +1351,11 @@ function EditVisit({ visit, onCancel, onSaved }) {
   return (
     <div className="rounded-2xl border-2 border-primary/40 p-4">
       <form onSubmit={save} className="grid gap-3 sm:grid-cols-2" noValidate>
-        {!visit.user && (
+        {(!visit.user || grouped) && (
           <div className="sm:col-span-2">
-            <Label htmlFor={`name-${visit.id}`}>Ad</Label>
+            <Label htmlFor={`name-${visit.id}`} hint={grouped ? 'sifarişin adı' : undefined}>
+              Ad
+            </Label>
             <TextInput id={`name-${visit.id}`} maxLength={80} {...field('name')} error={fieldErrors.name} />
           </div>
         )}
@@ -1298,6 +1382,19 @@ function EditVisit({ visit, onCancel, onSaved }) {
             </div>
           )}
         </div>
+        {grouped ? (
+          <div className="sm:col-span-2">
+            <PersonsEditor
+              persons={form.persons}
+              kind={form.kind}
+              ended={Boolean(visit.endedAt)}
+              onChange={(persons) => setForm({ ...form, persons })}
+            />
+            {(fieldErrors.persons || fieldErrors.people) && (
+              <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.persons || fieldErrors.people}</p>
+            )}
+          </div>
+        ) : (
         <div>
           <Label htmlFor={`people-${visit.id}`}>Nəfər sayı</Label>
           <PeopleStepper
@@ -1308,6 +1405,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
           />
           {fieldErrors.people && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.people}</p>}
         </div>
+        )}
         <div className="sm:col-span-2">
           <PromoField id={`promo-${visit.id}`} value={form.promo} onChange={(promo) => setForm({ ...form, promo })} />
           {fieldErrors.promoCode && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.promoCode}</p>}
@@ -1328,7 +1426,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
             error={fieldErrors['deposit.amount']}
           />
         </div>
-        {form.kind !== 'room' && studentTiers(studentDiscount).length > 0 && (
+        {!grouped && form.kind !== 'room' && studentTiers(studentDiscount).length > 0 && (
           <div className="sm:col-span-2">
             <StudentField
               id={`students-${visit.id}`}
@@ -1350,7 +1448,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
             <TextInput id={`end-${visit.id}`} type="datetime-local" {...field('endedAt')} error={fieldErrors.endedAt} />
           </div>
         )}
-        {visit.endedAt && (
+        {visit.endedAt && !grouped && (
           <div className="sm:col-span-2">
             <span className="block text-[0.85rem] font-bold mb-1.5">Ödəniş</span>
             <div className="inline-flex bg-ink/5 rounded-full p-1 gap-1">
@@ -1388,6 +1486,240 @@ function EditVisit({ visit, onCancel, onSaved }) {
           </div>
         </div>
       </form>
+    </div>
+  )
+}
+
+// Nəfərin adı: üzv — ad (və kod), qonaq — "Qonaq 1", "Qonaq 2"…
+function personLabel(persons, i) {
+  const p = persons[i]
+  if (p.user) return `${p.user.firstName} ${p.user.lastName}`
+  return `Qonaq ${persons.slice(0, i + 1).filter((x) => !x.user && !x.userId).length}`
+}
+
+// Sətirdə sifarişin nəfərləri: "Aysel 6.30₼ (kart) · Kamal 5.95₼ · Qonaq 1 7₼".
+// Davam edəndə — canlı paylar (shares), bitəndə — saxlanmış paylar və ödəniş üsulları.
+function PersonsLine({ visit, shares }) {
+  const persons = visit.persons ?? []
+  // Tək qonaqlı köhnə tip sifarişdə siyahıya ehtiyac yoxdur
+  if (persons.length === 0 || (persons.length === 1 && !persons[0].user)) return null
+  return (
+    <ul className="mt-1 flex flex-col gap-0.5 text-[0.75rem]">
+      {persons.map((p, i) => {
+        const share = shares ? shares[i]?.share : p.amount
+        const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
+        return (
+          <li key={p.id} className="flex items-center gap-1.5 text-inkdim">
+            {p.user ? <PiUserCircleCheckBold size={13} className="text-brand-teal-deep shrink-0" /> : <PiUsersBold size={13} className="shrink-0" />}
+            <span className={`truncate ${p.user ? 'font-semibold text-ink' : ''}`}>{personLabel(persons, i)}</span>
+            {p.user?.customerCode && <span className="shrink-0">{p.user.customerCode}</span>}
+            {p.club && percent > 0 && <span className="shrink-0 font-bold text-brand-orange-deep">{p.club.name} −{percent}%</span>}
+            {p.student && <PiStudentBold size={13} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
+            {share != null && <span className="ml-auto shrink-0 font-bold text-ink tabular-nums">{money(share)}</span>}
+            {!shares && p.paymentMethod && <span className="shrink-0">{PAYMENT[p.paymentMethod]?.label.toLowerCase()}</span>}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// Sifarişi bitirmək: hər nəfərin payı və onun ödəniş üsulu (nağd/kart). "Hamısı nağd/kart" — birdən seçmək.
+function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
+  const persons = visit.persons
+  const [methods, setMethods] = useState({})
+  const deposit = Number(visit.deposit ?? 0)
+  const all = (method) => setMethods(Object.fromEntries(persons.map((p) => [p.id, method])))
+  const ready = persons.every((p) => methods[p.id])
+
+  return (
+    <div className="flex flex-col gap-2 max-w-[560px] ml-auto">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-bold text-[0.9rem]">
+          {visit.name} · cəmi <span className="text-primary">{money(amount)}</span>
+          {deposit > 0 && <span className="text-inkdim font-semibold"> · beh {money(deposit)} birinci nəfərin payından çıxılır</span>}
+        </span>
+        <span className="inline-flex gap-1">
+          {Object.entries(PAYMENT).map(([method, { label }]) => (
+            <Button key={method} variant="outline" size="sm" onClick={() => all(method)}>
+              Hamısı {label.toLowerCase()}
+            </Button>
+          ))}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-1">
+        {persons.map((p, i) => {
+          const share = shares[i]?.share ?? 0
+          const due = i === 0 ? round2(share - deposit) : share
+          return (
+            <li key={p.id} className="flex items-center gap-2 bg-card rounded-xl px-3 py-1.5">
+              <span className={`flex-1 min-w-0 truncate text-[0.88rem] ${p.user ? 'font-bold' : ''}`}>{personLabel(persons, i)}</span>
+              <span className="font-display font-bold tabular-nums text-[0.95rem]">
+                {due >= 0 ? money(due) : `qaytar ${money(-due)}`}
+              </span>
+              <span className="inline-flex bg-ink/5 rounded-full p-0.5 gap-0.5">
+                {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
+                  <button
+                    key={method}
+                    type="button"
+                    aria-pressed={methods[p.id] === method}
+                    onClick={() => setMethods((m) => ({ ...m, [p.id]: method }))}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[0.78rem] transition-colors ${
+                      methods[p.id] === method ? 'bg-ink text-bg' : 'text-inkdim hover:text-ink'
+                    }`}
+                  >
+                    <Icon size={13} /> {label}
+                  </button>
+                ))}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="flex justify-end gap-1.5">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Ləğv et
+        </Button>
+        <Button variant="dark" size="sm" loading={busy} disabled={!ready} onClick={() => onEnd(methods)}>
+          <PiStopFill size={12} /> {ready ? 'Bitir' : 'Hər kəs üçün üsul seç'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Düzəlişdə sifarişin nəfərləri: üzv əlavə et / çıxar, qonaq əlavə et, tələbə, (bitmişdə) ödəniş üsulu
+function PersonsEditor({ persons, kind, ended, onChange }) {
+  const { room, studentDiscount } = usePricing()
+  const isRoom = kind === 'room'
+  const set = (i, patch) => onChange(persons.map((p, j) => (j === i ? { ...p, ...patch } : p)))
+  const full = isRoom && persons.length >= room.maxPeople
+
+  return (
+    <div>
+      <span className="block text-[0.85rem] font-bold mb-1.5">Nəfərlər ({persons.length})</span>
+      <ul className="flex flex-col gap-1.5">
+        {persons.map((p, i) => (
+          <li key={p.id ?? `new-${i}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink/10 px-3 py-1.5">
+            {p.user ? <PiUserCircleCheckBold size={17} className="text-brand-teal-deep" /> : <PiUsersBold size={17} className="text-inkdim" />}
+            <span className={`flex-1 min-w-[120px] truncate text-[0.88rem] ${p.user ? 'font-bold' : ''}`}>
+              {personLabel(persons, i)}
+              {p.user?.customerCode && <span className="font-normal text-inkdim"> · {p.user.customerCode}</span>}
+              {!p.id && <span className="font-normal text-primary"> · yeni</span>}
+            </span>
+            {!isRoom && studentTiers(studentDiscount).length > 0 && (
+              <label className="flex items-center gap-1 text-[0.78rem] font-bold text-inkdim cursor-pointer select-none">
+                <input type="checkbox" checked={p.student} onChange={(e) => set(i, { student: e.target.checked })} className="w-4 h-4 accent-[var(--color-primary)]" />
+                Tələbə
+              </label>
+            )}
+            {ended && p.id && (
+              <span className="inline-flex bg-ink/5 rounded-full p-0.5 gap-0.5">
+                {Object.entries(PAYMENT).map(([method, { label }]) => (
+                  <button
+                    key={method}
+                    type="button"
+                    aria-pressed={p.paymentMethod === method}
+                    onClick={() => set(i, { paymentMethod: method })}
+                    className={`px-2.5 py-1 rounded-full font-bold text-[0.75rem] ${p.paymentMethod === method ? 'bg-ink text-bg' : 'text-inkdim hover:text-ink'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label="Çıxar"
+              disabled={persons.length <= 1}
+              onClick={() => onChange(persons.filter((_, j) => j !== i))}
+              className="p-1.5 rounded-full text-inkdim hover:bg-ink/10 disabled:opacity-30"
+            >
+              <PiXBold size={13} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-start gap-2 mt-2">
+        <Button size="sm" disabled={full} onClick={() => onChange([...persons, { id: null, userId: null, user: null, student: false, paymentMethod: null }])}>
+          <PiPlusBold size={13} /> Qonaq
+        </Button>
+        {!full && (
+          <div className="flex-1 min-w-[200px]">
+            <MemberSearch
+              exclude={persons.map((p) => p.userId).filter(Boolean)}
+              onPick={(u) => onChange([...persons, { id: null, userId: u.id, user: u, student: false, paymentMethod: null }])}
+            />
+          </div>
+        )}
+      </div>
+      {ended && <p className="text-[0.75rem] text-inkdim mt-1.5">Yeni əlavə olunan nəfər birinci nəfərin ödəniş üsulunu alır — saxlayandan sonra dəyişmək olar.</p>}
+    </div>
+  )
+}
+
+// Üzv axtarışı (kod, ad, telefon) — seçiləndə onPick(user)
+function MemberSearch({ exclude = [], onPick }) {
+  const request = useAdminApi()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) return setResults([])
+    let cancelled = false
+    const id = setTimeout(() => {
+      request(`/admin/users?q=${encodeURIComponent(q)}&status=active&limit=6`)
+        .then((d) => !cancelled && setResults(d.users))
+        .catch(() => !cancelled && setResults([]))
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  const visible = results.filter((u) => !exclude.includes(u.id))
+  return (
+    <div className="relative">
+      <TextInput
+        value={query}
+        maxLength={80}
+        autoComplete="off"
+        placeholder="+ Üzv: kod, ad və ya telefon"
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="py-1.5 text-[0.88rem]"
+      />
+      {focused && query.trim().length >= 2 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-ink/10 bg-card shadow-xl overflow-hidden">
+          {visible.length === 0 && <div className="px-3 py-2 text-[0.8rem] text-inkdim">Üzv tapılmadı</div>}
+          {visible.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onPick(u)
+                setQuery('')
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-ink/5 border-b border-ink/5 text-[0.85rem]"
+            >
+              <PiUserCircleCheckBold size={17} className="text-brand-teal-deep shrink-0" />
+              <span className="flex-1 min-w-0 truncate">
+                <b>
+                  {u.firstName} {u.lastName}
+                </b>{' '}
+                <span className="text-inkdim">· {u.customerCode}</span>
+              </span>
+              {u.club && <ClubTag club={u.club} />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

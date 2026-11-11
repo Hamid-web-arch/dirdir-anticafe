@@ -647,6 +647,10 @@ function Visits() {
   if (data && !active && data.visits.length === 0) return null // heç ziyarət yoxdursa kartı göstərmirik
 
   const live = active ? visitPrice(pricing, visitMinutes(active.startedAt, now), active) : null
+  // Bir neçə nəfərlik sifarişdə müştəri öz payını görür (ümumi məbləğ ayrıca)
+  const myIndex = active?.persons?.findIndex((p) => p.mine) ?? -1
+  const myLive = active && active.persons?.length > 1 && myIndex >= 0 ? live.persons?.[myIndex] : null
+  const myShare = (v) => (v.persons?.length > 1 && v.mine?.amount != null ? v.mine.amount : null)
 
   return (
     <div className={card}>
@@ -667,8 +671,9 @@ function Visits() {
               <div className="flex items-end justify-between gap-4 mt-3">
                 <div className="font-display font-bold text-[2rem] leading-none tabular-nums">{elapsedClock(active.startedAt, now)}</div>
                 <div className="text-right">
-                  <div className="text-[0.78rem] font-bold text-ink/60">{t('account.visitAmount')}</div>
-                  <div className="font-display font-bold text-[2rem] leading-none text-primary tabular-nums">{money(live.amount)}</div>
+                  <div className="text-[0.78rem] font-bold text-ink/60">{myLive ? t('account.visitMyShare') : t('account.visitAmount')}</div>
+                  <div className="font-display font-bold text-[2rem] leading-none text-primary tabular-nums">{money(myLive ? myLive.share : live.amount)}</div>
+                  {myLive && <div className="text-[0.78rem] font-semibold text-ink/60 mt-1">{t('account.visitTotal', { amount: money(live.amount) })}</div>}
                 </div>
               </div>
               <p className="text-[0.8rem] text-ink/60 mt-3">
@@ -697,7 +702,10 @@ function Visits() {
                       {v.people > 1 && ` · ${t('units.people', { count: v.people })}`}
                     </div>
                   </div>
-                  <span className="shrink-0 font-display font-bold text-primary tabular-nums">{money(v.amount)}</span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display font-bold text-primary tabular-nums">{money(myShare(v) ?? v.amount)}</span>
+                    {myShare(v) != null && <span className="block text-[0.72rem] text-inkdim">{t('account.visitTotal', { amount: money(v.amount) })}</span>}
+                  </span>
                 </li>
               ))}
             </ul>
