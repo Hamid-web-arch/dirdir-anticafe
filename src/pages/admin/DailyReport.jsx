@@ -331,7 +331,7 @@ function VisitsTable({ visits, now, pricing, isToday, onChange, onDelete, notify
   return (
     <section className={`${card} !p-0 overflow-hidden`}>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[780px] text-[0.9rem] tabular-nums border-collapse">
+        <table className="w-full min-w-[680px] text-[0.9rem] tabular-nums border-collapse">
           <thead className="bg-brand-orange-soft">
             <tr>
               <th className={`${th} text-left`}>Müştəri</th>
@@ -410,7 +410,8 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
     }
   }
 
-  const td = 'px-3 py-2.5 border-b border-ink/10 align-top'
+  const grouped = hasPersonsList(visit)
+  const td = `px-3 py-2.5 align-top ${grouped ? 'pb-1.5' : 'border-b border-ink/10'}`
   const full = (children, extra = '') => (
     <tr>
       <td colSpan={8} className={`px-3 py-3 border-b border-ink/10 ${extra}`}>
@@ -460,8 +461,8 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           <div className="flex flex-wrap gap-1 mt-0.5 empty:hidden">
             <VisitBadges visit={visit} inTable />
           </div>
-          <PersonsLine visit={visit} shares={isActive ? price.persons : null} />
-          {price.discount > 0 && (
+          {grouped && <div className="text-[0.75rem] text-inkdim mt-0.5">{personsSummary(visit.persons)}</div>}
+          {!grouped && price.discount > 0 && (
             <div className="text-[0.72rem] text-inkdim mt-0.5">
               {price.clubDiscount > 0 && price.discountSource !== 'club'
                 ? `${DISCOUNT_SOURCE[price.discountSource]} −${money(round2(price.discount - price.clubDiscount))} · DırDır Club −${money(price.clubDiscount)}`
@@ -527,6 +528,13 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           </span>
         </td>
       </tr>
+      {grouped && (
+        <tr className={isActive ? 'bg-brand-teal-soft/50' : ''}>
+          <td colSpan={8} className="px-3 pb-3 pt-0 border-b border-ink/10">
+            <PersonsLine visit={visit} shares={isActive ? price.persons : null} price={price} />
+          </td>
+        </tr>
+      )}
       {ending &&
         isActive &&
         visit.persons?.length > 1 &&
@@ -1497,30 +1505,76 @@ function personLabel(persons, i) {
   return `Qonaq ${persons.slice(0, i + 1).filter((x) => !x.user && !x.userId).length}`
 }
 
-// Sətirdə sifarişin nəfərləri: "Aysel 6.30₼ (kart) · Kamal 5.95₼ · Qonaq 1 7₼".
-// Davam edəndə — canlı paylar (shares), bitəndə — saxlanmış paylar və ödəniş üsulları.
-function PersonsLine({ visit, shares }) {
+// Qrup sifarişidirmi (nəfərlərin siyahısı göstərilir)? Tək qonaqlı köhnə tip sifarişdə — yox.
+function hasPersonsList(visit) {
   const persons = visit.persons ?? []
-  // Tək qonaqlı köhnə tip sifarişdə siyahıya ehtiyac yoxdur
-  if (persons.length === 0 || (persons.length === 1 && !persons[0].user)) return null
+  return persons.length > 1 || (persons.length === 1 && Boolean(persons[0].user))
+}
+
+// "7 nəfər: 4 üzv + 3 qonaq"
+function personsSummary(persons) {
+  const members = persons.filter((p) => p.user || p.userId).length
+  const guests = persons.length - members
+  const parts = [members && `${members} üzv`, guests && `${guests} qonaq`].filter(Boolean)
+  return `${persons.length} nəfər: ${parts.join(' + ')}`
+}
+
+// Sifarişin nəfərləri — sətrin altında kiçik kartlar: ad, kod, status, pay və ödəniş üsulu.
+// Davam edəndə — canlı paylar (shares), bitəndə — saxlanmış paylar və ödəniş üsulları.
+function PersonsLine({ visit, shares, price }) {
+  const persons = visit.persons ?? []
   return (
-    <ul className="mt-1 flex flex-col gap-0.5 text-[0.75rem]">
-      {persons.map((p, i) => {
-        const share = shares ? shares[i]?.share : p.amount
-        const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
-        return (
-          <li key={p.id} className="flex items-center gap-1.5 text-inkdim">
-            {p.user ? <PiUserCircleCheckBold size={13} className="text-brand-teal-deep shrink-0" /> : <PiUsersBold size={13} className="shrink-0" />}
-            <span className={`truncate ${p.user ? 'font-semibold text-ink' : ''}`}>{personLabel(persons, i)}</span>
-            {p.user?.customerCode && <span className="shrink-0">{p.user.customerCode}</span>}
-            {p.club && percent > 0 && <span className="shrink-0 font-bold text-brand-orange-deep">{p.club.name} −{percent}%</span>}
-            {p.student && <PiStudentBold size={13} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
-            {share != null && <span className="ml-auto shrink-0 font-bold text-ink tabular-nums">{money(share)}</span>}
-            {!shares && p.paymentMethod && <span className="shrink-0">{PAYMENT[p.paymentMethod]?.label.toLowerCase()}</span>}
-          </li>
-        )
-      })}
-    </ul>
+    <div className="rounded-xl bg-bg/70 border border-ink/10 p-2">
+      <ul className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
+        {persons.map((p, i) => {
+          const share = shares ? shares[i]?.share : p.amount
+          const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
+          const method = !shares && p.paymentMethod ? PAYMENT[p.paymentMethod] : null
+          const MethodIcon = method?.icon
+          return (
+            <li key={p.id} className="flex items-center gap-2 bg-card rounded-lg px-2.5 py-1.5 min-w-0">
+              {p.user ? (
+                <PiUserCircleCheckBold size={18} className="text-brand-teal-deep shrink-0" />
+              ) : (
+                <PiUsersBold size={18} className="text-inkdim shrink-0" />
+              )}
+              <div className="flex-1 min-w-0 leading-tight">
+                <div className={`flex items-center gap-1 text-[0.85rem] ${p.user ? 'font-bold' : 'text-inkdim'}`}>
+                  <span className="truncate" title={personLabel(persons, i)}>{personLabel(persons, i)}</span>
+                  {p.student && <PiStudentBold size={14} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
+                </div>
+                {(p.user?.customerCode || (p.club && percent > 0) || p.student) && (
+                  <div className="text-[0.72rem] text-inkdim truncate">
+                    {[p.user?.customerCode, p.student && 'tələbə'].filter(Boolean).join(' · ')}
+                    {p.club && percent > 0 && (
+                      <span className="font-bold text-brand-orange-deep">
+                        {p.user?.customerCode || p.student ? ' · ' : ''}
+                        {p.club.name} −{percent}%
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0 text-right leading-tight">
+                {share != null && <div className="font-display font-bold tabular-nums text-[0.95rem]">{money(share)}</div>}
+                {method && (
+                  <div className={`inline-flex items-center gap-0.5 text-[0.7rem] font-bold ${p.paymentMethod === 'card' ? 'text-brand-cyan-deep' : 'text-brand-teal-deep'}`}>
+                    <MethodIcon size={11} /> {method.label.toLowerCase()}
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      {price?.discount > 0 && (
+        <div className="text-[0.72rem] text-inkdim mt-1.5 px-1">
+          Endirim: {price.clubDiscount > 0 && price.discountSource !== 'club'
+            ? `${DISCOUNT_SOURCE[price.discountSource]} −${money(round2(price.discount - price.clubDiscount))} · DırDır Club −${money(price.clubDiscount)}`
+            : `${DISCOUNT_SOURCE[price.discountSource]} −${money(price.discount)}`}
+        </div>
+      )}
+    </div>
   )
 }
 
