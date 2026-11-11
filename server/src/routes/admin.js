@@ -8,6 +8,8 @@ import { processImage, rawImage, imageUrl } from '../images.js'
 import { TEAM_ORDER } from './competitions.js'
 import { publicSlide } from './slides.js'
 import { getPricing, savePricing, DEFAULT_PRICING } from '../pricing.js'
+import { getClub, clubStatuses } from '../club.js'
+import { memberStatus } from './club.js'
 import {
   pointsSchema,
   userListQuerySchema,
@@ -105,7 +107,19 @@ adminRouter.get('/users', async (req, res) => {
     const exact = await prisma.user.findFirst({ where: { AND: [...and, { customerNo: exactNo }] }, include: { _count: { select: { teams: true } } } })
     if (exact) users.splice(0, users.length, exact, ...users.filter((u) => u.id !== exact.id).slice(0, limit - 1))
   }
-  res.json({ users: users.map(adminUser), total })
+  // DırDır Club statusu (axtarış nəticəsində və Günün hesabatında göstərilir)
+  const club = await getClub()
+  const statuses = club.enabled ? await clubStatuses(users.map((u) => u.id), club) : new Map()
+  res.json({
+    users: users.map((u) => {
+      const status = statuses.get(u.id)
+      return {
+        ...adminUser(u),
+        club: status ? memberStatus(status) : null,
+      }
+    }),
+    total,
+  })
 })
 
 // Bir istifadəçi: profil + qoşulduğu yarışlar

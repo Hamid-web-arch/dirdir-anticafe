@@ -34,6 +34,7 @@ const AdminStats = lazy(() => import('./pages/admin/Stats.jsx'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile.jsx'))
 const AdminDailyReport = lazy(() => import('./pages/admin/DailyReport.jsx'))
 const AdminWheel = lazy(() => import('./pages/admin/Wheel.jsx'))
+const AdminClub = lazy(() => import('./pages/admin/Club.jsx'))
 
 export default function App() {
   const { t } = useI18n()
@@ -79,6 +80,7 @@ export default function App() {
               <Route path="adminler" element={<AdminAdmins />} />
               <Route path="statistika" element={<AdminStats />} />
               <Route path="carx" element={<AdminWheel />} />
+              <Route path="club" element={<AdminClub />} />
               <Route path="profil" element={<AdminProfile />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -1119,14 +1119,21 @@ describe('günün hesabatı (seanslar)', () => {
     await api.post(`/api/admin/visits/${reg.body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'card' })
     mine = await api.get('/api/auth/me/visits').set(bearer(user.token))
     assert.equal(mine.body.active, null)
-    assert.equal(mine.body.visits[0].amount, 4)
+    // Qeydiyyatlı müştəri — DırDır Club "Tanış" statusu: 5% endirim (4 → 3.8)
+    assert.equal(mine.body.visits[0].amount, 3.8)
 
-    // Günün siyahısı və tarixçə
+    // Günün siyahısı və tarixçə. Seanslar "75 və 30 dəqiqə əvvəl" başlayıb — gecə yarısından az sonra işə salınanda
+    // fərqli günlərə düşə bilərlər, ona görə hər seansın öz günü ilə yoxlayırıq.
     const list = await api.get('/api/admin/visits').set(bearer(adminToken))
     assert.equal(list.body.day, list.body.today)
-    assert.equal(list.body.visits.length, 2)
+    const visitDays = [...new Set([guest.body.visit.day, reg.body.visit.day])]
+    let listed = 0
+    for (const day of visitDays) listed += (await api.get(`/api/admin/visits?day=${day}`).set(bearer(adminToken))).body.visits.length
+    assert.equal(listed, 2)
     const days = await api.get('/api/admin/visits/days').set(bearer(adminToken))
-    assert.deepEqual(days.body.days, [{ day: list.body.today, count: 2, total: 9.5, cash: 5.5, card: 4 }])
+    const sum = (field) => Math.round(days.body.days.reduce((s, d) => s + d[field], 0) * 100) / 100
+    assert.deepEqual(days.body.days.map((d) => d.day).sort(), [...visitDays].sort())
+    assert.deepEqual({ count: sum('count'), total: sum('total'), cash: sum('cash'), card: sum('card') }, { count: 2, total: 9.3, cash: 5.5, card: 3.8 })
 
     // İstifadəçi admin ünvanlarına girə bilməz
     assert.equal((await api.get('/api/admin/visits').set(bearer(user.token))).status, 403)
@@ -1771,5 +1778,196 @@ describe('beh (əvvəlcədən ödəniş)', () => {
       paymentSplit({ endedAt: new Date(), amount: 8, deposit: 10, depositMethod: 'card', paymentMethod: 'cash' }),
       { cash: -2, card: 10, other: 0 },
     )
+  })
+})
+
+describe('DırDır Club', () => {
+  const dayAgo = (n) => {
+    const d = new Date(Date.now() + 4 * 3600 * 1000) // Bakı vaxtı
+    d.setUTCDate(d.getUTCDate() - n)
+    return d.toISOString().slice(0, 10)
+  }
+  // Bitmiş seans (ödənişli və ya pulsuz) — status yalnız ödənişli, fərqli günləri sayır
+  const pastVisit = (userId, day, amount = 8) =>
+    ctx.prisma.visit.create({
+      data: { userId, name: 'X', day, startedAt: new Date(`${day}T10:00:00Z`), endedAt: new Date(`${day}T12:00:00Z`), minutes: 120, amount, paymentMethod: 'cash' },
+    })
+  const setClub = async (adminToken, patch) => {
+    const { body } = await api.get('/api/admin/club').set(bearer(adminToken))
+    const res = await api.put('/api/admin/club').set(bearer(adminToken)).send({ ...body.club, ...patch })
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    return res.body.club
+  }
+
+  it('status son aylarda fərqli ödənişli günlərə görə; kabinetdə növbəti statusa qalan görünür', async () => {
+    const adminToken = await createAdmin()
+    const { body: user } = await register()
+    await setClub(adminToken, { startDay: dayAgo(400) })
+
+    // 9 fərqli gün + eyni gündə ikinci seans + pulsuz seans + 7 ay əvvəlki seans — 9 sayılır (Qonaq)
+    for (let i = 1; i <= 9; i++) await pastVisit(user.user.id, dayAgo(i * 3))
+    await pastVisit(user.user.id, dayAgo(3))
+    await pastVisit(user.user.id, dayAgo(40), 0)
+    await pastVisit(user.user.id, dayAgo(220))
+
+    const res = await api.get('/api/club').set(bearer(user.token))
+    assert.equal(res.status, 200)
+    assert.equal(res.body.me.visits, 9)
+    assert.equal(res.body.me.tier.key, 'qonaq')
+    assert.equal(res.body.me.tier.hallPercent, 10)
+    assert.equal(res.body.me.next.key, 'sakin')
+    assert.equal(res.body.me.next.needed, 6)
+    assert.ok(res.body.me.leavesOn)
+    assert.equal(res.body.club.tiers.length, 4)
+    // Qonaq — kabinet yoxdur, qaydalar var
+    const guest = await api.get('/api/club')
+    assert.equal(guest.body.me, null)
+
+    // Admin axtarışında status görünür
+    const list = await api.get('/api/admin/users?q=Aysel').set(bearer(adminToken))
+    assert.equal(list.body.users[0].club.tier.key, 'qonaq')
+
+    // Club işə düşməzdən əvvəlki ziyarətlər sayılmır
+    await setClub(adminToken, { startDay: dayAgo(10) })
+    assert.equal((await api.get('/api/club').set(bearer(user.token))).body.me.visits, 3)
+  })
+
+  it('status endirimi seansa yazılır: zalda öz payına (və ya qrupa), kinoda bütün otağa; söndürüləndə yoxdur', async () => {
+    const adminToken = await createAdmin()
+    const { body: user } = await register()
+    await setClub(adminToken, { startDay: dayAgo(400) })
+    for (let i = 1; i <= 15; i++) await pastVisit(user.user.id, dayAgo(i)) // Sakin — 15%
+    const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+    const start = (body) => api.post('/api/admin/visits').set(bearer(adminToken)).send({ userId: user.user.id, startedAt: minutesAgo(60), ...body })
+    const end = (id) => api.post(`/api/admin/visits/${id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })
+
+    // Zal, 2 nəfər, 1 saat = 8₼; 15% yalnız müştərinin öz payına (4₼) → 0.6 endirim
+    const hall = await start({ people: 2 })
+    assert.equal(hall.body.visit.club.tier, 'sakin')
+    assert.equal(hall.body.visit.club.hallPercent, 15)
+    assert.equal((await end(hall.body.visit.id)).body.visit.amount, 7.4)
+
+    // Qrup rejimi: bütün qrupa → 8 − 1.2 = 6.8
+    await setClub(adminToken, { group: true })
+    const group = await start({ people: 2 })
+    assert.equal((await end(group.body.visit.id)).body.visit.amount, 6.8)
+
+    // Kino otağı (15₼): 15% → 12.75; promokod 20% çoxdur — o tətbiq olunur (cəmlənmir)
+    await ctx.prisma.promoCode.create({ data: { code: 'BIG20', percent: 20 } })
+    const room = await start({ kind: 'room', people: 2 })
+    assert.equal((await end(room.body.visit.id)).body.visit.amount, 12.75)
+    const promo = await start({ kind: 'room', people: 2, promoCode: 'BIG20' })
+    assert.equal((await end(promo.body.visit.id)).body.visit.amount, 12)
+
+    // "Cəmlənsin" rejimi: 20% + 15% → 15 − 3 − 2.25 = 9.75
+    await setClub(adminToken, { combine: 'stack' })
+    const stacked = await start({ kind: 'room', people: 2, promoCode: 'BIG20' })
+    assert.equal((await end(stacked.body.visit.id)).body.visit.amount, 9.75)
+
+    // Club söndürülüb — endirim yoxdur, kabinetdə status yoxdur
+    await setClub(adminToken, { enabled: false })
+    const off = await start({})
+    assert.equal(off.body.visit.club, null)
+    assert.equal((await end(off.body.visit.id)).body.visit.amount, 4)
+    assert.equal((await api.get('/api/club').set(bearer(user.token))).body.me, null)
+  })
+
+  it('ayarlar yoxlanılır: birinci status 0-dan, hədlər artan, faiz maksimumdan çox deyil; icazə lazımdır', async () => {
+    const adminToken = await createAdmin()
+    const { body: user } = await register()
+    const { body } = await api.get('/api/admin/club').set(bearer(adminToken))
+    const tiers = body.club.tiers
+
+    const badStart = await api.put('/api/admin/club').set(bearer(adminToken)).send({ ...body.club, tiers: tiers.map((t, i) => (i === 0 ? { ...t, minVisits: 1 } : t)) })
+    assert.ok(badStart.body.error.fields['tiers.0.minVisits'])
+    const badOrder = await api.put('/api/admin/club').set(bearer(adminToken)).send({ ...body.club, tiers: tiers.map((t, i) => (i === 2 ? { ...t, minVisits: 5 } : t)) })
+    assert.ok(badOrder.body.error.fields['tiers.2.minVisits'])
+    const tooMuch = await api.put('/api/admin/club').set(bearer(adminToken)).send({ ...body.club, tiers: tiers.map((t, i) => (i === 3 ? { ...t, hallPercent: 30 } : t)) })
+    assert.ok(tooMuch.body.error.fields['tiers.3.hallPercent'])
+
+    // Kartı redaktə: ad, endirim, üstünlüklər, hədiyyələr; yeni status əlavə etmək
+    const edited = await api
+      .put('/api/admin/club')
+      .set(bearer(adminToken))
+      .send({
+        ...body.club,
+        tiers: [
+          ...tiers.map((t, i) => (i === 1 ? { ...t, name: { az: 'Dost', en: '', ru: '' }, hallPercent: 12, benefits: [{ az: 'Pulsuz çay' }], gifts: [{ az: 'Tort' }] } : t)),
+          { key: 'efsane', name: { az: 'Əfsanə' }, icon: '👑', color: 'yellow', minVisits: 40, hallPercent: 20, roomPercent: 20, benefits: [], gifts: [] },
+        ],
+      })
+    assert.equal(edited.status, 200, JSON.stringify(edited.body))
+    assert.equal(edited.body.club.tiers[1].name.az, 'Dost')
+    assert.equal(edited.body.club.tiers[1].gifts[0].az, 'Tort')
+    assert.equal(edited.body.club.tiers.length, 5)
+    assert.equal((await api.get('/api/club')).body.club.tiers[4].name.az, 'Əfsanə')
+
+    assert.equal((await api.get('/api/admin/club').set(bearer(user.token))).status, 403)
+  })
+})
+
+describe('DırDır Club — admin status verir', () => {
+  const dayAgo = (n) => {
+    const d = new Date(Date.now() + 4 * 3600 * 1000)
+    d.setUTCDate(d.getUTCDate() - n)
+    return d.toISOString().slice(0, 10)
+  }
+  const pastVisit = (userId, day) =>
+    ctx.prisma.visit.create({
+      data: { userId, name: 'X', day, startedAt: new Date(`${day}T10:00:00Z`), endedAt: new Date(`${day}T12:00:00Z`), minutes: 120, amount: 8, paymentMethod: 'cash' },
+    })
+
+  it('verilən status başlanğıcdır: gəldikcə artır, bonus vaxtı bitəndə azalır; aşağı salmaq və ləğv etmək olur', async () => {
+    const adminToken = await createAdmin()
+    const { body: user } = await register()
+    const { body } = await api.get('/api/admin/club').set(bearer(adminToken))
+    await api.put('/api/admin/club').set(bearer(adminToken)).send({ ...body.club, startDay: dayAgo(400) })
+    const give = (tier, token = adminToken) => api.put(`/api/admin/club-members/${user.user.id}`).set(bearer(token)).send({ tier })
+    const me = async () => (await api.get('/api/club').set(bearer(user.token))).body.me
+
+    assert.equal((await give('yoxdur')).status, 400)
+    assert.equal((await give('sakin', user.token)).status, 403)
+
+    // 0 ziyarətli müştəriyə Sakin (15) — bonus 15
+    const res = await give('sakin')
+    assert.equal(res.status, 200)
+    assert.equal(res.body.club.tier.key, 'sakin')
+    assert.equal(res.body.club.realVisits, 0)
+    assert.equal(res.body.club.given.bonus, 15)
+    let status = await me()
+    assert.equal(status.tier.key, 'sakin')
+    assert.equal(status.next.key, 'ev-sahibi')
+    assert.equal(status.next.needed, 10)
+
+    // Seansa Sakin endirimi yazılır: zal 1 saat 4₼ − 15% = 3.4
+    const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+    const visit = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ userId: user.user.id, startedAt: minutesAgo(60) })
+    assert.equal(visit.body.visit.club.tier, 'sakin')
+    assert.equal((await api.post(`/api/admin/visits/${visit.body.visit.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'cash' })).body.visit.amount, 3.4)
+
+    // Gəldikcə artır: daha 9 fərqli gün (yuxarıdakı seansla 10) — Ev sahibi. 2–10 gün əvvəl: gecə yarısından sonra
+    // "60 dəqiqə əvvəl" başlayan seans dünənə düşə bilər, onunla eyni gün olmasın
+    for (let i = 2; i <= 10; i++) await pastVisit(user.user.id, dayAgo(i))
+    status = await me()
+    assert.equal(status.visits, 25)
+    assert.equal(status.tier.key, 'ev-sahibi')
+
+    // Bonusun vaxtı bitdi — yalnız həqiqi ziyarətlər qalır (10 — Qonaq)
+    await ctx.prisma.user.update({ where: { id: user.user.id }, data: { clubBonusUntil: dayAgo(1) } })
+    status = await me()
+    assert.equal(status.visits, 10)
+    assert.equal(status.tier.key, 'qonaq')
+    assert.equal(status.given, null)
+
+    // Aşağı salmaq: 10 ziyarətli (Qonaq) müştəriyə Tanış — bonus −10
+    const down = await give('tanish')
+    assert.equal(down.body.club.given.bonus, -10)
+    assert.equal(down.body.club.tier.key, 'tanish')
+    assert.equal((await me()).visits, 0)
+
+    // Ləğv — yenə ziyarətlərə görə
+    const cleared = await give(null)
+    assert.equal(cleared.body.club.given, null)
+    assert.equal(cleared.body.club.tier.key, 'qonaq')
   })
 })

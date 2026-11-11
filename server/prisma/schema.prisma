@@ -32,6 +32,14 @@ model User {
   permissions       String[]  @default([]) // adi admin: açıq bölmələr (server/src/permissions.js)
   blockedAt         DateTime? // doluysa — admin bloklayıb, daxil ola bilmir
   newsletter        Boolean   @default(false) // yeniliklərdən xəbərdar olmaq istəyir (qeydiyyatda və profildə açar)
+  // DırDır Club: admin müştəriyə status verəndə həmin statusa çatmaq üçün çatışmayan ziyarətlər "bonus" kimi yazılır
+  // (status aşağı salınanda mənfi). Bonus adi ziyarət kimi clubBonusUntil gününə qədər sayılır — müştəri o statusdan
+  // adi qayda ilə davam edir: gəldikcə artır, gəlmədikcə azalır.
+  clubTier          String? // verilən statusun açarı (tarixçə üçün)
+  clubBonus         Int?
+  clubBonusUntil    String? // YYYY-MM-DD, Bakı vaxtı — bu gündən bonus sayılmır
+  clubTierSetAt     DateTime?
+  clubTierSetById   String? // hansı admin verib
   avatarId          String?   @unique
   avatar            Image?    @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
   createdAt         DateTime  @default(now())
@@ -233,6 +241,9 @@ model Visit {
   discountValue Decimal?  @db.Decimal(8, 2)
   deposit       Decimal?  @db.Decimal(8, 2) // beh: əvvəlcədən alınan məbləğ (bitəndə qalıq ödənilir)
   depositMethod String? // behin ödəniş üsulu: cash | card
+  // DırDır Club: seans başlayanda müştərinin statusu və endirimi (sonra qaydalar dəyişsə də seansın endirimi qalır)
+  // { tier, name, hallPercent, roomPercent, stack, group } — server/src/club.js
+  club          Json?
   startedAt     DateTime
   endedAt       DateTime? // boşdursa seans davam edir
   minutes       Int? // bitəndə: qalma müddəti (dəqiqə)

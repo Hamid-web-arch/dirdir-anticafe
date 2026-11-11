@@ -23,6 +23,7 @@ import {
   PiTicketBold,
   PiTagBold,
   PiHandCoinsBold,
+  PiCrownBold,
   PiTrashBold,
   PiUserCircleCheckBold,
   PiUsersBold,
@@ -47,6 +48,7 @@ import {
   paymentSplit,
 } from '../../pricing/visitPrice.js'
 import { formatAzDate } from '../../i18n/index.jsx'
+import { tierStyle } from '../../lib/club.js'
 import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, Spinner } from './ui.jsx'
 
 // Məbləğ: 4 → "4₼", 5.5 → "5.50₼"
@@ -61,7 +63,21 @@ const discountBody = (d) => {
   return String(d.value).trim() !== '' && value > 0 ? { type: d.type, value } : null
 }
 // Tətbiq olunan endirimin adı (cəmlənmir — ən böyüyü)
-const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim' }
+const DISCOUNT_SOURCE = { student: 'tələbə endirimi', promo: 'promokod', custom: 'xüsusi endirim', club: 'DırDır Club' }
+
+// Müştərinin DırDır Club statusu: "☕ Qonaq · −10%" (axtarışda və seçiləndə)
+function ClubTag({ club, kind = 'hall' }) {
+  if (!club?.tier) return null
+  const { tier } = club
+  const style = tierStyle(tier.color)
+  const percent = kind === 'room' ? tier.roomPercent : tier.hallPercent
+  return (
+    <span className={`inline-flex items-center gap-1 text-[0.7rem] font-bold px-2 py-0.5 rounded-full ${style.soft} ${style.text}`}>
+      {tier.icon} {tier.name.az}
+      {percent > 0 && ` · −${percent}%`}
+    </span>
+  )
+}
 // Beh formada: { amount: '', method: 'cash' | 'card' }
 const EMPTY_DEPOSIT = { amount: '', method: 'cash' }
 // Formadakı beh → serverə; boşdursa və ya 0-dırsa — beh yoxdur (null)
@@ -445,7 +461,9 @@ function VisitTableRow({ visit, now, pricing, onChange, onDelete, notify }) {
           </div>
           {price.discount > 0 && (
             <div className="text-[0.72rem] text-inkdim mt-0.5">
-              {DISCOUNT_SOURCE[price.discountSource]} −{money(price.discount)}
+              {price.clubDiscount > 0 && price.discountSource !== 'club'
+                ? `${DISCOUNT_SOURCE[price.discountSource]} −${money(round2(price.discount - price.clubDiscount))} · DırDır Club −${money(price.clubDiscount)}`
+                : `${DISCOUNT_SOURCE[price.discountSource]} −${money(price.discount)}`}
             </div>
           )}
           {visit.note && <div className="text-[0.75rem] italic text-inkdim mt-0.5">{visit.note}</div>}
@@ -569,6 +587,11 @@ function VisitBadges({ visit, inTable }) {
       {visit.promoCode && (
         <span className={`${badge} text-brand-pink-deep bg-brand-pink-soft`}>
           <PiTicketBold size={13} /> {visit.promoCode} −{visit.promoPercent}%
+        </span>
+      )}
+      {visit.club && (
+        <span className={`${badge} text-brand-orange-deep bg-brand-orange-soft`} title="DırDır Club statusu (seans başlayanda)">
+          <PiCrownBold size={13} /> {visit.club.name} −{isRoom ? visit.club.roomPercent : visit.club.hallPercent}%
         </span>
       )}
       {visit.deposit > 0 && (
@@ -736,6 +759,7 @@ function NewVisit({ onCreated, roomBusy }) {
     promoPercent: promo?.percent,
     discountType: customDiscount?.type,
     discountValue: customDiscount?.value,
+    club: selected?.club?.tier ?? null,
   })
 
   return (
@@ -755,6 +779,11 @@ function NewVisit({ onCreated, roomBusy }) {
             <div className="text-[0.78rem] text-inkdim truncate">
               <b className="text-ink">{selected.customerCode}</b> · Qeydiyyatlı · {selected.phone}
             </div>
+            {selected.club && (
+              <div className="mt-1">
+                <ClubTag club={selected.club} kind={kind} />
+              </div>
+            )}
           </div>
           <button type="button" onClick={reset} aria-label="Seçimi ləğv et" className="p-1.5 rounded-full hover:bg-ink/10">
             <PiXBold size={15} />
@@ -797,6 +826,11 @@ function NewVisit({ onCreated, roomBusy }) {
                     <span className="block text-[0.78rem] text-inkdim truncate">
                       <b className="text-ink">{u.customerCode}</b> · {u.phone} · {u.email}
                     </span>
+                    {u.club && (
+                      <span className="block mt-0.5">
+                        <ClubTag club={u.club} />
+                      </span>
+                    )}
                   </span>
                 </button>
               ))}

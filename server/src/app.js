@@ -15,6 +15,7 @@ import { adminContentRouter } from './routes/admin-content.js'
 import { getSiteImages, getHeroVideo } from './site.js'
 import { serveVideo } from './videos.js'
 import { wheelRouter, adminWheelRouter } from './routes/wheel.js'
+import { clubRouter, adminClubRouter } from './routes/club.js'
 import { optionalAuth } from './auth.js'
 import { feedbackSchema } from './validation.js'
 import { adminRouter } from './routes/admin.js'
@@ -119,6 +120,8 @@ export function createApp() {
   app.use('/api/admin', adminAdminsRouter)
   app.use('/api/admin', adminStatsRouter)
   app.use('/api/wheel', wheelRouter)
+  app.use('/api/club', clubRouter)
+  app.use('/api/admin', adminClubRouter)
   app.use('/api/admin', adminWheelRouter)
 
   app.use(notFound)

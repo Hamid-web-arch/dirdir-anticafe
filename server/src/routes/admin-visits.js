@@ -6,6 +6,7 @@ import { requirePermission } from '../permissions.js'
 import { getPricing } from '../pricing.js'
 import { bakuDay, visitMinutes, visitPrice, publicVisit, paymentSplit } from '../visits.js'
 import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema } from '../validation.js'
+import { clubSnapshot } from '../club.js'
 
 // Günün hesabatı: admin hər gələn müştərinin seansını başladır və bitirir.
 // Qeydlər günlərə (Bakı vaxtı) bölünür və silinmir — tarixçədən istənilən günə baxmaq olur.
@@ -121,12 +122,15 @@ adminVisitsRouter.post('/visits', async (req, res) => {
   if (kind === 'room') await assertRoom({ people })
 
   let customerName = name
+  let club = null
   if (userId) {
     const user = await prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new HttpError(404, 'NOT_FOUND', 'İstifadəçi tapılmadı.')
     const active = await prisma.visit.findFirst({ where: { userId, endedAt: null } })
     if (active) throw new HttpError(409, 'VISIT_ACTIVE', 'Bu istifadəçinin artıq davam edən seansı var.')
     customerName = `${user.firstName} ${user.lastName}`
+    // DırDır Club: müştərinin indiki statusu və endirimi seansa yazılır
+    club = await clubSnapshot(userId)
   }
 
   const visit = await prisma.visit.create({
@@ -140,6 +144,7 @@ adminVisitsRouter.post('/visits', async (req, res) => {
       ...promo,
       ...discountFields(discount),
       ...depositFields(deposit),
+      ...(club ? { club } : {}),
       startedAt,
       note: note || null,
       createdById: req.user.id,
@@ -217,6 +222,7 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
         students: nextStudents,
         promoPercent: promo.promoPercent,
         ...nextDiscount,
+        club: visit.club,
       }),
     )
   }

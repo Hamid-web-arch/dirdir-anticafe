@@ -14,12 +14,14 @@ import { useEffect, useState } from 'react'
 // Promokod (zal və kino otağı): bütün məbləğdən promoPercent faiz.
 // Xüsusi endirim (admin verir, zal və kino otağı): bütün məbləğdən discountValue faiz (discountType 'percent')
 // və ya discountValue manat ('amount', məbləğdən çox ola bilməz).
-// Endirimlər cəmlənmir — hansı çoxdursa, o (saytdakı kalkulyatorla eyni). discountSource: 'student' | 'promo' | 'custom' | null.
+// DırDır Club status endirimi (club — seans başlayanda yazılan status): kino otağında bütün qiymətə, zalda müştərinin
+// öz payına (club.group — bütün qrupa). Endirimlər cəmlənmir — hansı çoxdursa, o; club.stack olanda status endirimi
+// digərinin üstünə gəlir. discountSource: 'student' | 'promo' | 'custom' | 'club' | null; clubDiscount — status payı.
 // Üçüncü parametr seansın özü ola bilər: visitPrice(pricing, minutes, visit).
 export function visitPrice(
   pricing,
   minutes,
-  { people = 1, kind = 'hall', students = 0, promoPercent = 0, discountType = null, discountValue = null } = {},
+  { people = 1, kind = 'hall', students = 0, promoPercent = 0, discountType = null, discountValue = null, club = null } = {},
 ) {
   const { hall, room, studentDiscount } = pricing
   const grace = hall.graceMinutes ?? 10
@@ -29,11 +31,24 @@ export function visitPrice(
   const custom = Number(discountValue ?? 0)
   const customOff = (base) =>
     custom > 0 ? round2(discountType === 'amount' ? Math.min(custom, base) : (base * Math.min(custom, 100)) / 100) : 0
-  // Ən böyük endirim; bərabər olanda sıra: tələbə, promokod, xüsusi
+  // Ən böyük endirim; bərabər olanda sıra: tələbə, promokod, xüsusi, club
   const best = (options) => {
     const [source, discount] = options.reduce((a, b) => (b[1] > a[1] ? b : a), [null, 0])
     return { discount, discountSource: discount > 0 ? source : null }
   }
+  // DırDır Club status endirimi (seansın club məlumatından). club.stack — digər endirimin üstünə gəlir,
+  // yoxsa digərləri ilə yarışır (ən böyüyü). Cəmi heç vaxt məbləğdən çox olmur.
+  const withClub = (options, clubOff, total) => {
+    if (!(clubOff > 0)) return { ...best(options), clubDiscount: 0 }
+    if (!club.stack) {
+      const result = best([...options, ['club', clubOff]])
+      return { ...result, clubDiscount: result.discountSource === 'club' ? result.discount : 0 }
+    }
+    const other = best(options)
+    const discount = round2(Math.min(total, other.discount + clubOff))
+    return { discount, discountSource: other.discountSource ?? 'club', clubDiscount: round2(discount - other.discount) }
+  }
+  const clubPercent = club ? (kind === 'room' ? club.roomPercent : club.hallPercent) ?? 0 : 0
 
   if (kind === 'room') {
     const { smallGroup, group } = room
@@ -41,15 +56,21 @@ export function visitPrice(
       people <= smallGroup.maxPeople
         ? smallGroup.firstHour + (hours - 1) * smallGroup.nextHour
         : group.perHour * hours + Math.max(0, people - group.includedPeople) * group.extraPerPerson * hours
-    const { discount, discountSource } = best([
-      ['promo', round2((raw * (promoPercent ?? 0)) / 100)],
-      ['custom', customOff(raw)],
-    ])
+    // Kino otağında status endirimi bütün otağın qiymətinə
+    const { discount, discountSource, clubDiscount } = withClub(
+      [
+        ['promo', round2((raw * (promoPercent ?? 0)) / 100)],
+        ['custom', customOff(raw)],
+      ],
+      round2((raw * clubPercent) / 100),
+      raw,
+    )
     return {
       billedHours: hours,
       perPerson: null,
       discount,
       discountSource,
+      clubDiscount,
       studentEligible: false,
       studentPercent: 0,
       amount: round2(raw - discount),
@@ -62,16 +83,22 @@ export function visitPrice(
   const studentCount = Math.min(students, people)
   const percent = studentCount > 0 ? studentPercent(studentDiscount, hours) : 0
   const subtotal = perPerson * people
-  const { discount, discountSource } = best([
-    ['student', round2((perPerson * studentCount * percent) / 100)],
-    ['promo', round2((subtotal * (promoPercent ?? 0)) / 100)],
-    ['custom', customOff(subtotal)],
-  ])
+  // Zalda status endirimi müştərinin öz payına (club.group — bütün qrupa)
+  const { discount, discountSource, clubDiscount } = withClub(
+    [
+      ['student', round2((perPerson * studentCount * percent) / 100)],
+      ['promo', round2((subtotal * (promoPercent ?? 0)) / 100)],
+      ['custom', customOff(subtotal)],
+    ],
+    round2(((club?.group ? subtotal : perPerson) * clubPercent) / 100),
+    subtotal,
+  )
   return {
     billedHours: hours,
     perPerson,
     discount,
     discountSource,
+    clubDiscount,
     studentEligible: percent > 0,
     studentPercent: percent,
     amount: round2(subtotal - discount),

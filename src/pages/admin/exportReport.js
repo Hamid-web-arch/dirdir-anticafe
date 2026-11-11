@@ -17,6 +17,7 @@ const discountText = (v) => {
   if (v.students > 0 && v.kind !== 'room') parts.push(v.people > 1 ? `${v.students} tələbə` : 'tələbə')
   if (v.promoCode) parts.push(`${v.promoCode} −${v.promoPercent}%`)
   if (v.discountValue > 0) parts.push(`endirim −${v.discountValue}${v.discountType === 'amount' ? ' ₼' : '%'}`)
+  if (v.club) parts.push(`Club: ${v.club.name} −${v.kind === 'room' ? v.club.roomPercent : v.club.hallPercent}%`)
   if (v.deposit > 0) parts.push(`beh ${money(v.deposit)} (${METHOD[v.depositMethod] ?? '?'})`)
   return parts.join(', ')
 }

@@ -24,6 +24,7 @@ import { api, assetUrl } from '../lib/api.js'
 import { formatPhone, phoneDigits, isPhone, MIN_PASSWORD, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
 import { useSeo } from '../lib/seo.js'
+import { tierStyle } from '../lib/club.js'
 import { usePricing } from '../pricing/PricingContext.jsx'
 import { visitPrice, visitMinutes, elapsedClock, durationText, useNow, bakuTime } from '../pricing/visitPrice.js'
 
@@ -51,6 +52,9 @@ export default function Account() {
       <div className="relative z-10 max-w-[760px] mx-auto px-5 sm:px-7 flex flex-col gap-6">
         <Reveal>
           <ProfileCard />
+        </Reveal>
+        <Reveal delay={20}>
+          <ClubCard />
         </Reveal>
         <Reveal delay={30}>
           <Gifts />
@@ -425,6 +429,144 @@ function PasswordCard() {
 
 // Anticafe ziyarətləri: admin seansı başladanda burada canlı saat və məbləğ görünür.
 // Seans başlayıb-bitəndə görünsün deyə siyahı vaxtaşırı yenilənir.
+// DırDır Club: statusun, növbəti statusa qalan ziyarətlər, üstünlüklər və bütün statuslar (qaydalar).
+// Club söndürülübsə kart görünmür.
+function ClubCard() {
+  const { t, pick, date } = useI18n()
+  const { token } = useAuth()
+  const [data, setData] = useState(null)
+  const [showAll, setShowAll] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    api('/club', { token })
+      .then((d) => !cancelled && setData(d))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  const me = data?.me
+  if (!me) return null
+  const { club } = data
+  const tier = club.tiers[me.tier.index] ?? club.tiers[0]
+  const style = tierStyle(tier.color)
+  const next = me.next
+  // Hazırkı statusun əvvəlindən növbəti statusa qədər irəliləyiş
+  const progress = next ? Math.min(100, Math.round(((me.visits - tier.minVisits) / (next.minVisits - tier.minVisits)) * 100)) : 100
+  const items = (list) => list.map(pick).filter(Boolean)
+
+  return (
+    <div className="bg-card border border-ink/10 rounded-[24px] overflow-hidden">
+      <div className={`${style.soft} p-6 sm:p-8`}>
+        <div className="flex items-center gap-4">
+          <span className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-[22px] bg-card shadow-lift flex items-center justify-center text-[2.2rem] sm:text-[2.6rem]">
+            {tier.icon}
+          </span>
+          <div className="min-w-0">
+            <p className={`text-[0.75rem] font-bold uppercase tracking-wider ${style.text}`}>{t('club.title')}</p>
+            <h2 className="font-display font-bold text-[1.7rem] sm:text-[2rem] leading-tight">{pick(tier.name)}</h2>
+            <p className="text-[0.9rem] text-inkdim font-semibold">{t('club.visits', { count: me.visits, months: club.months })}</p>
+            {me.given?.name && me.given.bonus > 0 && <p className="text-[0.85rem] font-bold mt-0.5">{t('club.given', { name: pick(me.given.name) })}</p>}
+          </div>
+        </div>
+
+        {(tier.hallPercent > 0 || tier.roomPercent > 0) && (
+          <p className={`inline-flex mt-4 px-3 py-1.5 rounded-full bg-card font-bold text-[0.9rem] ${style.text}`}>
+            {t('club.discounts', { hall: tier.hallPercent, room: tier.roomPercent })}
+          </p>
+        )}
+
+        <div className="mt-5">
+          <div className="h-3 rounded-full bg-card overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+            <div className={`h-full rounded-full ${style.solid} transition-[width] duration-700`} style={{ width: `${Math.max(4, progress)}%` }} />
+          </div>
+          <p className="text-[0.88rem] font-bold mt-2">
+            {next ? t('club.next', { icon: next.icon, name: pick(next.name), count: next.needed }) : t('club.top')}
+          </p>
+        </div>
+      </div>
+
+      <div className="p-6 sm:p-8 flex flex-col gap-5">
+        {items(tier.benefits).length > 0 && (
+          <div>
+            <h3 className="font-display font-bold text-[1.05rem] mb-2">{t('club.benefits')}</h3>
+            <ul className="flex flex-col gap-1.5">
+              {items(tier.benefits).map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-[0.92rem]">
+                  <PiCheckCircleFill size={18} className={`shrink-0 mt-0.5 ${style.text}`} /> {b}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {items(tier.gifts).length > 0 && (
+          <div>
+            <h3 className="font-display font-bold text-[1.05rem] mb-2">{t('club.gifts')}</h3>
+            <ul className="flex flex-col gap-1.5">
+              {items(tier.gifts).map((g, i) => (
+                <li key={i} className="flex items-start gap-2 text-[0.92rem]">
+                  <span aria-hidden="true">🎁</span> {g}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {me.tier.index > 0 && (
+          <p className="text-[0.85rem] text-inkdim">
+            {t('club.keep', { months: club.months, count: me.keepVisits })}
+            {me.leavesOn && <> {t('club.leaves', { date: date(`${me.leavesOn}T12:00:00`) })}</>}
+          </p>
+        )}
+
+        <div>
+          <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll} className="font-bold text-primary hover:underline text-[0.92rem]">
+            {showAll ? t('club.hideTiers') : t('club.allTiers')}
+          </button>
+          {showAll && (
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="grid sm:grid-cols-2 gap-3">
+                {club.tiers.map((tr, i) => {
+                  const s = tierStyle(tr.color)
+                  const upper = club.tiers[i + 1]
+                  const current = i === me.tier.index
+                  return (
+                    <div key={tr.key} className={`rounded-2xl border-2 p-4 ${current ? s.border : 'border-ink/10'}`}>
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <span className={`w-10 h-10 rounded-xl ${s.soft} flex items-center justify-center text-[1.3rem]`}>{tr.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-display font-bold leading-tight">{pick(tr.name)}</div>
+                          <div className="text-[0.75rem] text-inkdim font-semibold">
+                            {upper ? t('club.range', { from: tr.minVisits, to: upper.minVisits - 1 }) : t('club.rangeFrom', { from: tr.minVisits })}
+                          </div>
+                        </div>
+                        {current && <span className={`text-[0.7rem] font-bold px-2 py-0.5 rounded-full ${s.soft} ${s.text}`}>{t('club.you')}</span>}
+                      </div>
+                      <p className={`text-[0.82rem] font-bold ${s.text} mb-1.5`}>
+                        {t('club.discounts', { hall: tr.hallPercent, room: tr.roomPercent })}
+                      </p>
+                      <ul className="text-[0.8rem] text-inkdim flex flex-col gap-0.5">
+                        {[...items(tr.benefits), ...items(tr.gifts).map((g) => `🎁 ${g}`)].map((line, j) => (
+                          <li key={j}>• {line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[0.82rem] text-inkdim">
+                {t('club.rules', { months: club.months })} {club.combine === 'stack' ? t('club.combineStack') : t('club.combine')}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Hədiyyə çarxından qazanılanlar. Heç fırlatmayıbsa kart görünmür.
 function Gifts() {
   const { t, pick, date } = useI18n()

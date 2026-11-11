@@ -11,7 +11,9 @@ import {
   PiArrowsClockwiseBold,
 } from 'react-icons/pi'
 import { useAuth } from '../../auth/AuthContext.jsx'
-import { assetUrl } from '../../lib/api.js'
+import { api, assetUrl } from '../../lib/api.js'
+import { tierStyle } from '../../lib/club.js'
+import { formatAzDate } from '../../i18n/index.jsx'
 import { formatPhone, MIN_PASSWORD } from '../../lib/forms.js'
 import {
   useAdminApi,
@@ -320,7 +322,14 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
             )}
           </div>
           <div className="text-[0.82rem] text-inkdim truncate">
-            <b className="text-ink">{u.customerCode}</b> · {u.email} · +994 {formatPhone(u.phone)}
+            <b className="text-ink">{u.customerCode}</b>
+            {u.club?.tier && (
+              <span title={`DırDır Club · ${u.club.visits} ziyarət`}>
+                {' '}
+                · {u.club.tier.icon} {u.club.tier.name.az}
+              </span>
+            )}{' '}
+            · {u.email} · +994 {formatPhone(u.phone)}
           </div>
         </div>
         <div className="hidden sm:block text-right text-[0.8rem] text-inkdim shrink-0">
@@ -337,9 +346,105 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
             Qeydiyyat: {formatDateTime(u.createdAt)}
             {u.blockedAt && ` · Bloklanıb: ${formatDateTime(u.blockedAt)}`}
           </div>
+          <ClubControl user={u} onChanged={onChanged} onError={onError} />
           {actions}
         </div>
       )}
+    </div>
+  )
+}
+
+// Statusların siyahısı bir dəfə yüklənir (bütün sətirlər üçün)
+let clubTiersRequest = null
+const loadClubTiers = () =>
+  (clubTiersRequest ??= api('/club')
+    .then((d) => (d.club.enabled ? d.club.tiers : []))
+    .catch(() => {
+      clubTiersRequest = null
+      return []
+    }))
+
+// DırDır Club statusu: ziyarətlərə görə; admin istədiyi statusu verə bilər — o statusdan adi qayda ilə davam edir
+function ClubControl({ user, onChanged, onError }) {
+  const request = useAdminApi()
+  const [tiers, setTiers] = useState(null)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    loadClubTiers().then((t) => alive && setTiers(t))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (!tiers?.length || !user.club) return null
+  const { club } = user
+  const { given } = club
+  const dayText = (day) => formatAzDate(`${day}T12:00:00`, { day: 'numeric', month: 'long', year: 'numeric' })
+
+  // tier: statusun açarı — həmin statusu ver; null — verilən statusu ləğv et
+  const send = async (tier, which) => {
+    setBusy(which)
+    try {
+      const res = await request(`/admin/club-members/${user.id}`, { method: 'PUT', body: { tier } })
+      onChanged({ ...user, club: res.club })
+    } catch (err) {
+      onError(err)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-ink/10 p-3.5 flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-bold text-[0.92rem]">DırDır Club:</span>
+        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[0.85rem] ${tierStyle(club.tier.color).soft} ${tierStyle(club.tier.color).text}`}>
+          {club.tier.icon} {club.tier.name.az}
+        </span>
+        <span className="text-[0.8rem] text-inkdim">{club.visits} ziyarət sayılır</span>
+      </div>
+
+      {given && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-orange-soft px-3 py-2 text-[0.8rem]">
+          <span className="flex-1 min-w-[200px]">
+            Admin {given.setAt ? formatAzDate(given.setAt, { day: 'numeric', month: 'long' }) : ''} <b>{given.name?.az ?? 'status'}</b> verib: həqiqi{' '}
+            {club.realVisits} ziyarətin üstünə {given.bonus >= 0 ? `+${given.bonus}` : given.bonus} bonus, {dayText(given.until)} tarixinədək sayılır.
+          </span>
+          <Button variant="ghost" size="sm" loading={busy === 'clear'} onClick={() => send(null, 'clear')}>
+            Ləğv et
+          </Button>
+        </div>
+      )}
+
+      <div>
+        <span className="block text-[0.8rem] font-bold text-inkdim mb-1.5">Status ver:</span>
+        <div className="flex flex-wrap gap-1.5">
+          {tiers.map((t) => {
+            const style = tierStyle(t.color)
+            const current = t.key === club.tier.key
+            return (
+              <button
+                key={t.key}
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => send(t.key, t.key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full border-2 font-bold text-[0.85rem] transition-colors disabled:opacity-60 ${style.soft} ${style.text} ${
+                  current ? 'border-ink' : 'border-transparent hover:border-ink/30'
+                }`}
+              >
+                {busy === t.key && <PiArrowsClockwiseBold size={14} className="animate-spin" />}
+                {t.icon} {t.name.az}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <p className="text-[0.75rem] text-inkdim">
+        Verilən status başlanğıc nöqtəsidir: müştəri gəldikcə status yüksəlir, gəlmədikcə adi qayda ilə azalır (bonus ziyarətlər də Club-ın hesablama
+        müddəti qədər sayılır). Aşağı status verib endirimi azaltmaq da olar.
+      </p>
     </div>
   )
 }

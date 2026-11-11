@@ -16,6 +16,7 @@ export const ADMIN_PERMISSIONS = [
   'slider', // Slider
   'gorunus', // Görünüş
   'carx', // Hədiyyə çarxı (hədiyyələr, müddət, qazananlar)
+  'club', // DırDır Club (statuslar, endirimlər, hədiyyələr)
 ]
 
 // Baş admin hər şeyə icazəlidir; digər admin yalnız ona verilən bölmələrə

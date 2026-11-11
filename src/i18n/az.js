@@ -360,6 +360,27 @@ export default {
     VALIDATION: 'Məlumatlar düzgün deyil.',
   },
 
+  // DırDır Club — müştəri kabinetində status kartı (src/pages/Account.jsx)
+  club: {
+    title: 'DırDır Club',
+    visits: { one: 'Son {months} ayda {count} ziyarət', other: 'Son {months} ayda {count} ziyarət' },
+    discounts: 'Zal −{hall}% · Kino otağı −{room}%',
+    next: 'Növbəti status — {icon} {name}: daha {count} ziyarət',
+    top: 'Ən yüksək statusdasan! 🎉',
+    given: 'DırDır sənə {name} statusunu hədiyyə edib 🎉 Gəldikcə daha da yüksəlirsən.',
+    keep: 'Statusunu qorumaq üçün son {months} ayda ən az {count} ziyarət lazımdır.',
+    leaves: 'Gəlməsən, {date} tarixində ən köhnə ziyarətin hesabdan çıxacaq.',
+    benefits: 'Üstünlüklərin',
+    gifts: 'Hədiyyələr',
+    allTiers: 'Bütün statuslar və qaydalar',
+    hideTiers: 'Gizlət',
+    range: '{from}–{to} ziyarət',
+    rangeFrom: '{from}+ ziyarət',
+    you: 'sən buradasan',
+    rules: 'Status son {months} aydakı ödənişli ziyarətlərə görə hər gün yenidən hesablanır. Bir gündə bir neçə dəfə gəlmək 1 ziyarət sayılır, hədiyyə (pulsuz) ziyarətlər sayılmır. Status endirimi kassada müştəri kodunu deyəndə tətbiq olunur.',
+    combine: 'Status endirimi digər endirimlərlə (tələbə, promokod) cəmlənmir — hansı çoxdursa, o tətbiq olunur.',
+    combineStack: 'Status endirimi digər endirimlərin (tələbə, promokod) üstünə gəlir.',
+  },
   account: {
     customerCode: 'Müştəri kodun',
     customerCodeHint: 'Kafedə bu kodu de — səni dərhal tapaq.',
