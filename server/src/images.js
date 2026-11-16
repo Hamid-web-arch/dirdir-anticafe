@@ -18,7 +18,20 @@ const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'gif', 'heif'])
 // "Şəkil bombası"na qarşı: kiçik fayl, amma nəhəng ölçü (məs. 50000×50000) serveri yükləməsin. 50 MP kifayətdir.
 const MAX_PIXELS = 50_000_000
 
-export async function processImage(buffer, preset) {
+// Yaddaşa qənaət (Render-in pulsuz serverində 512 MB): libvips emal olunmuş şəkilləri yaddaşda saxlamasın,
+// bir şəkli bir ip emal etsin. Böyük PNG/HEIC (məs. 48 MP) açılanda ~50 MB tutur — bir neçəsi eyni anda
+// yüklənsə yaddaş dolardı, ona görə şəkillər növbə ilə, bir-bir emal olunur.
+sharp.cache(false)
+sharp.concurrency(1)
+let queue = Promise.resolve()
+
+export function processImage(buffer, preset) {
+  const run = queue.then(() => convert(buffer, preset))
+  queue = run.catch(() => {})
+  return run
+}
+
+async function convert(buffer, preset) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new HttpError(400, 'IMAGE_INVALID', 'Şəkil faylı göndərilməyib.')
   }
