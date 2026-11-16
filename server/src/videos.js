@@ -23,16 +23,24 @@ export function checkVideo(buffer) {
 
 export const videoUrl = (id) => (id ? `/api/videos/${id}` : null)
 
-// Video hər sorğuda bazadan oxunmasın — sonuncu bir neçəsi yaddaşda saxlanır (id dəyişmir, köhnəlmir)
+// Video hər sorğuda bazadan oxunmasın — yalnız sonuncu yaddaşda saxlanır (id dəyişmir, köhnəlmir).
+// Yaddaşda saxlanan vədin (Promise) özüdür: server oyananda brauzerlər videonu eyni anda bir neçə hissə ilə
+// istəyir — hər sorğu videonu bazadan ayrıca oxusaydı (hər biri ~12 MB və surətləri), Render-in 512 MB
+// yaddaşı dolurdu və server yenidən başlayırdı. İndi eyni anda gələn sorğular bir oxumanı gözləyir.
 const memory = new Map()
-async function loadVideo(id) {
+function loadVideo(id) {
   if (memory.has(id)) return memory.get(id)
-  const video = await prisma.video.findUnique({ where: { id }, select: { mime: true, data: true } })
-  if (!video) return null
-  const entry = { mime: video.mime, data: Buffer.from(video.data) }
-  memory.set(id, entry)
-  if (memory.size > 2) memory.delete(memory.keys().next().value)
-  return entry
+  const pending = prisma.video
+    .findUnique({ where: { id }, select: { mime: true, data: true } })
+    .then((video) => (video ? { mime: video.mime, data: Buffer.from(video.data.buffer, video.data.byteOffset, video.data.byteLength) } : null))
+  memory.clear()
+  memory.set(id, pending)
+  // Uğursuz oxuma və ya olmayan video yaddaşda qalmasın — növbəti sorğu yenidən cəhd etsin
+  pending.then(
+    (entry) => entry || memory.delete(id),
+    () => memory.delete(id),
+  )
+  return pending
 }
 
 // Brauzerlər (xüsusən iPhone Safari) videonu hissə-hissə istəyir: "Range: bytes=0-1" — 206 cavabı lazımdır
