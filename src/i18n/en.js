@@ -58,11 +58,27 @@ export default {
     titleA: '1 hour, {price} manat —',
     titleB: 'unlimited and super cozy',
     text: 'At {name} the first hour is just {first}, every next hour is {next} — and however long you stay, you never pay more than {cap}. Sweets, tea, coffee and soft drinks are unlimited, plus board games and our own cinema room.',
+    titleShortA: '1 hour {price} —',
+    titleShortB: 'everything unlimited',
+    capLine: 'However long you stay, max {cap}.',
+    openNow: 'Open now · until {time}',
+    closedNow: 'Closed · opens at {time}',
+    location: 'Sahil metro',
+    featTea: 'Unlimited tea, coffee, sweets',
+    featGames: 'Board games',
+    featCinema: 'Cinema room',
+    roomCard: 'up to {people} people · by booking',
     ctaPrice: 'See prices →',
     ctaInstagram: 'Follow on Instagram',
     statFirst: 'first hour, all included',
     statHours: 'open daily',
     statCinema: 'our own cinema room',
+  },
+
+  bar: {
+    label: 'Quick contact',
+    reserve: 'Book a spot',
+    directions: 'Directions',
   },
 
   wheel: {

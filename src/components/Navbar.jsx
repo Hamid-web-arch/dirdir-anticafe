@@ -13,7 +13,7 @@ import {
   PiMoonBold,
 } from 'react-icons/pi'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { reserveUrl } from '../data/business.js'
+import { visitUrl } from '../data/business.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { useI18n, LANGUAGES } from '../i18n/index.jsx'
 import { assetUrl } from '../lib/api.js'
@@ -98,7 +98,9 @@ export default function Navbar() {
           <span className="hidden sm:inline-flex">
             <ThemeToggle />
           </span>
-          <LanguageMenu />
+          <span className="hidden md:inline-flex">
+            <LanguageMenu />
+          </span>
           <Link
             to={account.to}
             aria-label={account.label}
@@ -108,12 +110,13 @@ export default function Navbar() {
           </Link>
           {/* Bütün ekranlarda yuxarıda: kiçik telefonda və lg-də (menyu sıx olanda) yalnız ikon, qalanında yazı ilə */}
           <ReserveButton
-            href={reserveUrl}
-            label={t('nav.reserve')}
+            wrapClassName="hidden md:inline-flex"
+            href={visitUrl}
+            label={t('bar.reserve')}
             className="inline-flex items-center gap-1.5 bg-primary text-white shadow-cta px-3 sm:px-5 lg:px-3 xl:px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-orange-deep transition-colors whitespace-nowrap"
           >
             <PiWhatsappLogoBold size={18} className="reserve-icon" />{' '}
-            <span className="hidden sm:inline lg:hidden xl:inline">{t('nav.reserve')}</span>
+            <span className="hidden sm:inline lg:hidden xl:inline">{t('bar.reserve')}</span>
           </ReserveButton>
 
           <button
@@ -163,6 +166,11 @@ export default function Navbar() {
                 </NavLink>
               </li>
             ))}
+            {/* Dil — telefonda yuxarıda yer olmadığı üçün burada */}
+            <li className="md:hidden border-b border-ink/10 py-3 flex items-center justify-between gap-3">
+              <span className="font-semibold text-[0.94rem] text-inkdim">{t('nav.language')}</span>
+              <LanguageButtons />
+            </li>
             {/* Qaranlıq rejim açarı — ən dar telefonlarda yuxarıda yer olmadığı üçün burada */}
             <li className="sm:hidden border-b border-ink/10 py-3.5 flex items-center justify-between gap-3">
               <span className="font-semibold text-[0.94rem] text-inkdim">{t('nav.darkMode')}</span>
@@ -258,6 +266,30 @@ function LanguageMenu() {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+// Telefon menyusunda dil seçimi: AZ · EN · RU düymələri
+function LanguageButtons() {
+  const { lang, setLang } = useI18n()
+  return (
+    <div className="inline-flex bg-ink/5 rounded-full p-1 gap-1">
+      {LANGUAGES.map((code) => (
+        <button
+          key={code}
+          type="button"
+          lang={code}
+          aria-pressed={code === lang}
+          aria-label={LANGUAGE_NAMES[code]}
+          onClick={() => setLang(code)}
+          className={`px-3 py-1.5 rounded-full text-[0.8rem] font-bold uppercase transition-colors ${
+            code === lang ? 'bg-primary text-white' : 'text-inkdim hover:text-ink'
+          }`}
+        >
+          {code}
+        </button>
+      ))}
     </div>
   )
 }

@@ -449,7 +449,7 @@ function useMobileTotalBar() {
   }, [])
 
   const visible = state.section && !state.total
-  // Sağ aşağıdakı WhatsApp düyməsi (FloatingWhatsApp) zolağın üstünə qalxsın
+  // Telefonda aşağı panel (MobileActionBar) gizlənsin, hədiyyə çarxı düyməsi zolağın üstünə qalxsın
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('dirdir:bottom-bar', { detail: visible }))
   }, [visible])

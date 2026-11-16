@@ -60,11 +60,27 @@ export default {
     titleA: '1 saat {price} manat —',
     titleB: 'limitsiz və çox rahat',
     text: '{name}-də ilk saat cəmi {first}, sonrakı hər saat {next}-dir — nə qədər qalsan da, {cap}-dan artıq ödəmirsən. Şirniyyat, çay, kofe, sərin içkilər limitsiz daxildir, üstəlik stolüstü oyunlar və öz kino otağımız var.',
+    titleShortA: '1 saat {price} —',
+    titleShortB: 'hər şey limitsiz',
+    capLine: 'Nə qədər qalsan da, maksimum {cap}.',
+    openNow: 'İndi açıqdır · {time}-dək',
+    closedNow: 'Bağlıdır · {time}-da açılır',
+    location: 'Sahil m.',
+    featTea: 'Limitsiz çay, kofe, şirniyyat',
+    featGames: 'Stolüstü oyunlar',
+    featCinema: 'Kino otağı',
+    roomCard: '{people} nəfərə qədər · rezerv ilə',
     ctaPrice: 'Qiymətə bax →',
     ctaInstagram: 'Instagramda izlə',
     statFirst: 'ilk saat, hər şey daxil',
     statHours: 'gündəlik iş saatları',
     statCinema: 'öz kino otağımız',
+  },
+
+  bar: {
+    label: 'Tez əlaqə',
+    reserve: 'Yer saxla',
+    directions: 'Yol tap',
   },
 
   // Hədiyyə çarxı (src/components/GiftWheel.jsx)

@@ -182,6 +182,16 @@ export default function GiftWheel() {
   const [state, setState, reload] = useWheelState(token)
   const [open, setOpen] = useState(false)
   const [raised, setRaised] = useState(false) // telefonda hesablayıcının aşağı zolağı açıqdır
+  // "Hədiyyəni indi qazan!" yazısı 3 saniyədən sonra çıxır, 8 saniyə sonra gizlənir (düymələri örtməsin)
+  const [label, setLabel] = useState(false)
+  useEffect(() => {
+    const show = setTimeout(() => setLabel(true), 3000)
+    const hide = setTimeout(() => setLabel(false), 11000)
+    return () => {
+      clearTimeout(show)
+      clearTimeout(hide)
+    }
+  }, [])
 
   useEffect(() => {
     const onBar = (e) => setRaised(Boolean(e.detail))
@@ -196,18 +206,18 @@ export default function GiftWheel() {
   return (
     <>
       <div
-        className={`fixed left-4 sm:left-6 z-40 flex items-center gap-2.5 transition-[bottom] duration-300 ${
-          raised ? 'bottom-24 md:bottom-6' : 'bottom-4 sm:bottom-6'
+        className={`fixed right-4 md:right-auto md:left-6 z-40 flex flex-row-reverse md:flex-row items-center gap-2.5 transition-[bottom] duration-300 ${
+          raised ? 'bottom-24 md:bottom-6' : 'bottom-[92px] md:bottom-6'
         }`}
       >
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label={t('wheel.open')}
-          className="gift-float relative shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
+          className="gift-float relative shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-full bg-primary text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
         >
           <MiniWheel className="gift-float-wheel absolute inset-1.5" />
-          <span className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-ink flex items-center justify-center border-2 border-white">
+          <span className="relative w-6 h-6 md:w-7 md:h-7 rounded-full bg-ink flex items-center justify-center border-2 border-white">
             <PiGiftBold size={16} />
           </span>
         </button>
@@ -216,7 +226,7 @@ export default function GiftWheel() {
           onClick={() => setOpen(true)}
           tabIndex={-1}
           aria-hidden="true"
-          className="gift-label bg-card text-ink border border-ink/10 shadow-lift rounded-2xl rounded-bl-md px-3 py-2 text-left font-display font-bold text-[0.82rem] sm:text-[0.9rem] leading-tight hover:border-primary"
+          className={`${label ? '' : 'hidden'} gift-label bg-card text-ink border border-ink/10 shadow-lift rounded-2xl rounded-br-md md:rounded-br-2xl md:rounded-bl-md px-3 py-2 text-left font-display font-bold text-[0.82rem] md:text-[0.9rem] leading-tight hover:border-primary`}
         >
           {t('wheel.label')}
         </button>

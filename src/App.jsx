@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
-import FloatingWhatsApp from './components/FloatingWhatsApp.jsx'
+import MobileActionBar from './components/MobileActionBar.jsx'
 import GiftWheel from './components/GiftWheel.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
 import Home from './pages/Home.jsx'
@@ -90,7 +90,7 @@ export default function App() {
       {!isAdmin && (
         <>
           <Footer />
-          <FloatingWhatsApp />
+          <MobileActionBar />
           <GiftWheel />
         </>
       )}
