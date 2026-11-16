@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import {
   PiTrophyBold,
   PiSignOutBold,
@@ -15,8 +15,14 @@ import {
   PiCoffeeBold,
   PiGiftBold,
   PiIdentificationCardBold,
+  PiCopyBold,
+  PiCheckBold,
+  PiHouseBold,
+  PiClockCounterClockwiseBold,
+  PiGearSixBold,
+  PiCaretDownBold,
+  PiUserBold,
 } from 'react-icons/pi'
-import Reveal from '../components/Reveal.jsx'
 import Switch from '../components/Switch.jsx'
 import { Field, PasswordField, FormError } from '../components/AuthLayout.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
@@ -30,10 +36,22 @@ import { visitPrice, visitMinutes, elapsedClock, durationText, useNow, bakuTime 
 
 const MAX_UPLOAD = 10 * 1024 * 1024
 
+// Kabinet: yuxarıda yığcam başlıq (şəkil, ad, müştəri kodu), altında üç bölmə:
+// Əsas — davam edən ziyarət, DırDır Club statusu, hədiyyələr; Ziyarətlər — keçmiş ziyarətlər və yarışlar;
+// Ayarlar — şəxsi məlumatlar, bildirişlər, şifrə, çıxış. Seçilən bölmə ünvanda saxlanır (?bolme=…).
+const TABS = [
+  { key: 'esas', icon: PiHouseBold, label: 'account.tabHome' },
+  { key: 'ziyaretler', icon: PiClockCounterClockwiseBold, label: 'account.tabVisits' },
+  { key: 'ayarlar', icon: PiGearSixBold, label: 'account.tabSettings' },
+]
+
 export default function Account() {
   const { t } = useI18n()
   const { user, checking, logout } = useAuth()
+  const [params, setParams] = useSearchParams()
   useSeo({ title: t('seo.account.title'), noindex: true })
+  const tab = TABS.some((x) => x.key === params.get('bolme')) ? params.get('bolme') : 'esas'
+  const visits = useMyVisits(Boolean(user) && user.role !== 'ADMIN')
 
   if (checking) {
     return (
@@ -47,172 +65,232 @@ export default function Account() {
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />
 
   return (
-    <section className="relative overflow-hidden py-16 sm:py-24">
+    <section className="relative overflow-hidden py-8 sm:py-14">
       <div className="absolute w-[320px] h-[320px] bg-brand-orange/20 rounded-full blur-3xl -top-28 -right-24 pointer-events-none" />
-      <div className="relative z-10 max-w-[760px] mx-auto px-5 sm:px-7 flex flex-col gap-6">
-        <Reveal>
-          <ProfileCard />
-        </Reveal>
-        <Reveal delay={20}>
-          <ClubCard />
-        </Reveal>
-        <Reveal delay={30}>
-          <Gifts />
-        </Reveal>
-        <Reveal delay={40}>
-          <Visits />
-        </Reveal>
-        <Reveal delay={60}>
-          <History />
-        </Reveal>
-        <Reveal delay={90}>
-          <NewsletterCard />
-        </Reveal>
-        <Reveal delay={120}>
-          <PasswordCard />
-        </Reveal>
-        <Reveal delay={160}>
-          <div className="flex flex-col sm:flex-row gap-3">
+      <div className="relative z-10 max-w-[760px] mx-auto px-4 sm:px-7 flex flex-col gap-4 sm:gap-5">
+        <ProfileHeader />
+
+        <div role="tablist" aria-label={t('account.sections')} className="grid grid-cols-3 gap-1 bg-ink/5 rounded-2xl p-1">
+          {TABS.map(({ key, icon: Icon, label }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setParams(key === 'esas' ? {} : { bolme: key }, { replace: true })}
+              className={`inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-[0.85rem] sm:text-[0.92rem] transition-colors ${
+                tab === key ? 'bg-card text-ink shadow-sm' : 'text-inkdim hover:text-ink'
+              }`}
+            >
+              <Icon size={17} className="shrink-0" /> <span className="truncate">{t(label)}</span>
+            </button>
+          ))}
+        </div>
+
+        {tab === 'esas' && (
+          <>
+            <ActiveVisit data={visits} />
+            <ClubCard />
+            <Gifts />
+          </>
+        )}
+        {tab === 'ziyaretler' && (
+          <>
+            <VisitList data={visits} />
+            <History />
+          </>
+        )}
+        {tab === 'ayarlar' && (
+          <>
+            <PersonalCard />
+            <NewsletterCard />
+            <PasswordCard />
             <button
               onClick={logout}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg transition-all"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full font-bold text-[0.92rem] border-2 border-ink text-ink hover:bg-ink hover:text-bg transition-all"
             >
               <PiSignOutBold size={18} /> {t('account.logout')}
             </button>
-          </div>
-        </Reveal>
+          </>
+        )}
       </div>
     </section>
   )
 }
 
-const card = 'bg-card border border-ink/10 rounded-[24px] p-6 sm:p-8'
+const card = 'bg-card border border-ink/10 rounded-[24px] p-5 sm:p-7'
 
-function ProfileCard() {
-  const i18n = useI18n()
-  const { t, errorText } = i18n
-  const { user, token, updateUser } = useAuth()
+// Profil şəklini yükləmək / silmək — başlıqda və Ayarlarda eyni
+function useAvatar() {
+  const { token, updateUser } = useAuth()
   const fileInput = useRef(null)
   const [uploading, setUploading] = useState(false)
-  const [avatarError, setAvatarError] = useState(null)
-  const [editing, setEditing] = useState(false)
+  const [error, setError] = useState(null)
 
-  const uploadAvatar = async (file) => {
+  const upload = async (file) => {
     if (!file) return
-    setAvatarError(null)
-    if (file.size > MAX_UPLOAD) return setAvatarError({ code: 'IMAGE_TOO_LARGE' })
+    setError(null)
+    if (file.size > MAX_UPLOAD) return setError({ code: 'IMAGE_TOO_LARGE' })
     setUploading(true)
     try {
       updateUser((await api('/auth/me/avatar', { method: 'PUT', body: file, token })).user)
     } catch (err) {
-      setAvatarError(err)
+      setError(err)
     } finally {
       setUploading(false)
-      fileInput.current.value = ''
+      if (fileInput.current) fileInput.current.value = ''
     }
   }
 
-  const removeAvatar = async () => {
+  const remove = async () => {
     setUploading(true)
+    setError(null)
     try {
       updateUser((await api('/auth/me/avatar', { method: 'DELETE', token })).user)
     } catch (err) {
-      setAvatarError(err)
+      setError(err)
     } finally {
       setUploading(false)
     }
   }
 
+  const input = (
+    <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files[0])} />
+  )
+  return { input, pick: () => fileInput.current?.click(), remove, uploading, error }
+}
+
+// Yuxarıdakı yığcam başlıq: şəkil (üstündəki kamera ilə dəyişir), salam, müştəri kodu (kopyalamaq olur)
+function ProfileHeader() {
+  const { t, errorText } = useI18n()
+  const { user } = useAuth()
+  const avatar = useAvatar()
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(user.customerCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {}
+  }
+
+  return (
+    <div className={`${card} flex items-center gap-4`}>
+      {avatar.input}
+      <button
+        type="button"
+        onClick={avatar.pick}
+        disabled={avatar.uploading}
+        aria-label={user.avatarUrl ? t('account.avatarChange') : t('account.avatarAdd')}
+        className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-full group"
+      >
+        {user.avatarUrl ? (
+          <img src={assetUrl(user.avatarUrl)} alt="" className="w-full h-full rounded-full object-cover border-[3px] border-brand-orange-soft" />
+        ) : (
+          <span className="w-full h-full rounded-full bg-primary text-white font-display font-bold text-[1.8rem] sm:text-[2.1rem] flex items-center justify-center">
+            {user.firstName.charAt(0)}
+          </span>
+        )}
+        <span className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-card border border-ink/15 text-ink flex items-center justify-center shadow-sm group-hover:text-primary">
+          <PiCameraBold size={14} />
+        </span>
+        {avatar.uploading && (
+          <span className="absolute inset-0 rounded-full bg-ink/50 text-white flex items-center justify-center">
+            <PiSpinnerBold size={22} className="animate-spin" />
+          </span>
+        )}
+      </button>
+      <div className="min-w-0 flex-1">
+        <h1 className="font-display font-bold text-[1.35rem] sm:text-[1.75rem] leading-tight break-words">
+          {t('account.hello', { name: user.firstName })}
+        </h1>
+        {/* Müştəri kodu: kafedə deyir, admin Günün hesabatında bununla tapır */}
+        {user.customerCode && (
+          <button
+            type="button"
+            onClick={copy}
+            title={t('account.customerCodeHint')}
+            className="mt-1.5 inline-flex items-center gap-2 rounded-xl bg-brand-orange-soft pl-2.5 pr-2 py-1 hover:ring-2 hover:ring-primary/30 transition-shadow"
+          >
+            <PiIdentificationCardBold size={16} className="text-primary shrink-0" />
+            <span className="font-display font-bold text-[1rem] tracking-wider text-ink">{user.customerCode}</span>
+            <span className="inline-flex items-center gap-1 text-[0.72rem] font-bold text-brand-orange-deep">
+              {copied ? <PiCheckBold size={13} /> : <PiCopyBold size={13} />}
+              {copied ? t('account.copied') : t('account.copy')}
+            </span>
+          </button>
+        )}
+        <p className="text-[0.78rem] text-inkdim mt-1">{t('account.customerCodeHint')}</p>
+        {avatar.error && <p className="text-[0.82rem] font-semibold text-brand-pink-deep mt-1">{errorText(avatar.error)}</p>}
+      </div>
+    </div>
+  )
+}
+
+// Ayarlar → şəxsi məlumatlar: ad, email, telefon, şəkil; "Dəyiş" ilə forma açılır
+function PersonalCard() {
+  const { t, errorText } = useI18n()
+  const { user } = useAuth()
+  const avatar = useAvatar()
+  const [editing, setEditing] = useState(false)
+
   return (
     <div className={card}>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-5 mb-6">
-        <div className="relative w-24 h-24 shrink-0">
-          {user.avatarUrl ? (
-            <img src={assetUrl(user.avatarUrl)} alt="" className="w-24 h-24 rounded-full object-cover border-4 border-brand-orange-soft" />
-          ) : (
-            <span className="w-24 h-24 rounded-full bg-primary text-white font-display font-bold text-[2.4rem] flex items-center justify-center">
-              {user.firstName.charAt(0)}
-            </span>
-          )}
-          {uploading && (
-            <span className="absolute inset-0 rounded-full bg-ink/50 text-white flex items-center justify-center">
-              <PiSpinnerBold size={26} className="animate-spin" />
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display font-bold text-[1.6rem] sm:text-[2rem] leading-tight break-words">
-            {t('account.hello', { name: user.firstName })}
-          </h1>
-          <p className="text-inkdim">
-            {user.firstName} {user.lastName}
-            {user.role === 'ADMIN' && (
-              <span className="ml-2 text-[0.75rem] font-bold uppercase px-2 py-0.5 rounded-full bg-brand-purple-soft text-brand-purple-deep">
-                {t('account.admin')}
-              </span>
-            )}
-          </p>
-          {/* Müştəri kodu: kafedə deyir, admin Günün hesabatında bununla tapır */}
-          {user.customerCode && (
-            <div className="inline-flex items-center gap-2.5 mt-2.5 rounded-xl bg-brand-orange-soft px-3 py-1.5" title={t('account.customerCodeHint')}>
-              <PiIdentificationCardBold size={18} className="text-primary shrink-0" />
-              <span className="text-[0.8rem] font-semibold text-inkdim">{t('account.customerCode')}:</span>
-              <span className="font-display font-bold text-[1.05rem] tracking-wider text-ink">{user.customerCode}</span>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2 mt-3">
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => uploadAvatar(e.target.files[0])}
-            />
-            <button
-              disabled={uploading}
-              onClick={() => fileInput.current.click()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[0.85rem] font-bold border-2 border-ink/15 hover:border-primary hover:text-primary disabled:opacity-60 transition-colors"
-            >
-              <PiCameraBold size={16} /> {user.avatarUrl ? t('account.avatarChange') : t('account.avatarAdd')}
-            </button>
-            {user.avatarUrl && (
-              <button
-                disabled={uploading}
-                onClick={removeAvatar}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[0.85rem] font-bold text-inkdim hover:text-brand-pink-deep disabled:opacity-60"
-              >
-                <PiTrashBold size={16} /> {t('account.avatarRemove')}
-              </button>
-            )}
-          </div>
-          {avatarError && <p className="text-[0.85rem] font-semibold text-brand-pink-deep mt-2">{errorText(avatarError)}</p>}
-        </div>
+      {avatar.input}
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem]">
+          <PiUserBold size={20} className="text-primary" /> {t('account.personal')}
+        </h2>
+        {!editing && (
+          <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[0.9rem] font-bold text-primary hover:underline">
+            <PiPencilSimpleBold size={15} /> {t('account.change')}
+          </button>
+        )}
       </div>
-
       {editing ? (
         <EditForm onDone={() => setEditing(false)} />
       ) : (
-        <>
-          <dl className="flex flex-col gap-3 text-[0.95rem] border-t border-ink/10 pt-5">
-            <div className="flex items-center gap-3">
-              <PiEnvelopeSimpleBold size={18} className="text-primary shrink-0" />
-              <dt className="sr-only">{t('auth.email')}</dt>
-              <dd className="truncate">{user.email}</dd>
-            </div>
-            <div className="flex items-center gap-3">
-              <PiPhoneBold size={18} className="text-primary shrink-0" />
-              <dt className="sr-only">{t('auth.phone')}</dt>
-              <dd>+994 {formatPhone(user.phone)}</dd>
-            </div>
-          </dl>
-          <button
-            onClick={() => setEditing(true)}
-            className="mt-5 inline-flex items-center gap-1.5 text-[0.9rem] font-bold text-primary hover:underline"
-          >
-            <PiPencilSimpleBold size={16} /> {t('account.edit')}
-          </button>
-        </>
+        <dl className="flex flex-col gap-3 text-[0.95rem]">
+          <div className="flex items-center gap-3">
+            <PiUserBold size={18} className="text-primary shrink-0" />
+            <dt className="sr-only">{t('auth.firstName')}</dt>
+            <dd className="truncate">
+              {user.firstName} {user.lastName}
+            </dd>
+          </div>
+          <div className="flex items-center gap-3">
+            <PiEnvelopeSimpleBold size={18} className="text-primary shrink-0" />
+            <dt className="sr-only">{t('auth.email')}</dt>
+            <dd className="truncate">{user.email}</dd>
+          </div>
+          <div className="flex items-center gap-3">
+            <PiPhoneBold size={18} className="text-primary shrink-0" />
+            <dt className="sr-only">{t('auth.phone')}</dt>
+            <dd>+994 {formatPhone(user.phone)}</dd>
+          </div>
+        </dl>
       )}
+      <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-ink/10">
+        <button
+          disabled={avatar.uploading}
+          onClick={avatar.pick}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[0.85rem] font-bold border-2 border-ink/15 hover:border-primary hover:text-primary disabled:opacity-60 transition-colors"
+        >
+          {avatar.uploading ? <PiSpinnerBold size={16} className="animate-spin" /> : <PiCameraBold size={16} />}{' '}
+          {user.avatarUrl ? t('account.avatarChange') : t('account.avatarAdd')}
+        </button>
+        {user.avatarUrl && (
+          <button
+            disabled={avatar.uploading}
+            onClick={avatar.remove}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[0.85rem] font-bold text-inkdim hover:text-brand-pink-deep disabled:opacity-60"
+          >
+            <PiTrashBold size={16} /> {t('account.avatarRemove')}
+          </button>
+        )}
+      </div>
+      {avatar.error && <p className="text-[0.82rem] font-semibold text-brand-pink-deep mt-2">{errorText(avatar.error)}</p>}
     </div>
   )
 }
@@ -255,7 +333,7 @@ function EditForm({ onDone }) {
   const message = (field) => fieldMessage(field, errors, serverError, i18n)
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4 border-t border-ink/10 pt-5">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <div className="grid sm:grid-cols-2 gap-4">
         <Field id="acc-first" label={t('auth.firstName')} autoComplete="given-name" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} error={message('firstName')} />
         <Field id="acc-last" label={t('auth.lastName')} autoComplete="family-name" value={form.lastName} onChange={(e) => set('lastName', e.target.value)} error={message('lastName')} />
@@ -311,13 +389,13 @@ function NewsletterCard() {
 
   return (
     <div className={card}>
-      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-3">
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem] mb-3">
         <PiBellRingingBold size={20} className="text-primary" /> {t('account.newsletterTitle')}
       </h2>
       <Switch checked={Boolean(user.newsletter)} onChange={change} disabled={saving}>
         {t('auth.newsletter')}
       </Switch>
-      <p className="text-[0.85rem] text-inkdim mt-2 pl-14">
+      <p className="text-[0.85rem] text-inkdim mt-2 sm:pl-14">
         {user.newsletter ? t('account.newsletterOn') : t('account.newsletterOff')}
       </p>
       {error && <FormError>{errorText(error)}</FormError>}
@@ -371,7 +449,7 @@ function PasswordCard() {
   return (
     <div className={card}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem]">
+        <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem]">
           <PiLockKeyBold size={20} className="text-primary" /> {t('account.passwordTitle')}
         </h2>
         {!open && (
@@ -436,6 +514,7 @@ function ClubCard() {
   const { token } = useAuth()
   const [data, setData] = useState(null)
   const [showAll, setShowAll] = useState(false)
+  const [showPerks, setShowPerks] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -459,21 +538,21 @@ function ClubCard() {
 
   return (
     <div className="bg-card border border-ink/10 rounded-[24px] overflow-hidden">
-      <div className={`${style.soft} p-6 sm:p-8`}>
+      <div className={`${style.soft} p-5 sm:p-7`}>
         <div className="flex items-center gap-4">
-          <span className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-[22px] bg-card shadow-lift flex items-center justify-center text-[2.2rem] sm:text-[2.6rem]">
+          <span className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-[18px] bg-card shadow-lift flex items-center justify-center text-[1.9rem] sm:text-[2.2rem]">
             {tier.icon}
           </span>
           <div className="min-w-0">
             <p className={`text-[0.75rem] font-bold uppercase tracking-wider ${style.text}`}>{t('club.title')}</p>
-            <h2 className="font-display font-bold text-[1.7rem] sm:text-[2rem] leading-tight">{pick(tier.name)}</h2>
+            <h2 className="font-display font-bold text-[1.5rem] sm:text-[1.8rem] leading-tight">{pick(tier.name)}</h2>
             <p className="text-[0.9rem] text-inkdim font-semibold">{t('club.visits', { count: me.visits, months: club.months })}</p>
             {me.given?.name && me.given.bonus > 0 && <p className="text-[0.85rem] font-bold mt-0.5">{t('club.given', { name: pick(me.given.name) })}</p>}
           </div>
         </div>
 
         {(tier.hallPercent > 0 || tier.roomPercent > 0) && (
-          <p className={`inline-flex mt-4 px-3 py-1.5 rounded-full bg-card font-bold text-[0.9rem] ${style.text}`}>
+          <p className={`inline-flex mt-4 px-3 py-1.5 rounded-2xl bg-card font-bold text-[0.85rem] sm:text-[0.9rem] ${style.text}`}>
             {t('club.discounts', { hall: tier.hallPercent, room: tier.roomPercent })}
             {tier.minHours > 0 && t('club.minHours', { hours: tier.minHours })}
           </p>
@@ -489,8 +568,19 @@ function ClubCard() {
         </div>
       </div>
 
-      <div className="p-6 sm:p-8 flex flex-col gap-5">
-        {items(tier.benefits).length > 0 && (
+      <div className="px-5 sm:px-7 py-4 flex flex-col gap-4">
+        {(items(tier.benefits).length > 0 || items(tier.gifts).length > 0) && (
+          <button
+            type="button"
+            onClick={() => setShowPerks((v) => !v)}
+            aria-expanded={showPerks}
+            className="flex items-center justify-between gap-3 font-bold text-[0.95rem] text-left"
+          >
+            {t('account.clubPerks', { count: items(tier.benefits).length + items(tier.gifts).length })}
+            <PiCaretDownBold size={15} className={`shrink-0 transition-transform ${showPerks ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+        {showPerks && items(tier.benefits).length > 0 && (
           <div>
             <h3 className="font-display font-bold text-[1.05rem] mb-2">{t('club.benefits')}</h3>
             <ul className="flex flex-col gap-1.5">
@@ -502,7 +592,7 @@ function ClubCard() {
             </ul>
           </div>
         )}
-        {items(tier.gifts).length > 0 && (
+        {showPerks && items(tier.gifts).length > 0 && (
           <div>
             <h3 className="font-display font-bold text-[1.05rem] mb-2">{t('club.gifts')}</h3>
             <ul className="flex flex-col gap-1.5">
@@ -515,7 +605,7 @@ function ClubCard() {
           </div>
         )}
 
-        {me.tier.index > 0 && (
+        {showPerks && me.tier.index > 0 && (
           <p className="text-[0.85rem] text-inkdim">
             {t('club.keep', { months: club.months, count: me.keepVisits })}
             {me.leavesOn && <> {t('club.leaves', { date: date(`${me.leavesOn}T12:00:00`) })}</>}
@@ -523,7 +613,7 @@ function ClubCard() {
         )}
 
         <div>
-          <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll} className="font-bold text-primary hover:underline text-[0.92rem]">
+          <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll} className="font-bold text-primary hover:underline text-[0.9rem]">
             {showAll ? t('club.hideTiers') : t('club.allTiers')}
           </button>
           {showAll && (
@@ -585,18 +675,23 @@ function Gifts() {
     }
   }, [token])
 
+  const [showOld, setShowOld] = useState(false)
   if (!spins?.length) return null
+  const open = spins.filter((s) => !s.usedAt && !s.expired)
+  const old = spins.filter((s) => s.usedAt || s.expired)
+  const shown = showOld ? spins : open
 
   return (
     <div className={card}>
-      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-1">
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem] mb-1">
         <PiGiftBold size={20} className="text-primary" /> {t('account.giftsTitle')}
       </h2>
       <p className="text-[0.85rem] text-inkdim mb-4">
         {t('account.giftsHint')} <span className="font-bold text-ink">{user.customerCode}</span>
       </p>
+      {open.length === 0 && !showOld && <p className="text-[0.9rem] text-inkdim">{t('account.giftsNone')}</p>}
       <ul className="flex flex-col gap-2">
-        {spins.map((s) => (
+        {shown.map((s) => (
           <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-ink/10 px-4 py-3 ${s.usedAt || s.expired ? 'opacity-60' : ''}`}>
             <span className="text-[1.3rem]" aria-hidden="true">
               🎁
@@ -618,17 +713,21 @@ function Gifts() {
           </li>
         ))}
       </ul>
+      {old.length > 0 && (
+        <button type="button" onClick={() => setShowOld((v) => !v)} className="mt-3 text-[0.88rem] font-bold text-primary hover:underline">
+          {showOld ? t('account.giftsHideOld') : t('account.giftsShowOld', { count: old.length })}
+        </button>
+      )}
     </div>
   )
 }
 
-function Visits() {
-  const { t, date } = useI18n()
+// Ziyarətlər bir dəfə yüklənir və 30 saniyədən bir yenilənir (seans başlayıb-bitəndə görünsün)
+function useMyVisits(enabled) {
   const { token } = useAuth()
-  const pricing = usePricing()
   const [data, setData] = useState(null)
-
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
     const load = () =>
       api('/auth/me/visits', { token })
@@ -640,80 +739,83 @@ function Visits() {
       cancelled = true
       clearInterval(id)
     }
-  }, [token])
+  }, [token, enabled])
+  return data
+}
 
+const money = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}₼`
+
+// Əsas → davam edən ziyarət: canlı saat və məbləğ (qrupda — öz payın)
+function ActiveVisit({ data }) {
+  const { t } = useI18n()
+  const pricing = usePricing()
   const active = data?.active
   const now = useNow(1000, Boolean(active))
+  if (!active) return null
+
+  const live = visitPrice(pricing, visitMinutes(active.startedAt, now), active)
+  const myIndex = active.persons?.findIndex((p) => p.mine) ?? -1
+  const myLive = active.persons?.length > 1 && myIndex >= 0 ? live.persons?.[myIndex] : null
+
+  return (
+    <div className="rounded-[24px] bg-brand-teal-soft border border-brand-teal/30 p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-bold text-brand-teal-deep">
+        <span className="w-2.5 h-2.5 rounded-full bg-brand-teal animate-pulse" />
+        {t('account.visitNow')}
+        <span className="font-semibold text-ink/60">· {t('account.visitSince', { time: bakuTime(active.startedAt) })}</span>
+      </div>
+      <div className="flex items-end justify-between gap-4 mt-3">
+        <div className="font-display font-bold text-[1.9rem] sm:text-[2.1rem] leading-none tabular-nums">{elapsedClock(active.startedAt, now)}</div>
+        <div className="text-right">
+          <div className="text-[0.78rem] font-bold text-ink/60">{myLive ? t('account.visitMyShare') : t('account.visitAmount')}</div>
+          <div className="font-display font-bold text-[1.9rem] sm:text-[2.1rem] leading-none text-primary tabular-nums">{money(myLive ? myLive.share : live.amount)}</div>
+          {myLive && <div className="text-[0.78rem] font-semibold text-ink/60 mt-1">{t('account.visitTotal', { amount: money(live.amount) })}</div>}
+        </div>
+      </div>
+      <p className="text-[0.8rem] text-ink/60 mt-3">
+        {active.kind === 'room' && `${t('account.visitRoom')} · ${t('units.people', { count: active.people })} · `}
+        {active.kind !== 'room' && active.people > 1 && `${t('units.people', { count: active.people })} · `}
+        {live.capped ? t('account.visitCap') : t('account.visitBilled', { hours: live.billedHours })} · {t('account.visitsLive')}
+      </p>
+    </div>
+  )
+}
+
+// Ziyarətlər → keçmiş ziyarətlər (son 50)
+function VisitList({ data }) {
+  const { t, date } = useI18n()
   const units = { h: t('account.hoursShort'), m: t('account.minutesShort') }
-  const money = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}₼`
-
-  if (data && !active && data.visits.length === 0) return null // heç ziyarət yoxdursa kartı göstərmirik
-
-  const live = active ? visitPrice(pricing, visitMinutes(active.startedAt, now), active) : null
-  // Bir neçə nəfərlik sifarişdə müştəri öz payını görür (ümumi məbləğ ayrıca)
-  const myIndex = active?.persons?.findIndex((p) => p.mine) ?? -1
-  const myLive = active && active.persons?.length > 1 && myIndex >= 0 ? live.persons?.[myIndex] : null
   const myShare = (v) => (v.persons?.length > 1 && v.mine?.amount != null ? v.mine.amount : null)
 
   return (
     <div className={card}>
-      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-4">
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem] mb-3">
         <PiCoffeeBold size={20} className="text-primary" /> {t('account.visits')}
+        {data?.visits.length > 0 && <span className="text-[0.85rem] font-semibold text-inkdim">· {data.visits.length}</span>}
       </h2>
       {data === null ? (
         <PiSpinnerBold size={22} className="animate-spin text-inkdim" />
+      ) : data.visits.length === 0 ? (
+        <p className="text-inkdim text-[0.92rem]">{t('account.visitsEmpty')}</p>
       ) : (
-        <>
-          {active && (
-            <div className="rounded-2xl bg-brand-teal-soft p-5 mb-4">
-              <div className="flex items-center gap-2 font-bold text-brand-teal-deep">
-                <span className="w-2.5 h-2.5 rounded-full bg-brand-teal animate-pulse" />
-                {t('account.visitNow')}
-                <span className="font-semibold text-ink/60">· {t('account.visitSince', { time: bakuTime(active.startedAt) })}</span>
-              </div>
-              <div className="flex items-end justify-between gap-4 mt-3">
-                <div className="font-display font-bold text-[2rem] leading-none tabular-nums">{elapsedClock(active.startedAt, now)}</div>
-                <div className="text-right">
-                  <div className="text-[0.78rem] font-bold text-ink/60">{myLive ? t('account.visitMyShare') : t('account.visitAmount')}</div>
-                  <div className="font-display font-bold text-[2rem] leading-none text-primary tabular-nums">{money(myLive ? myLive.share : live.amount)}</div>
-                  {myLive && <div className="text-[0.78rem] font-semibold text-ink/60 mt-1">{t('account.visitTotal', { amount: money(live.amount) })}</div>}
+        <ul className="flex flex-col divide-y divide-ink/5">
+          {data.visits.map((v) => (
+            <li key={v.id} className="flex items-center gap-3 py-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-bold">{date(v.startedAt)}</div>
+                <div className="text-[0.83rem] text-inkdim tabular-nums">
+                  {bakuTime(v.startedAt)} – {bakuTime(v.endedAt)} · {durationText(v.minutes, units)}
+                  {v.kind === 'room' && ` · ${t('account.visitRoom')}`}
+                  {v.people > 1 && ` · ${t('units.people', { count: v.people })}`}
                 </div>
               </div>
-              <p className="text-[0.8rem] text-ink/60 mt-3">
-                {active.kind === 'room' && `${t('account.visitRoom')} · ${t('units.people', { count: active.people })} · `}
-                {active.kind !== 'room' && active.people > 1 && `${t('units.people', { count: active.people })} × ${money(live.perPerson)} · `}
-                {live.capped ? t('account.visitCap') : t('account.visitBilled', { hours: live.billedHours })} ·{' '}
-                {live.discount > 0 &&
-                  `${
-                    live.discountSource === 'promo'
-                      ? t('account.visitPromo', { code: active.promoCode, amount: money(live.discount) })
-                      : t('account.visitStudent', { amount: money(live.discount) })
-                  } · `}
-                {t('account.visitsLive')}
-              </p>
-            </div>
-          )}
-          {data.visits.length > 0 && (
-            <ul className="flex flex-col divide-y divide-ink/5">
-              {data.visits.map((v) => (
-                <li key={v.id} className="flex items-center gap-3 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold">{date(v.startedAt)}</div>
-                    <div className="text-[0.85rem] text-inkdim tabular-nums">
-                      {bakuTime(v.startedAt)} – {bakuTime(v.endedAt)} · {durationText(v.minutes, units)}
-                      {v.kind === 'room' && ` · ${t('account.visitRoom')}`}
-                      {v.people > 1 && ` · ${t('units.people', { count: v.people })}`}
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-right">
-                    <span className="block font-display font-bold text-primary tabular-nums">{money(myShare(v) ?? v.amount)}</span>
-                    {myShare(v) != null && <span className="block text-[0.72rem] text-inkdim">{t('account.visitTotal', { amount: money(v.amount) })}</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+              <span className="shrink-0 text-right">
+                <span className="block font-display font-bold text-primary tabular-nums">{money(myShare(v) ?? v.amount)}</span>
+                {myShare(v) != null && <span className="block text-[0.72rem] text-inkdim">{t('account.visitTotal', { amount: money(v.amount) })}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
@@ -732,7 +834,7 @@ function History() {
 
   return (
     <div className={card}>
-      <h2 className="flex items-center gap-2 font-display font-bold text-[1.2rem] mb-4">
+      <h2 className="flex items-center gap-2 font-display font-bold text-[1.15rem] mb-3">
         <PiTrophyBold size={20} className="text-primary" /> {t('account.history')}
       </h2>
       {teams === null ? (

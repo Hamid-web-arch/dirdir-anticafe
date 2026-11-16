@@ -14,9 +14,9 @@ export default function AuthLayout({ title, subtitle, panelTitle, panelText, chi
       <div className="absolute w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] bg-brand-orange/20 rounded-full blur-3xl -top-28 -right-24 pointer-events-none" />
       <div className="absolute w-[220px] h-[220px] sm:w-[300px] sm:h-[300px] bg-brand-purple/20 rounded-full blur-3xl -bottom-16 -left-16 pointer-events-none" />
 
-      <div className="relative z-10 max-w-[1000px] mx-auto px-5 sm:px-7">
+      <div className="relative z-10 max-w-[1000px] mx-auto px-4 sm:px-7">
         <Reveal>
-          <div className="grid md:grid-cols-[0.9fr_1.1fr] bg-card border border-ink/10 rounded-[28px] overflow-hidden shadow-lift">
+          <div className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] bg-card border border-ink/10 rounded-[28px] overflow-hidden shadow-lift">
             <div className="relative hidden md:flex flex-col justify-end p-9 min-h-[560px] text-white">
               <img src={customImage ?? hallImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-night/90 via-night/40 to-night/10" />
@@ -30,7 +30,7 @@ export default function AuthLayout({ title, subtitle, panelTitle, panelText, chi
               </div>
             </div>
 
-            <div className="p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
+            <div className="min-w-0 p-5 sm:p-10 lg:p-12 flex flex-col justify-center">
               <h1 className="font-display font-bold text-[1.8rem] sm:text-[2.2rem] leading-tight mb-2">{title}</h1>
               <p className="text-inkdim mb-8">{subtitle}</p>
               {children}
