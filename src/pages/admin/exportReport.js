@@ -29,7 +29,8 @@ const personsText = (v) => {
   return persons
     .map((p) => {
       const who = p.user ? `${p.user.firstName} ${p.user.lastName}${p.user.customerCode ? ` (${p.user.customerCode})` : ''}` : 'Qonaq'
-      const paid = p.amount != null ? ` ${money(p.amount)}${p.paymentMethod ? ` ${METHOD[p.paymentMethod] ?? ''}` : ''}` : ''
+      const how = p.paymentMethod === 'split' ? `nağd ${money(p.cashAmount ?? 0)} + kart ${money(Math.round((p.amount - (p.cashAmount ?? 0)) * 100) / 100)}` : METHOD[p.paymentMethod] ?? ''
+      const paid = p.amount != null ? ` ${money(p.amount)}${p.paymentMethod ? ` ${how}` : ''}` : ''
       return `${who}${p.student ? ' (tələbə)' : ''}${paid}`
     })
     .join('; ')

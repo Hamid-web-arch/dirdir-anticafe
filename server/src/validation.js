@@ -29,6 +29,12 @@ const phone = z
   })
   .refine((d) => d.length === 9 && OPERATOR_CODES.includes(d.slice(0, 2)), 'Nömrəni tam yaz, məs. 50 123 45 67.')
 
+// Telefon könüllüdür: boş sahə (və ya null) — nömrə yoxdur; yazılıbsa düzgün olmalıdır
+const optionalPhone = z.preprocess(
+  (v) => (v == null || (typeof v === 'string' && v.replace(/\D/g, '') === '') ? null : v),
+  phone.nullable(),
+)
+
 const password = z
   .string({ error: 'Şifrəni yaz.' })
   .min(MIN_PASSWORD, `Şifrə ən azı ${MIN_PASSWORD} simvol olmalıdır.`)
@@ -38,7 +44,7 @@ export const registerSchema = z.object({
   firstName: name('Adını'),
   lastName: name('Soyadını'),
   email,
-  phone,
+  phone: optionalPhone.default(null),
   password,
   // Yeniliklərdən xəbərdar olmaq istəyir (formada standart olaraq açıqdır)
   newsletter: z.boolean().default(false),
@@ -77,7 +83,7 @@ export const loginSchema = z.preprocess(
 )
 
 export const profileUpdateSchema = z
-  .object({ firstName: name('Adını'), lastName: name('Soyadını'), phone, newsletter: z.boolean() })
+  .object({ firstName: name('Adını'), lastName: name('Soyadını'), phone: optionalPhone, newsletter: z.boolean() })
   .partial()
   .refine((d) => Object.keys(d).length > 0, 'Dəyişiklik yoxdur.')
 
@@ -465,12 +471,16 @@ export const visitCreateSchema = z
     message: 'Müştərinin adını yaz və ya qeydiyyatlı istifadəçini seç.',
   })
 
-const paymentMethod = z.enum(['cash', 'card'], { error: 'Ödəniş üsulunu seç: nağd və ya kart.' })
-// Hər nəfərin ödəniş üsulu: { nəfərinId: "cash" | "card" }
+// Ödəniş: nağd, kart və ya split — bir hissəsi nağd (cashAmount), qalanı kart
+const paymentMethod = z.enum(['cash', 'card', 'split'], { error: 'Ödəniş üsulunu seç: nağd, kart və ya nağd + kart.' })
+// Hər nəfərin ödəniş üsulu: { nəfərinId: "cash" | "card" | "split" }
 const personPayments = z.record(z.string().min(1).max(40), paymentMethod)
+const cashPart = z.number({ error: 'Nağd hissəni yaz.' }).positive('Nağd hissə 0-dan çox olmalıdır.').max(100000)
+// split olan nəfərlərin nağd hissəsi: { nəfərinId: 5 }
+const personCash = z.record(z.string().min(1).max(40), cashPart)
 
 export const visitEndSchema = z
-  .object({ paymentMethod: paymentMethod.optional(), payments: personPayments.optional() })
+  .object({ paymentMethod: paymentMethod.optional(), payments: personPayments.optional(), cashAmount: cashPart.optional(), cashAmounts: personCash.optional() })
   .refine((v) => v.paymentMethod || (v.payments && Object.keys(v.payments).length), {
     path: ['paymentMethod'],
     message: 'Ödəniş üsulunu seç: nağd və ya kart.',
@@ -480,6 +490,8 @@ export const visitUpdateSchema = z.object({
   persons: visitPersons.optional(),
   payments: personPayments.optional(),
   paymentMethod: paymentMethod.optional(),
+  cashAmount: cashPart.optional(),
+  cashAmounts: personCash.optional(),
   people: visitPeople.optional(),
   kind: visitKind.optional(),
   students: visitStudents.optional(),

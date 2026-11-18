@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PiPlusBold, PiPencilSimpleBold, PiTrashBold, PiUsersThreeBold, PiArrowLeftBold, PiClockCounterClockwiseBold, PiGiftBold, PiXBold } from 'react-icons/pi'
-import { formatPhone } from '../../lib/forms.js'
+import { phoneText } from '../../lib/forms.js'
 import {
   useAdminApi,
   card,
@@ -361,7 +361,7 @@ function TeamRow({ team, onChanged, onError }) {
             </div>
             <div className="text-[0.82rem] text-inkdim truncate">
               {team.user.blockedAt && <span className="font-bold text-brand-pink-deep">bloklanıb · </span>}
-              {team.user.firstName} {team.user.lastName} · +994 {formatPhone(team.user.phone)} · {team.user.email}
+              {team.user.firstName} {team.user.lastName} · {phoneText(team.user.phone)} · {team.user.email}
             </div>
           </div>
         </div>

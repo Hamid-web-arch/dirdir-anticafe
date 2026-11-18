@@ -48,7 +48,7 @@ export default function Register() {
     if (!form.firstName.trim()) found.firstName = { key: 'validation.firstName' }
     if (!form.lastName.trim()) found.lastName = { key: 'validation.lastName' }
     if (!isEmail(form.email)) found.email = { key: 'validation.email' }
-    if (!isPhone(form.phone)) found.phone = { key: 'validation.phone' }
+    if (form.phone && !isPhone(form.phone)) found.phone = { key: 'validation.phone' }
     if (form.password.length < MIN_PASSWORD) found.password = { key: 'validation.passwordMin', vars: { min: MIN_PASSWORD } }
     if (form.confirm !== form.password || !form.confirm) found.confirm = { key: 'validation.confirm' }
     setErrors(found)
@@ -129,7 +129,7 @@ export default function Register() {
         />
         <Field
           id="reg-phone"
-          label={t('auth.phone')}
+          label={`${t('auth.phone')} (${t('auth.optional')})`}
           type="tel"
           inputMode="numeric"
           autoComplete="tel-national"

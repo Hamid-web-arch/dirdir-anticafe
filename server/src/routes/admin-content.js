@@ -214,7 +214,12 @@ adminContentRouter.post('/broadcasts', async (req, res) => {
   }
 
   const recipients = await prisma.user.findMany({
-    where: { ...subscribedWhere, ...(userIds?.length ? { id: { in: userIds } } : {}) },
+    where: {
+      ...subscribedWhere,
+      ...(userIds?.length ? { id: { in: userIds } } : {}),
+      // WhatsApp — yalnız telefon nömrəsi olanlara (nömrə könüllüdür)
+      ...(channel === 'whatsapp' ? { phone: { not: null } } : {}),
+    },
     select: { id: true, firstName: true, lastName: true, email: true, phone: true },
     orderBy: { firstName: 'asc' },
   })

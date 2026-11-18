@@ -117,6 +117,29 @@ describe('qeydiyyat', () => {
     const samePhone = await register({ email: 'basqa@mail.com', phone: '050 123 45 67' })
     assert.deepEqual(samePhone.body.error.fieldCodes, { phone: 'PHONE_TAKEN' })
   })
+
+  it('telefon könüllüdür: nömrəsiz qeydiyyat, sonra nömrə əlavə etmək; giriş email və ya telefonla', async () => {
+    const first = await register({ phone: '' })
+    assert.equal(first.status, 201, JSON.stringify(first.body))
+    assert.equal(first.body.user.phone, null)
+    // Nömrəsiz ikinci hesab da olar (boş nömrələr bir-birinə mane olmur)
+    const second = await register({ email: 'kamal@mail.com', phone: undefined, firstName: 'Kamal' })
+    assert.equal(second.status, 201, JSON.stringify(second.body))
+
+    // Boş telefonla giriş heç kimə uyğun gəlmir
+    const empty = await api.post('/api/auth/login').send({ login: '+994', password: aysel.password })
+    assert.equal(empty.status, 401)
+
+    // Nömrə əlavə olunur → telefonla da girmək olur; sonra silmək olur
+    const added = await api.patch('/api/auth/me').set(bearer(first.body.token)).send({ phone: '055 111 22 33' })
+    assert.equal(added.body.user.phone, '551112233')
+    const byPhone = await api.post('/api/auth/login').send({ login: '+994 55 111 22 33', password: aysel.password })
+    assert.equal(byPhone.status, 200)
+    const byEmail = await api.post('/api/auth/login').send({ login: 'AYSEL@mail.com', password: aysel.password })
+    assert.equal(byEmail.status, 200)
+    const removed = await api.patch('/api/auth/me').set(bearer(first.body.token)).send({ phone: '' })
+    assert.equal(removed.body.user.phone, null)
+  })
 })
 
 describe('giriş', () => {
@@ -2187,5 +2210,65 @@ describe('hədiyyə çarxının hədiyyəsi sifarişdə', () => {
       data: { userId: aysel.user.id, prize: { az: '10% endirim' }, expiresAt: new Date(Date.now() - 1000) },
     })
     assert.equal((await start({ persons: [{ userId: aysel.user.id, spinId: old.id }] })).status, 400)
+  })
+})
+
+describe('ödəniş: bir hissəsi nağd, qalanı kart', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+
+  it('tək nəfər: nağd hissə + kart qalıq; beh nəzərə alınır; düzəlişdə yoxlanır', async () => {
+    const adminToken = await createAdmin()
+    const start = (body) => api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), ...body })
+    // 1 nəfər × 2 saat = 7₼, beh 4₼ nağd → ödəniləcək 3₼: 2 nağd + 1 kart
+    const v = (await start({ name: 'Rəşad', deposit: { amount: 4, method: 'cash' } })).body.visit
+    const end = (body) => api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send(body)
+    assert.equal((await end({ paymentMethod: 'split' })).status, 400) // nağd hissə yazılmayıb
+    assert.equal((await end({ paymentMethod: 'split', cashAmount: 3 })).status, 400) // hamısı nağddırsa — "nağd" seç
+    const ok = await end({ paymentMethod: 'split', cashAmount: 2 })
+    assert.equal(ok.status, 200, JSON.stringify(ok.body))
+    assert.equal(ok.body.visit.paymentMethod, 'split')
+    const person = ok.body.visit.persons[0]
+    assert.equal(person.cashAmount, 2)
+
+    const row = async () => (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === ok.body.visit.day)
+    let r = await row()
+    assert.deepEqual([r.cash, r.card], [6, 1]) // beh 4 + 2 nağd, 1 kart
+
+    // Düzəliş: nağd hissəni dəyiş, yanlış dəyər, sonra karta keç
+    const patch = (body) => api.patch(`/api/admin/visits/${v.id}`).set(bearer(adminToken)).send(body)
+    const edited = await patch({ persons: [{ id: person.id }], payments: { [person.id]: 'split' }, cashAmounts: { [person.id]: 2.5 } })
+    assert.equal(edited.status, 200, JSON.stringify(edited.body))
+    assert.equal(edited.body.visit.persons[0].cashAmount, 2.5)
+    assert.equal((await patch({ persons: [{ id: person.id }], payments: { [person.id]: 'split' }, cashAmounts: { [person.id]: 50 } })).status, 400)
+    const card = await patch({ persons: [{ id: person.id }], payments: { [person.id]: 'card' } })
+    assert.equal(card.body.visit.persons[0].cashAmount, null)
+    r = await row()
+    assert.deepEqual([r.cash, r.card], [4, 3])
+  })
+
+  it('bütün sifariş üçün bir "nağd + kart": nağd hissə nəfərlərə sırayla paylanır', async () => {
+    const adminToken = await createAdmin()
+    const v = (await api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), name: 'Dostlar', persons: [{}, {}] })).body.visit
+    const end = await api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'split', cashAmount: 10 })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    assert.deepEqual(end.body.visit.persons.map((p) => [p.paymentMethod, p.cashAmount]), [['cash', null], ['split', 3]])
+    const r = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
+    assert.deepEqual([r.cash, r.card], [10, 4])
+  })
+
+  it('qrup sifarişi: hər nəfər ayrıca nağd + kart ödəyə bilər', async () => {
+    const adminToken = await createAdmin()
+    const res = await api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), name: 'Qrup', persons: [{}, {}] })
+    const visit = res.body.visit
+    const [a, b] = visit.persons
+    const end = await api
+      .post(`/api/admin/visits/${visit.id}/end`)
+      .set(bearer(adminToken))
+      .send({ payments: { [a.id]: 'split', [b.id]: 'card' }, cashAmounts: { [a.id]: 3 } })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    assert.equal(end.body.visit.persons[0].cashAmount, 3)
+    assert.equal(end.body.visit.paymentMethod, 'mixed')
+    const row = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
+    assert.deepEqual([row.cash, row.card], [3, 11]) // 7 + 7: nağd 3, kart 4 + 7
   })
 })

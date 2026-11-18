@@ -72,7 +72,7 @@ function CardShell({ icon: Icon, title, note, onSubmit, state, submitLabel = 'Ya
 function InfoCard() {
   const request = useAdminApi()
   const { user, updateUser } = useAuth()
-  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, phone: formatPhone(user.phone) })
+  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, phone: user.phone ? formatPhone(user.phone) : '' })
   const state = useSave()
   const fields = state.error?.fields ?? {}
   const set = (key) => (e) => {

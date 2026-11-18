@@ -134,7 +134,7 @@ authRouter.post('/password/reset', async (req, res) => {
 authRouter.post('/login', async (req, res) => {
   const { login, password } = loginSchema.parse(req.body)
   // login — { email } və ya { phone }; boş telefon heç kimə uyğun gəlmir
-  const user = login.email || login.phone ? await prisma.user.findUnique({ where: login }) : null
+  const user = login.email || (login.phone && login.phone.length === 9) ? await prisma.user.findUnique({ where: login }) : null
 
   // Hesabın olub-olmamasını bildirmirik — hər iki halda eyni cavab və eyni vaxt.
   if (!user) await burnPasswordCheck(password)

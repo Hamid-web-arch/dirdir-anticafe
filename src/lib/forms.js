@@ -19,6 +19,9 @@ export const isPhone = (digits) => digits.length === 9 && OPERATOR_CODES.include
 export const formatPhone = (digits) =>
   [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)].filter(Boolean).join(' ')
 
+// Ekranda: "501234567" → "+994 50 123 45 67"; nömrə yoxdursa (könüllüdür) — "—"
+export const phoneText = (digits) => (digits ? `+994 ${formatPhone(digits)}` : '—')
+
 // ?next=/arena — girişdən sonra qayıdılacaq səhifə. Yalnız saytın öz yolları ("//başqa.sayt" yox).
 export const safeNext = (value, fallback = '/hesabim') =>
   value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback

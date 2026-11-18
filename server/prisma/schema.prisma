@@ -24,7 +24,7 @@ model User {
   firstName         String
   lastName          String
   email             String    @unique // həmişə kiçik hərflə saxlanır
-  phone             String    @unique // 9 rəqəm, +994-süz (məs. 501234567)
+  phone             String?   @unique // 9 rəqəm, +994-süz (məs. 501234567); könüllüdür — boş ola bilər
   passwordHash      String
   passwordChangedAt DateTime? // bu andan əvvəl verilmiş tokenlər etibarsızdır (şifrə dəyişəndə)
   role              Role      @default(USER)
@@ -255,7 +255,8 @@ model Visit {
   endedAt       DateTime? // boşdursa seans davam edir
   minutes       Int? // bitəndə: qalma müddəti (dəqiqə)
   amount        Decimal?  @db.Decimal(8, 2) // bitəndə: hesablanan məbləğ (o anki qiymətlərlə)
-  paymentMethod String? // bitəndə: cash (nağd) | card (kart)
+  paymentMethod String? // bitəndə: cash (nağd) | card (kart) | split (bir hissəsi nağd, qalanı kart) | mixed (nəfərlər fərqli)
+  cashAmount    Decimal?  @db.Decimal(8, 2) // split: ödənişin nağd hissəsi (qalanı kartla)
   note          String?
   createdById   String?
   createdBy     User?     @relation("VisitCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -297,7 +298,8 @@ model VisitPerson {
   club          Json? // üzvün statusu seans başlayanda (server/src/club.js → clubSnapshot)
   amount        Decimal? @db.Decimal(8, 2) // bitəndə: bu nəfərin payı (endirimdən sonra)
   discount      Decimal? @db.Decimal(8, 2)
-  paymentMethod String? // bitəndə: cash | card
+  paymentMethod String? // bitəndə: cash | card | split
+  cashAmount    Decimal? @db.Decimal(8, 2) // split: bu nəfərin ödəməsinin nağd hissəsi (qalanı kartla)
   // Hədiyyə çarxından qazanılan hədiyyə bu nəfərin payına tətbiq olunur (sifariş bitəndə "istifadə olunub" olur)
   spinId        String?    @unique
   spin          WheelSpin? @relation(fields: [spinId], references: [id], onDelete: SetNull)

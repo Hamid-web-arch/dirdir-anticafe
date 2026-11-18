@@ -267,7 +267,7 @@ function PersonalCard() {
           <div className="flex items-center gap-3">
             <PiPhoneBold size={18} className="text-primary shrink-0" />
             <dt className="sr-only">{t('auth.phone')}</dt>
-            <dd>+994 {formatPhone(user.phone)}</dd>
+            <dd className={user.phone ? '' : 'text-inkdim'}>{user.phone ? `+994 ${formatPhone(user.phone)}` : t('account.noPhone')}</dd>
           </div>
         </dl>
       )}
@@ -299,7 +299,7 @@ function EditForm({ onDone }) {
   const i18n = useI18n()
   const { t, errorText } = i18n
   const { user, token, updateUser } = useAuth()
-  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, phone: user.phone })
+  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, phone: user.phone ?? '' })
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -315,7 +315,7 @@ function EditForm({ onDone }) {
     const found = {}
     if (!form.firstName.trim()) found.firstName = { key: 'validation.firstName' }
     if (!form.lastName.trim()) found.lastName = { key: 'validation.lastName' }
-    if (!isPhone(form.phone)) found.phone = { key: 'validation.phone' }
+    if (form.phone && !isPhone(form.phone)) found.phone = { key: 'validation.phone' }
     setErrors(found)
     if (Object.keys(found).length > 0) return
 
@@ -340,7 +340,7 @@ function EditForm({ onDone }) {
       </div>
       <Field
         id="acc-phone"
-        label={t('auth.phone')}
+        label={`${t('auth.phone')} (${t('auth.optional')})`}
         type="tel"
         inputMode="numeric"
         prefix="+994"

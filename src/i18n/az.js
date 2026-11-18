@@ -69,7 +69,6 @@ export default {
     featTea: 'Limitsiz çay, kofe, şirniyyat',
     featGames: 'Stolüstü oyunlar',
     featCinema: 'Kino otağı',
-    roomCard: '{people} nəfərə qədər · rezerv ilə',
     ctaPrice: 'Qiymətə bax →',
     ctaInstagram: 'Instagramda izlə',
     statFirst: 'ilk saat, hər şey daxil',
@@ -281,6 +280,7 @@ export default {
   },
 
   auth: {
+    optional: 'könüllü',
     codeTitle: 'Emailini təsdiqlə',
     codeSubtitle: '{email} ünvanına 6 rəqəmli kod göndərdik. Hesabın kodu yazandan sonra yaranacaq.',
     codeLabel: 'Təsdiq kodu',
@@ -401,6 +401,7 @@ export default {
     combineStack: 'Status endirimi digər endirimlərin (tələbə, promokod) üstünə gəlir.',
   },
   account: {
+    noPhone: 'Telefon əlavə edilməyib',
     customerCode: 'Müştəri kodun',
     sections: 'Kabinet bölmələri',
     tabHome: 'Əsas',

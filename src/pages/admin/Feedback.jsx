@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PiCheckBold, PiArrowCounterClockwiseBold, PiTrashBold, PiUserBold, PiWhatsappLogoBold, PiEnvelopeSimpleBold } from 'react-icons/pi'
-import { formatPhone } from '../../lib/forms.js'
+import { phoneText } from '../../lib/forms.js'
 import { useAdminApi, card, Button, ConfirmButton, ErrorBox, Spinner, Empty, formatDateTime } from './ui.jsx'
 
 // Əlaqə sahəsindən cavab linki: email → mailto, nömrə → WhatsApp
@@ -59,7 +59,8 @@ export default function AdminFeedback() {
       ) : (
         data.feedback.map((f) => {
           const contact = f.user ? f.user.email : f.contact
-          const reply = f.user ? { href: `https://wa.me/994${f.user.phone}`, icon: PiWhatsappLogoBold } : replyLink(f.contact)
+          // Qeydiyyatlı istifadəçiyə — nömrəsi varsa WhatsApp-dan, yoxsa emaillə
+          const reply = f.user ? (f.user.phone ? { href: `https://wa.me/994${f.user.phone}`, icon: PiWhatsappLogoBold } : replyLink(f.user.email)) : replyLink(f.contact)
           return (
             <div key={f.id} className={`${card} flex flex-col gap-3 ${f.read ? 'opacity-70' : 'border-l-4 border-l-primary'}`}>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.85rem]">
@@ -72,7 +73,7 @@ export default function AdminFeedback() {
                   </span>
                 )}
                 {contact && <span className="text-inkdim">{contact}</span>}
-                {f.user && <span className="text-inkdim">+994 {formatPhone(f.user.phone)}</span>}
+                {f.user && <span className="text-inkdim">{phoneText(f.user.phone)}</span>}
                 <span className="text-inkdim ml-auto">{formatDateTime(f.createdAt)}</span>
               </div>
               <p className="whitespace-pre-line leading-relaxed">{f.message}</p>

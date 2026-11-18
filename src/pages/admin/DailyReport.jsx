@@ -108,6 +108,44 @@ const PAYMENT = {
   card: { label: 'Kart', icon: PiCreditCardBold },
 }
 
+// Ödəniş seçimi: nağd, kart və ya "nağd + kart" (bir hissəsi nağd, qalanı kartla)
+const PAY_OPTIONS = {
+  ...PAYMENT,
+  split: { label: 'Nağd + kart', short: 'N + K', icon: PiCoinsBold },
+}
+
+// "Nağd + kart": nağd hissəni yaz, kart hissə özü hesablanır. due — ödəniləcək məbləğ.
+// Düzgündür: nağd 0-dan çox və məbləğdən az.
+const cashValid = (cash, due) => Number(cash) > 0 && round2(Number(cash)) < round2(due)
+function CashSplit({ id, due, value, onChange, autoFocus }) {
+  const cash = Number(value)
+  const ok = cashValid(value, due)
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-[0.8rem]">
+      <label htmlFor={id} className="font-bold">
+        Nağd
+      </label>
+      <span className={`inline-flex items-center bg-bg border-2 rounded-lg ${value && !ok ? 'border-brand-pink' : 'border-ink/15'}`}>
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          autoFocus={autoFocus}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-[4.5rem] bg-transparent px-2 py-1 font-bold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <span className="pr-2 text-inkdim">₼</span>
+      </span>
+      <span className={`font-bold tabular-nums ${value && !ok ? 'text-brand-pink-deep' : 'text-inkdim'}`}>
+        {value && !ok ? `0 ilə ${money(due)} arası` : `+ kart ${money(round2(due - (ok ? cash : 0)))}`}
+      </span>
+    </span>
+  )
+}
+
 // Seansın növü
 const KINDS = {
   hall: { label: 'Ümumi zal', short: 'Zal', icon: PiArmchairBold },
@@ -404,6 +442,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
   const request = useAdminApi()
   const [editing, setEditing] = useState(false)
   const [ending, setEnding] = useState(false) // "Bitir" basılıb — ödəniş üsulu soruşulur
+  const [splitCash, setSplitCash] = useState(null) // "Nağd + kart" açıqdır — nağd hissə (mətn)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const isActive = !visit.endedAt
@@ -558,8 +597,8 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
             amount={amount}
             busy={busy}
             onCancel={() => setEnding(false)}
-            onEnd={(payments) =>
-              act(`/admin/visits/${visit.id}/end`, { method: 'POST', body: { payments } }, (v) => `${visit.name} — sifariş bitdi: ${money(v.amount)}`)
+            onEnd={(payments, cashAmounts) =>
+              act(`/admin/visits/${visit.id}/end`, { method: 'POST', body: { payments, cashAmounts } }, (v) => `${visit.name} — sifariş bitdi: ${money(v.amount)}`)
             }
           />,
           'bg-brand-teal-soft/30',
@@ -591,9 +630,32 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
                 <Icon size={15} /> {label}
               </Button>
             ))}
+            <Button variant={splitCash === null ? 'outline' : 'primary'} size="sm" onClick={() => setSplitCash((v) => (v === null ? '' : null))}>
+              <PiCoinsBold size={15} /> Nağd + kart
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setEnding(false)}>
               Ləğv et
             </Button>
+            {splitCash !== null && (
+              <div className="basis-full flex flex-wrap items-center justify-end gap-2 mt-1">
+                <CashSplit id={`split-${visit.id}`} due={due} value={splitCash} onChange={setSplitCash} autoFocus />
+                <Button
+                  variant="dark"
+                  size="sm"
+                  loading={busy}
+                  disabled={!cashValid(splitCash, due)}
+                  onClick={() =>
+                    act(
+                      `/admin/visits/${visit.id}/end`,
+                      { method: 'POST', body: { paymentMethod: 'split', cashAmount: round2(Number(splitCash)) } },
+                      (v) => `${visit.name} — seans bitdi: ${money(v.amount)} · nağd ${money(round2(Number(splitCash)))} + kart ${money(round2(v.amount - deposit - Number(splitCash)))}`,
+                    )
+                  }
+                >
+                  <PiStopFill size={12} /> Bitir
+                </Button>
+              </div>
+            )}
           </div>,
           'bg-brand-teal-soft/30',
         )}
@@ -915,7 +977,7 @@ function NewVisit({ onCreated, roomBusy }) {
                     {u.firstName} {u.lastName}
                   </span>
                   <span className="block text-[0.78rem] text-inkdim truncate">
-                    <b className="text-ink">{u.customerCode}</b> · {u.phone} · {u.email}
+                    <b className="text-ink">{u.customerCode}</b>{u.phone && ` · ${u.phone}`} · {u.email}
                   </span>
                   {u.club && (
                     <span className="block mt-0.5">
@@ -1355,6 +1417,7 @@ function EditVisit({ visit, onCancel, onSaved }) {
     endedAt: visit.endedAt ? toBakuInput(visit.endedAt) : '',
     note: visit.note ?? '',
     paymentMethod: visit.paymentMethod ?? '',
+    cashAmount: visit.cashAmount != null ? String(visit.cashAmount) : '',
     people: visit.people,
     kind: visit.kind,
     students: visit.students,
@@ -1362,7 +1425,16 @@ function EditVisit({ visit, onCancel, onSaved }) {
     discount: visit.discountValue ? { type: visit.discountType, value: String(visit.discountValue) } : EMPTY_DISCOUNT,
     deposit: visit.deposit ? { amount: String(visit.deposit), method: visit.depositMethod ?? 'cash' } : EMPTY_DEPOSIT,
     // Nəfərli sifariş: [{ id, userId, user, student, paymentMethod }]
-    persons: (visit.persons ?? []).map((p) => ({ id: p.id, userId: p.userId, user: p.user, student: p.student, paymentMethod: p.paymentMethod, gift: p.gift })),
+    persons: (visit.persons ?? []).map((p) => ({
+      id: p.id,
+      userId: p.userId,
+      user: p.user,
+      student: p.student,
+      paymentMethod: p.paymentMethod,
+      cashAmount: p.cashAmount != null ? String(p.cashAmount) : '',
+      amount: p.amount,
+      gift: p.gift,
+    })),
   })
   const grouped = form.persons.length > 0
   const [saving, setSaving] = useState(false)
@@ -1381,9 +1453,15 @@ function EditVisit({ visit, onCancel, onSaved }) {
       delete body.people
       delete body.students
       body.persons = form.persons.map((p) => ({ ...(p.id ? { id: p.id } : {}), userId: p.userId ?? null, student: form.kind !== 'room' && p.student }))
-      if (visit.endedAt) body.payments = Object.fromEntries(form.persons.filter((p) => p.id && p.paymentMethod).map((p) => [p.id, p.paymentMethod]))
+      if (visit.endedAt) {
+        body.payments = Object.fromEntries(form.persons.filter((p) => p.id && p.paymentMethod).map((p) => [p.id, p.paymentMethod]))
+        body.cashAmounts = Object.fromEntries(
+          form.persons.filter((p) => p.id && p.paymentMethod === 'split' && Number(p.cashAmount) > 0).map((p) => [p.id, round2(Number(p.cashAmount))]),
+        )
+      }
     } else if (visit.endedAt && form.paymentMethod) {
       body.paymentMethod = form.paymentMethod
+      if (form.paymentMethod === 'split' && Number(form.cashAmount) > 0) body.cashAmount = round2(Number(form.cashAmount))
     }
     try {
       const { visit: updated } = await request(`/admin/visits/${visit.id}`, { method: 'PATCH', body })
@@ -1500,8 +1578,8 @@ function EditVisit({ visit, onCancel, onSaved }) {
         {visit.endedAt && !grouped && (
           <div className="sm:col-span-2">
             <span className="block text-[0.85rem] font-bold mb-1.5">Ödəniş</span>
-            <div className="inline-flex bg-ink/5 rounded-full p-1 gap-1">
-              {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
+            <div className="inline-flex flex-wrap bg-ink/5 rounded-full p-1 gap-1">
+              {Object.entries(PAY_OPTIONS).map(([method, { label, icon: Icon }]) => (
                 <button
                   key={method}
                   type="button"
@@ -1515,6 +1593,18 @@ function EditVisit({ visit, onCancel, onSaved }) {
                 </button>
               ))}
             </div>
+            {form.paymentMethod === 'split' && (
+              <div className="mt-2">
+                <CashSplit
+                  id={`edit-split-${visit.id}`}
+                  due={round2(Number(visit.amount ?? 0) - Number(visit.deposit ?? 0))}
+                  value={form.cashAmount}
+                  onChange={(v) => setForm({ ...form, cashAmount: v })}
+                />
+                <p className="text-[0.75rem] text-inkdim mt-1">Kart hissə saxlananda yenidən hesablanmış məbləğdən çıxılır.</p>
+              </div>
+            )}
+            {fieldErrors.cashAmount && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.cashAmount}</p>}
           </div>
         )}
         <div className="sm:col-span-2">
@@ -1572,7 +1662,9 @@ function PersonRows({ visit, shares, tone }) {
     const share = shares ? shares[i]?.share : p.amount
     const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
     const amountIn = (method) =>
-      share != null && (p.paymentMethod === method || (method === 'cash' && !p.paymentMethod)) ? (
+      p.paymentMethod === 'split' && share != null ? (
+        money(method === 'cash' ? Number(p.cashAmount ?? 0) : round2(share - Number(p.cashAmount ?? 0)))
+      ) : share != null && (p.paymentMethod === method || (method === 'cash' && !p.paymentMethod)) ? (
         <>
           {money(share)}
           {!p.paymentMethod && <span title="Ödəniş üsulu qeyd olunmayıb"> ?</span>}
@@ -1622,9 +1714,16 @@ function PersonRows({ visit, shares, tone }) {
 function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
   const persons = visit.persons
   const [methods, setMethods] = useState({})
+  const [cash, setCash] = useState({}) // "nağd + kart" seçilənlərin nağd hissəsi
   const deposit = Number(visit.deposit ?? 0)
   const all = (method) => setMethods(Object.fromEntries(persons.map((p) => [p.id, method])))
-  const ready = persons.every((p) => methods[p.id])
+  const dueOf = (i) => (i === 0 ? round2((shares[i]?.share ?? 0) - deposit) : (shares[i]?.share ?? 0))
+  const ready = persons.every((p, i) => methods[p.id] && (methods[p.id] !== 'split' || cashValid(cash[p.id], dueOf(i))))
+  const finish = () =>
+    onEnd(
+      methods,
+      Object.fromEntries(persons.filter((p) => methods[p.id] === 'split').map((p) => [p.id, round2(Number(cash[p.id]))])),
+    )
 
   return (
     <div className="flex flex-col gap-2 w-full max-w-[560px] ml-auto">
@@ -1643,29 +1742,34 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
       </div>
       <ul className="flex flex-col gap-1">
         {persons.map((p, i) => {
-          const share = shares[i]?.share ?? 0
-          const due = i === 0 ? round2(share - deposit) : share
+          const due = dueOf(i)
           return (
-            <li key={p.id} className="flex items-center gap-2 bg-card rounded-xl px-3 py-1.5">
+            <li key={p.id} className="flex flex-wrap items-center gap-2 bg-card rounded-xl px-3 py-1.5">
               <span className={`flex-1 min-w-0 truncate text-[0.88rem] ${p.user ? 'font-bold' : ''}`}>{personLabel(persons, i)}</span>
               <span className="font-display font-bold tabular-nums text-[0.95rem]">
                 {due >= 0 ? money(due) : `qaytar ${money(-due)}`}
               </span>
               <span className="inline-flex bg-ink/5 rounded-full p-0.5 gap-0.5">
-                {Object.entries(PAYMENT).map(([method, { label, icon: Icon }]) => (
+                {Object.entries(PAY_OPTIONS).map(([method, { label, short, icon: Icon }]) => (
                   <button
                     key={method}
                     type="button"
+                    title={label}
                     aria-pressed={methods[p.id] === method}
                     onClick={() => setMethods((m) => ({ ...m, [p.id]: method }))}
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[0.78rem] transition-colors ${
                       methods[p.id] === method ? 'bg-ink text-bg' : 'text-inkdim hover:text-ink'
                     }`}
                   >
-                    <Icon size={13} /> {label}
+                    <Icon size={13} /> {short ?? label}
                   </button>
                 ))}
               </span>
+              {methods[p.id] === 'split' && (
+                <span className="basis-full flex justify-end">
+                  <CashSplit id={`split-${p.id}`} due={due} value={cash[p.id] ?? ''} onChange={(v) => setCash((c) => ({ ...c, [p.id]: v }))} autoFocus />
+                </span>
+              )}
             </li>
           )
         })}
@@ -1674,7 +1778,7 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Ləğv et
         </Button>
-        <Button variant="dark" size="sm" loading={busy} disabled={!ready} onClick={() => onEnd(methods)}>
+        <Button variant="dark" size="sm" loading={busy} disabled={!ready} onClick={finish}>
           <PiStopFill size={12} /> {ready ? 'Bitir' : 'Hər kəs üçün üsul seç'}
         </Button>
       </div>
@@ -1709,17 +1813,23 @@ function PersonsEditor({ persons, kind, ended, onChange }) {
             )}
             {ended && p.id && (
               <span className="inline-flex bg-ink/5 rounded-full p-0.5 gap-0.5">
-                {Object.entries(PAYMENT).map(([method, { label }]) => (
+                {Object.entries(PAY_OPTIONS).map(([method, { label, short }]) => (
                   <button
                     key={method}
                     type="button"
+                    title={label}
                     aria-pressed={p.paymentMethod === method}
                     onClick={() => set(i, { paymentMethod: method })}
                     className={`px-2.5 py-1 rounded-full font-bold text-[0.75rem] ${p.paymentMethod === method ? 'bg-ink text-bg' : 'text-inkdim hover:text-ink'}`}
                   >
-                    {label}
+                    {short ?? label}
                   </button>
                 ))}
+              </span>
+            )}
+            {ended && p.id && p.paymentMethod === 'split' && (
+              <span className="basis-full flex justify-end">
+                <CashSplit id={`edit-split-${p.id}`} due={Number(p.amount ?? 0)} value={p.cashAmount ?? ''} onChange={(v) => set(i, { cashAmount: v })} />
               </span>
             )}
             <button

@@ -153,6 +153,17 @@ async function closing(startedAt, endedAt, visit) {
   return { data: { endedAt, minutes, amount: price.amount }, shares: price.persons ?? null }
 }
 
+// Ödənişin nağd hissəsi (split): 0-dan çox, ödəniləcək məbləğdən az olmalıdır (qalanı kartla)
+const round2 = (n) => Math.round(n * 100) / 100
+function cashFor(method, cash, due, who = '') {
+  if (method !== 'split') return null
+  if (!(cash > 0) || round2(cash) >= round2(due)) {
+    const message = `${who}Nağd hissə 0-dan çox və ${round2(due)}₼-dan az olmalıdır (qalanı kartla).`
+    throw new HttpError(400, 'VALIDATION', message, { fields: { cashAmount: message } })
+  }
+  return round2(cash)
+}
+
 // Ödəniş üsulu: hamısı eynidirsə — o, yoxsa "mixed" (qarışıq)
 const commonMethod = (methods) => (methods.every((m) => m === methods[0]) ? methods[0] : 'mixed')
 
@@ -189,7 +200,8 @@ adminVisitsRouter.get('/visits/days', async (req, res) => {
       paymentMethod: true,
       deposit: true,
       depositMethod: true,
-      persons: { select: { amount: true, paymentMethod: true }, orderBy: { position: 'asc' } },
+      cashAmount: true,
+      persons: { select: { amount: true, paymentMethod: true, cashAmount: true }, orderBy: { position: 'asc' } },
     },
     orderBy: { day: 'desc' },
   })
@@ -270,25 +282,46 @@ adminVisitsRouter.post('/visits', async (req, res) => {
 // Seansı bitir: indiki vaxtla, məbləğ cari qiymətlərlə hesablanır.
 // Ödəniş: paymentMethod — hamısı üçün; payments — { nəfərinId: "cash" | "card" } hər nəfərə ayrıca.
 adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
-  const { paymentMethod, payments = {} } = visitEndSchema.parse(req.body ?? {})
+  const { paymentMethod, payments = {}, cashAmount, cashAmounts = {} } = visitEndSchema.parse(req.body ?? {})
   const visit = await findVisit(req.params.id)
   if (visit.endedAt) throw new HttpError(409, 'VISIT_ENDED', 'Bu seans artıq bitib.')
   const { data, shares } = await closing(visit.startedAt, new Date(), visit)
 
   if (!visit.persons.length) {
     if (!paymentMethod) throw new HttpError(400, 'VALIDATION', 'Ödəniş üsulunu seç: nağd və ya kart.', { fields: { paymentMethod: 'Ödəniş üsulunu seç.' } })
-    await prisma.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod } })
+    const cash = cashFor(paymentMethod, cashAmount, data.amount - Number(visit.deposit ?? 0))
+    await prisma.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod, cashAmount: cash } })
   } else {
-    const methods = visit.persons.map((p) => payments[p.id] ?? paymentMethod)
+    let methods = visit.persons.map((p) => payments[p.id] ?? paymentMethod)
     if (methods.some((m) => !m)) {
       throw new HttpError(400, 'VALIDATION', 'Hər nəfər üçün ödəniş üsulunu seç: nağd və ya kart.', { fields: { payments: 'Hər nəfər üçün ödəniş üsulunu seç.' } })
     }
+    const deposit = Number(visit.deposit ?? 0)
+    const dues = visit.persons.map((p, i) => round2(shares[i].share - (i === 0 ? deposit : 0)))
+    let cash
+    if (paymentMethod === 'split' && Object.keys(payments).length === 0 && visit.persons.length > 1) {
+      // Bütün sifariş üçün bir "nağd + kart": nağd hissə nəfərlərə sırayla paylanır —
+      // tam nağdla ödəyən "nağd", qismən — "nağd + kart", qalanlar "kart"
+      cashFor('split', cashAmount, round2(dues.reduce((s, d) => s + d, 0)))
+      let left = round2(cashAmount)
+      cash = []
+      methods = dues.map((due) => {
+        const part = round2(Math.min(left, Math.max(0, due)))
+        left = round2(left - part)
+        if (part <= 0) return cash.push(null) && 'card'
+        if (part >= due) return cash.push(null) && 'cash'
+        cash.push(part)
+        return 'split'
+      })
+    } else {
+      cash = visit.persons.map((p, i) => cashFor(methods[i], cashAmounts[p.id] ?? cashAmount, dues[i], `${i + 1}-ci nəfər: `))
+    }
     await prisma.$transaction(async (tx) => {
-      await tx.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: commonMethod(methods) } })
+      await tx.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: commonMethod(methods), cashAmount: null } })
       for (const [i, p] of visit.persons.entries()) {
         await tx.visitPerson.update({
           where: { id: p.id },
-          data: { amount: shares[i].share, discount: shares[i].discount, paymentMethod: methods[i] },
+          data: { amount: shares[i].share, discount: shares[i].discount, paymentMethod: methods[i], cashAmount: cash[i] },
         })
       }
       // Hədiyyələr indi "istifadə olunub"
@@ -302,7 +335,7 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
 // Bitmiş seansda məbləğ (və hər nəfərin payı) yenidən hesablanır.
 adminVisitsRouter.patch('/visits/:id', async (req, res) => {
   const body = visitUpdateSchema.parse(req.body)
-  const { name, kind, people, students, promoCode, discount, deposit, startedAt, endedAt, note, paymentMethod, payments } = body
+  const { name, kind, people, students, promoCode, discount, deposit, startedAt, endedAt, note, paymentMethod, payments, cashAmount, cashAmounts } = body
   const visit = await findVisit(req.params.id)
   if ((endedAt || paymentMethod || payments) && !visit.endedAt) {
     throw new HttpError(400, 'VALIDATION', 'Seansı bitirmək üçün "Bitir" düyməsini işlət.')
@@ -404,6 +437,8 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     nextPersons = nextPersons.map((p) => ({
       ...p,
       paymentMethod: (p.id && payments?.[p.id]) ?? paymentMethod ?? p.paymentMethod ?? nextPersons[0].paymentMethod ?? visit.paymentMethod,
+      // split-in nağd hissəsi: göndərilibsə — yeni, yoxsa köhnəsi (eyni nəfər); aşağıda yoxlanır
+      cashAmount: (p.id && cashAmounts?.[p.id]) ?? cashAmount ?? (p.id ? (visit.persons.find((o) => o.id === p.id)?.cashAmount ?? null) : null),
     }))
     data.paymentMethod = commonMethod(nextPersons.map((p) => p.paymentMethod))
   } else if (paymentMethod) {
@@ -426,6 +461,22 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     shares = result.shares
   }
 
+  // Bitmiş seansda nağd hissə (split) yenidən yoxlanır — məbləğ dəyişmiş ola bilər
+  if (visit.endedAt) {
+    const finalAmount = Number(data.amount ?? visit.amount ?? 0)
+    const finalDeposit = Number(deposit !== undefined ? (deposit?.amount ?? 0) : (visit.deposit ?? 0))
+    if (grouped) {
+      nextPersons = nextPersons.map((p, i) => {
+        const share = shares ? shares[i].share : Number(visit.persons.find((o) => o.id === p.id)?.amount ?? 0)
+        return { ...p, cashAmount: cashFor(p.paymentMethod, p.cashAmount == null ? null : Number(p.cashAmount), share - (i === 0 ? finalDeposit : 0), `${i + 1}-ci nəfər: `) }
+      })
+    } else {
+      const method = data.paymentMethod ?? visit.paymentMethod
+      const cash = cashAmount ?? (visit.cashAmount == null ? null : Number(visit.cashAmount))
+      data.cashAmount = cashFor(method, cash, finalAmount - finalDeposit)
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.visit.update({ where: { id: visit.id }, data })
     if (!grouped) return
@@ -441,6 +492,7 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
         spinId: p.spinId ?? null,
         gift: p.gift ?? Prisma.DbNull,
         paymentMethod: visit.endedAt ? p.paymentMethod : null,
+        cashAmount: visit.endedAt ? (p.cashAmount ?? null) : null,
         ...(shares ? { amount: shares[i].share, discount: shares[i].discount } : {}),
       }
       if (p.id) await tx.visitPerson.update({ where: { id: p.id }, data: fields })
@@ -459,8 +511,8 @@ adminVisitsRouter.post('/visits/:id/resume', async (req, res) => {
   await assertMembersFree(memberIds, visit.id)
   if (visit.kind === 'room') await assertRoom({ people: visit.people })
   await prisma.$transaction(async (tx) => {
-    await tx.visit.update({ where: { id: visit.id }, data: { endedAt: null, minutes: null, amount: null, paymentMethod: null } })
-    await tx.visitPerson.updateMany({ where: { visitId: visit.id }, data: { amount: null, discount: null, paymentMethod: null } })
+    await tx.visit.update({ where: { id: visit.id }, data: { endedAt: null, minutes: null, amount: null, paymentMethod: null, cashAmount: null } })
+    await tx.visitPerson.updateMany({ where: { visitId: visit.id }, data: { amount: null, discount: null, paymentMethod: null, cashAmount: null } })
     // Hədiyyələr yenidən gözləyir — sifariş bitəndə istifadə olunacaq
     await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
   })

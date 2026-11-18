@@ -67,7 +67,6 @@ export default {
     featTea: 'Unlimited tea, coffee, sweets',
     featGames: 'Board games',
     featCinema: 'Cinema room',
-    roomCard: 'up to {people} people · by booking',
     ctaPrice: 'See prices →',
     ctaInstagram: 'Follow on Instagram',
     statFirst: 'first hour, all included',
@@ -277,6 +276,7 @@ export default {
   },
 
   auth: {
+    optional: 'optional',
     codeTitle: 'Confirm your email',
     codeSubtitle: 'We sent a 6-digit code to {email}. Your account is created once you enter it.',
     codeLabel: 'Confirmation code',
@@ -396,6 +396,7 @@ export default {
     combineStack: 'The status discount is added on top of other discounts (student, promo code).',
   },
   account: {
+    noPhone: 'No phone number added',
     customerCode: 'Your customer code',
     sections: 'Account sections',
     tabHome: 'Home',

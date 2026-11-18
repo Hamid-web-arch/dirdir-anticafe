@@ -14,7 +14,7 @@ import { useAuth } from '../../auth/AuthContext.jsx'
 import { api, assetUrl } from '../../lib/api.js'
 import { tierStyle } from '../../lib/club.js'
 import { formatAzDate } from '../../i18n/index.jsx'
-import { formatPhone, MIN_PASSWORD } from '../../lib/forms.js'
+import { phoneText, MIN_PASSWORD } from '../../lib/forms.js'
 import {
   useAdminApi,
   card,
@@ -329,7 +329,7 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
                 · {u.club.tier.icon} {u.club.tier.name.az}
               </span>
             )}{' '}
-            · {u.email} · +994 {formatPhone(u.phone)}
+            · {u.email} · {phoneText(u.phone)}
           </div>
         </div>
         <div className="hidden sm:block text-right text-[0.8rem] text-inkdim shrink-0">

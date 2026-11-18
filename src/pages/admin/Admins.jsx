@@ -13,7 +13,7 @@ import {
   PiUserCircleCheckBold,
   PiXBold,
 } from 'react-icons/pi'
-import { formatPhone, MIN_PASSWORD } from '../../lib/forms.js'
+import { phoneText, MIN_PASSWORD } from '../../lib/forms.js'
 import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, Spinner, Empty, formatDateTime } from './ui.jsx'
 import { GROUPS, PERMISSION_SECTIONS } from './sections.js'
 
@@ -204,7 +204,7 @@ function AdminCard({ admin: a, onChanged, onRemoved }) {
             )}
           </div>
           <div className="text-[0.85rem] text-inkdim">
-            {a.email} · +994 {formatPhone(a.phone)} · {formatDateTime(a.createdAt)}
+            {a.email} · {phoneText(a.phone)} · {formatDateTime(a.createdAt)}
           </div>
           <div className="mt-2.5">
             <PermissionChips admin={a} />
@@ -451,7 +451,7 @@ function PromoteForm({ onPromoted, onCancel }) {
                 {selected.firstName} {selected.lastName}
               </div>
               <div className="text-[0.78rem] text-inkdim truncate">
-                {selected.email} · +994 {formatPhone(selected.phone)}
+                {selected.email} · {phoneText(selected.phone)}
               </div>
             </div>
             <button type="button" onClick={() => setSelected(null)} aria-label="Seçimi ləğv et" className="p-1.5 rounded-full hover:bg-ink/10">
@@ -484,7 +484,7 @@ function PromoteForm({ onPromoted, onCancel }) {
                         {u.firstName} {u.lastName}
                       </span>
                       <span className="block text-[0.78rem] text-inkdim truncate">
-                        {u.email} · +994 {formatPhone(u.phone)}
+                        {u.email} · {phoneText(u.phone)}
                       </span>
                     </span>
                   </button>

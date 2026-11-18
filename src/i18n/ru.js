@@ -72,7 +72,6 @@ export default {
     featTea: 'Безлимитный чай, кофе, сладости',
     featGames: 'Настольные игры',
     featCinema: 'Кинозал',
-    roomCard: 'до {people} человек · по брони',
     ctaPrice: 'Смотреть цены →',
     ctaInstagram: 'Мы в Instagram',
     statFirst: 'первый час, всё включено',
@@ -282,6 +281,7 @@ export default {
   },
 
   auth: {
+    optional: 'необязательно',
     codeTitle: 'Подтверди email',
     codeSubtitle: 'Мы отправили 6-значный код на {email}. Аккаунт будет создан после ввода кода.',
     codeLabel: 'Код подтверждения',
@@ -401,6 +401,7 @@ export default {
     combineStack: 'Скидка по статусу добавляется к другим скидкам (студенческая, промокод).',
   },
   account: {
+    noPhone: 'Телефон не добавлен',
     customerCode: 'Твой код клиента',
     sections: 'Разделы кабинета',
     tabHome: 'Главное',

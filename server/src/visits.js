@@ -254,13 +254,20 @@ export function paymentSplit(v) {
   const add = (method, value) => {
     split[method === 'cash' || method === 'card' ? method : 'other'] += value
   }
+  // Ödənilən məbləğ üsuluna görə; split — nağd hissə nağda, qalanı karta
+  const pay = (method, due, cash) => {
+    if (method === 'split') {
+      const c = Number(cash ?? 0)
+      split.cash += c
+      split.card += due - c
+    } else add(method, due)
+  }
   if (deposit > 0) add(v.depositMethod, deposit)
   // Sifarişdə nəfərlər varsa — hər nəfərin payı öz üsulunda; beh birinci nəfərin ödəməsindən çıxılır
   if (v.persons?.some((p) => p.amount != null)) {
-    for (const p of v.persons) add(p.paymentMethod, Number(p.amount ?? 0))
-    if (deposit > 0) add(v.persons[0].paymentMethod, -deposit)
+    v.persons.forEach((p, i) => pay(p.paymentMethod, Number(p.amount ?? 0) - (i === 0 ? deposit : 0), p.cashAmount))
   } else {
-    add(v.paymentMethod, amount - deposit)
+    pay(v.paymentMethod, amount - deposit, v.cashAmount)
   }
   for (const key of Object.keys(split)) split[key] = Math.round(split[key] * 100) / 100
   return split
@@ -279,6 +286,7 @@ export const publicPerson = (p) => ({
   amount: p.amount == null ? null : Number(p.amount),
   discount: p.discount == null ? null : Number(p.discount),
   paymentMethod: p.paymentMethod ?? null,
+  cashAmount: p.cashAmount == null ? null : Number(p.cashAmount),
   // Hədiyyə çarxının hədiyyəsi (endirim kimi)
   spinId: p.spinId ?? null,
   gift: p.gift ?? null,
@@ -307,5 +315,6 @@ export const publicVisit = (v) => ({
   minutes: v.minutes,
   amount: v.amount == null ? null : Number(v.amount),
   paymentMethod: v.paymentMethod,
+  cashAmount: v.cashAmount == null ? null : Number(v.cashAmount),
   note: v.note,
 })

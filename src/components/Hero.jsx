@@ -39,7 +39,7 @@ export default function Hero() {
           video ? 'grid md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-6 md:gap-10 items-center' : ''
         }`}
       >
-        {video && <HeroVideo src={video} roomPeople={pricing.room.maxPeople} t={t} />}
+        {video && <HeroVideo src={video} t={t} />}
 
         <Reveal direction="left" className="max-w-[640px]">
           <div className="flex flex-wrap items-center gap-2 mb-4 md:mb-5">
@@ -115,9 +115,9 @@ function useOpenStatus() {
 }
 
 // Məkanın videosu: səssiz, təkrarlanan. Telefonda mətnin üstündə bütün enə (alt kənarı fona keçir),
-// böyük ekranda sağ sütunda yuvarlaq kartda, küncündə kino otağı haqqında kiçik kart.
+// böyük ekranda sağ sütunda yuvarlaq kartda, küncündə ünvan kartı (video məkanın ümumi görüntüsüdür).
 // Hərəkəti azaldılmış cihazlarda avtomatik oynamır (ilk kadr görünür).
-function HeroVideo({ src, roomPeople, t }) {
+function HeroVideo({ src, t }) {
   const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   return (
     <div className="relative -mx-5 sm:-mx-7 md:mx-0 md:order-last">
@@ -136,12 +136,12 @@ function HeroVideo({ src, roomPeople, t }) {
         <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-bg to-transparent md:hidden" />
       </div>
       <div className="hidden md:flex absolute -left-5 bottom-6 items-center gap-2.5 bg-card border border-ink/10 shadow-lift rounded-2xl px-3.5 py-2.5">
-        <span className="w-9 h-9 rounded-xl bg-brand-purple-soft text-brand-purple flex items-center justify-center">
-          <PiFilmSlate size={19} />
+        <span className="w-9 h-9 rounded-xl bg-brand-orange-soft text-primary flex items-center justify-center">
+          <PiMapPinBold size={19} />
         </span>
         <span className="leading-tight">
-          <span className="block font-bold text-[0.9rem]">{t('hero.featCinema')}</span>
-          <span className="block text-[0.78rem] text-inkdim">{t('hero.roomCard', { people: roomPeople })}</span>
+          <span className="block font-bold text-[0.9rem]">{business.name}</span>
+          <span className="block text-[0.78rem] text-inkdim">{t('contact.addressValue')}</span>
         </span>
       </div>
     </div>

@@ -8,7 +8,7 @@ import {
   PiWarningCircleBold,
   PiUsersThreeBold,
 } from 'react-icons/pi'
-import { formatPhone } from '../../lib/forms.js'
+import { phoneText } from '../../lib/forms.js'
 import { useAdminApi, card, Button, Label, TextInput, TextArea, ErrorBox, Spinner, Empty, formatDateTime } from './ui.jsx'
 
 const CHANNELS = [
@@ -208,7 +208,7 @@ function RecipientPicker({ selected, onChange }) {
                 {u.firstName} {u.lastName}
               </span>
               <span className="text-[0.82rem] text-inkdim truncate">
-                {u.email} · +994 {formatPhone(u.phone)}
+                {u.email} · {phoneText(u.phone)}
               </span>
             </label>
           ))
@@ -262,7 +262,7 @@ function Result({ result, onClose }) {
                 <span className="font-semibold">
                   {r.firstName} {r.lastName}
                 </span>
-                <span className="text-[0.85rem] text-inkdim">+994 {formatPhone(r.phone)}</span>
+                <span className="text-[0.85rem] text-inkdim">{phoneText(r.phone)}</span>
                 <a
                   href={`https://wa.me/994${r.phone}?text=${encodeURIComponent(r.message)}`}
                   target="_blank"
