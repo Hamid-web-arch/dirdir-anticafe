@@ -2223,7 +2223,7 @@ describe('ödəniş: bir hissəsi nağd, qalanı kart', () => {
     const v = (await start({ name: 'Rəşad', deposit: { amount: 4, method: 'cash' } })).body.visit
     const end = (body) => api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send(body)
     assert.equal((await end({ paymentMethod: 'split' })).status, 400) // nağd hissə yazılmayıb
-    assert.equal((await end({ paymentMethod: 'split', cashAmount: 3 })).status, 400) // hamısı nağddırsa — "nağd" seç
+    assert.equal((await end({ paymentMethod: 'split', cashAmount: 3.5 })).status, 400) // məbləğdən çox ola bilməz
     const ok = await end({ paymentMethod: 'split', cashAmount: 2 })
     assert.equal(ok.status, 200, JSON.stringify(ok.body))
     assert.equal(ok.body.visit.paymentMethod, 'split')
@@ -2270,5 +2270,21 @@ describe('ödəniş: bir hissəsi nağd, qalanı kart', () => {
     assert.equal(end.body.visit.paymentMethod, 'mixed')
     const row = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
     assert.deepEqual([row.cash, row.card], [3, 11]) // 7 + 7: nağd 3, kart 4 + 7
+  })
+})
+
+describe('nağd + kart: hamısı nağd və ya hamısı kart', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+  it('nağd hissə tam məbləğdirsə — "nağd", 0-dırsa — "kart" kimi yazılır', async () => {
+    const adminToken = await createAdmin()
+    const start = () => api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), name: 'Test' })
+    const endWith = async (cashAmount) => {
+      const v = (await start()).body.visit
+      return (await api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'split', cashAmount })).body.visit
+    }
+    const allCash = await endWith(7)
+    assert.deepEqual([allCash.persons[0].paymentMethod, allCash.persons[0].cashAmount, allCash.paymentMethod], ['cash', null, 'cash'])
+    const allCard = await endWith(0)
+    assert.deepEqual([allCard.persons[0].paymentMethod, allCard.paymentMethod], ['card', 'card'])
   })
 })

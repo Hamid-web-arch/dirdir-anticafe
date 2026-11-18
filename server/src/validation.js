@@ -475,7 +475,7 @@ export const visitCreateSchema = z
 const paymentMethod = z.enum(['cash', 'card', 'split'], { error: 'Ödəniş üsulunu seç: nağd, kart və ya nağd + kart.' })
 // Hər nəfərin ödəniş üsulu: { nəfərinId: "cash" | "card" | "split" }
 const personPayments = z.record(z.string().min(1).max(40), paymentMethod)
-const cashPart = z.number({ error: 'Nağd hissəni yaz.' }).positive('Nağd hissə 0-dan çox olmalıdır.').max(100000)
+const cashPart = z.number({ error: 'Nağd hissəni yaz.' }).min(0, 'Nağd hissə mənfi ola bilməz.').max(100000)
 // split olan nəfərlərin nağd hissəsi: { nəfərinId: 5 }
 const personCash = z.record(z.string().min(1).max(40), cashPart)
 

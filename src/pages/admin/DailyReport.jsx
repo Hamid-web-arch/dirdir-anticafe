@@ -115,8 +115,8 @@ const PAY_OPTIONS = {
 }
 
 // "Nağd + kart": nağd hissəni yaz, kart hissə özü hesablanır. due — ödəniləcək məbləğ.
-// Düzgündür: nağd 0-dan çox və məbləğdən az.
-const cashValid = (cash, due) => Number(cash) > 0 && round2(Number(cash)) < round2(due)
+// Düzgündür: 0 ilə məbləğ arası (hamısı nağd — "nağd", 0 — "kart" kimi yazılır).
+const cashValid = (cash, due) => cash !== '' && cash != null && Number(cash) >= 0 && round2(Number(cash)) <= round2(Math.max(0, due))
 function CashSplit({ id, due, value, onChange, autoFocus }) {
   const cash = Number(value)
   const ok = cashValid(value, due)
@@ -140,7 +140,13 @@ function CashSplit({ id, due, value, onChange, autoFocus }) {
         <span className="pr-2 text-inkdim">₼</span>
       </span>
       <span className={`font-bold tabular-nums ${value && !ok ? 'text-brand-pink-deep' : 'text-inkdim'}`}>
-        {value && !ok ? `0 ilə ${money(due)} arası` : `+ kart ${money(round2(due - (ok ? cash : 0)))}`}
+        {value && !ok
+          ? `0 ilə ${money(due)} arası`
+          : ok && round2(cash) === round2(due)
+            ? 'hamısı nağd'
+            : ok && cash === 0
+              ? 'hamısı kart'
+              : `+ kart ${money(round2(due - (ok ? cash : 0)))}`}
       </span>
     </span>
   )
@@ -1456,12 +1462,12 @@ function EditVisit({ visit, onCancel, onSaved }) {
       if (visit.endedAt) {
         body.payments = Object.fromEntries(form.persons.filter((p) => p.id && p.paymentMethod).map((p) => [p.id, p.paymentMethod]))
         body.cashAmounts = Object.fromEntries(
-          form.persons.filter((p) => p.id && p.paymentMethod === 'split' && Number(p.cashAmount) > 0).map((p) => [p.id, round2(Number(p.cashAmount))]),
+          form.persons.filter((p) => p.id && p.paymentMethod === 'split' && p.cashAmount !== '').map((p) => [p.id, round2(Number(p.cashAmount))]),
         )
       }
     } else if (visit.endedAt && form.paymentMethod) {
       body.paymentMethod = form.paymentMethod
-      if (form.paymentMethod === 'split' && Number(form.cashAmount) > 0) body.cashAmount = round2(Number(form.cashAmount))
+      if (form.paymentMethod === 'split' && form.cashAmount !== '') body.cashAmount = round2(Number(form.cashAmount))
     }
     try {
       const { visit: updated } = await request(`/admin/visits/${visit.id}`, { method: 'PATCH', body })
