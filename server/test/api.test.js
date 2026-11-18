@@ -2246,14 +2246,28 @@ describe('ödəniş: bir hissəsi nağd, qalanı kart', () => {
     assert.deepEqual([r.cash, r.card], [4, 3])
   })
 
-  it('bütün sifariş üçün bir "nağd + kart": nağd hissə nəfərlərə sırayla paylanır', async () => {
+  it('bütün sifariş üçün bir "nağd + kart": nəfərlərə bölünmür, sifarişdə ümumi nağd/kart saxlanır', async () => {
     const adminToken = await createAdmin()
     const v = (await api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(120), name: 'Dostlar', persons: [{}, {}] })).body.visit
     const end = await api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'split', cashAmount: 10 })
     assert.equal(end.status, 200, JSON.stringify(end.body))
-    assert.deepEqual(end.body.visit.persons.map((p) => [p.paymentMethod, p.cashAmount]), [['cash', null], ['split', 3]])
-    const r = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
+    assert.deepEqual([end.body.visit.paymentMethod, end.body.visit.cashAmount], ['split', 10])
+    assert.deepEqual(end.body.visit.persons.map((p) => [p.paymentMethod, p.cashAmount, p.amount]), [[null, null, 7], [null, null, 7]])
+    const day = async () => (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((d) => d.day === end.body.visit.day)
+    let r = await day()
     assert.deepEqual([r.cash, r.card], [10, 4])
+
+    // Düzəliş: ümumi nağd hissəni dəyiş — yenə bölünmür; nəfərlər üzrə üsul seçiləndə ümumi bölgü silinir
+    const patch = (body) => api.patch(`/api/admin/visits/${v.id}`).set(bearer(adminToken)).send(body)
+    const edited = await patch({ paymentMethod: 'split', cashAmount: 12 })
+    assert.deepEqual([edited.body.visit.paymentMethod, edited.body.visit.cashAmount], ['split', 12])
+    r = await day()
+    assert.deepEqual([r.cash, r.card], [12, 2])
+    const [a, b] = edited.body.visit.persons
+    const perPerson = await patch({ persons: [{ id: a.id }, { id: b.id }], payments: { [a.id]: 'cash', [b.id]: 'card' } })
+    assert.deepEqual([perPerson.body.visit.paymentMethod, perPerson.body.visit.cashAmount], ['mixed', null])
+    r = await day()
+    assert.deepEqual([r.cash, r.card], [7, 7])
   })
 
   it('qrup sifarişi: hər nəfər ayrıca nağd + kart ödəyə bilər', async () => {

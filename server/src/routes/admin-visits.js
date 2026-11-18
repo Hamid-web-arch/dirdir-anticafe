@@ -305,27 +305,24 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
     const deposit = Number(visit.deposit ?? 0)
     const dues = visit.persons.map((p, i) => round2(shares[i].share - (i === 0 ? deposit : 0)))
     let cash
+    let orderCash = null
     if (paymentMethod === 'split' && Object.keys(payments).length === 0 && visit.persons.length > 1) {
-      // Bütün sifariş üçün bir "nağd + kart": nağd hissə nəfərlərə sırayla paylanır —
-      // tam nağdla ödəyən "nağd", qismən — "nağd + kart", qalanlar "kart"
-      settle('split', cashAmount, round2(dues.reduce((s, d) => s + d, 0)))
-      let left = round2(cashAmount)
-      cash = []
-      methods = dues.map((due) => {
-        const part = round2(Math.min(left, Math.max(0, due)))
-        left = round2(left - part)
-        if (part <= 0) return cash.push(null) && 'card'
-        if (part >= due) return cash.push(null) && 'cash'
-        cash.push(part)
-        return 'split'
-      })
+      // Bütün sifariş üçün bir "nağd + kart": nəfərlərə bölünmür — sifarişdə ümumi nağd hissə saxlanır,
+      // qalanı kart (hamısı nağd / 0 — sadəcə "nağd" / "kart")
+      const pay = settle('split', cashAmount, round2(dues.reduce((s, d) => s + d, 0)))
+      orderCash = pay.cash
+      methods = visit.persons.map(() => (pay.method === 'split' ? null : pay.method))
+      cash = visit.persons.map(() => null)
     } else {
       const settled = visit.persons.map((p, i) => settle(methods[i], cashAmounts[p.id] ?? cashAmount, dues[i], `${i + 1}-ci nəfər: `))
       methods = settled.map((x) => x.method)
       cash = settled.map((x) => x.cash)
     }
     await prisma.$transaction(async (tx) => {
-      await tx.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: commonMethod(methods), cashAmount: null } })
+      await tx.visit.update({
+        where: { id: visit.id },
+        data: { ...data, paymentMethod: orderCash != null ? 'split' : commonMethod(methods), cashAmount: orderCash },
+      })
       for (const [i, p] of visit.persons.entries()) {
         await tx.visitPerson.update({
           where: { id: p.id },
@@ -439,9 +436,19 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
   }
   if (endedAt) assertNotFuture(endedAt, 'endedAt', 'Bitmə vaxtı')
 
+  // Sifariş ümumi "nağd + kart" ilə ödənilib (və ya indi belə seçilir) — nəfərlərə bölünmür
+  const orderSplit =
+    Boolean(visit.endedAt) &&
+    grouped &&
+    !(payments && Object.keys(payments).length) &&
+    (paymentMethod === 'split' || (!paymentMethod && visit.paymentMethod === 'split' && visit.cashAmount != null))
+
   // Bitmiş seansın ödəniş üsulları: paymentMethod — hamısı, payments — hər nəfərə ayrıca;
   // yeni əlavə olunan nəfər birincinin üsulunu alır
-  if (visit.endedAt && grouped) {
+  if (orderSplit) {
+    nextPersons = nextPersons.map((p) => ({ ...p, paymentMethod: null, cashAmount: null }))
+    data.paymentMethod = 'split'
+  } else if (visit.endedAt && grouped) {
     nextPersons = nextPersons.map((p) => ({
       ...p,
       paymentMethod: (p.id && payments?.[p.id]) ?? paymentMethod ?? p.paymentMethod ?? nextPersons[0].paymentMethod ?? visit.paymentMethod,
@@ -473,7 +480,14 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
   if (visit.endedAt) {
     const finalAmount = Number(data.amount ?? visit.amount ?? 0)
     const finalDeposit = Number(deposit !== undefined ? (deposit?.amount ?? 0) : (visit.deposit ?? 0))
-    if (grouped) {
+    if (orderSplit) {
+      const cash = cashAmount ?? (visit.cashAmount == null ? null : Number(visit.cashAmount))
+      const pay = settle('split', cash, finalAmount - finalDeposit)
+      data.paymentMethod = pay.method
+      data.cashAmount = pay.cash
+      if (pay.method !== 'split') nextPersons = nextPersons.map((p) => ({ ...p, paymentMethod: pay.method }))
+    } else if (grouped) {
+      data.cashAmount = null
       nextPersons = nextPersons.map((p, i) => {
         const share = shares ? shares[i].share : Number(visit.persons.find((o) => o.id === p.id)?.amount ?? 0)
         const pay = settle(p.paymentMethod, p.cashAmount == null ? null : Number(p.cashAmount), share - (i === 0 ? finalDeposit : 0), `${i + 1}-ci nəfər: `)

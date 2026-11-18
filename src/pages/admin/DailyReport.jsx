@@ -73,6 +73,9 @@ const DISCOUNT_SOURCE = {
   mixed: 'endirimlər',
 }
 
+// Sifariş ümumi "nağd + kart" ilə ödənilib — nəfərlərə bölünmür, yalnız sifarişin nağd və kart cəmi görünür
+const orderSplitPaid = (v) => v.paymentMethod === 'split' && v.cashAmount != null && (v.persons?.length ?? 0) > 0
+
 // Hədiyyə bu yerdə (zal / kino) işləyirmi
 const giftFits = (effect, kind) => effect && effect.kind !== 'gift' && (!effect.only || effect.only === kind)
 
@@ -603,9 +606,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
             amount={amount}
             busy={busy}
             onCancel={() => setEnding(false)}
-            onEnd={(payments, cashAmounts) =>
-              act(`/admin/visits/${visit.id}/end`, { method: 'POST', body: { payments, cashAmounts } }, (v) => `${visit.name} — sifariş bitdi: ${money(v.amount)}`)
-            }
+            onEnd={(body) => act(`/admin/visits/${visit.id}/end`, { method: 'POST', body }, (v) => `${visit.name} — sifariş bitdi: ${money(v.amount)}`)}
           />,
           'bg-brand-teal-soft/30',
         )}
@@ -1424,6 +1425,8 @@ function EditVisit({ visit, onCancel, onSaved }) {
     note: visit.note ?? '',
     paymentMethod: visit.paymentMethod ?? '',
     cashAmount: visit.cashAmount != null ? String(visit.cashAmount) : '',
+    // Qrup sifarişində ümumi "nağd + kart": nağd hissə (mətn); null — nəfərlər üzrə ödəniş
+    orderCash: orderSplitPaid(visit) ? String(visit.cashAmount) : null,
     people: visit.people,
     kind: visit.kind,
     students: visit.students,
@@ -1459,7 +1462,10 @@ function EditVisit({ visit, onCancel, onSaved }) {
       delete body.people
       delete body.students
       body.persons = form.persons.map((p) => ({ ...(p.id ? { id: p.id } : {}), userId: p.userId ?? null, student: form.kind !== 'room' && p.student }))
-      if (visit.endedAt) {
+      if (visit.endedAt && form.orderCash !== null) {
+        body.paymentMethod = 'split'
+        if (form.orderCash !== '') body.cashAmount = round2(Number(form.orderCash))
+      } else if (visit.endedAt) {
         body.payments = Object.fromEntries(form.persons.filter((p) => p.id && p.paymentMethod).map((p) => [p.id, p.paymentMethod]))
         body.cashAmounts = Object.fromEntries(
           form.persons.filter((p) => p.id && p.paymentMethod === 'split' && p.cashAmount !== '').map((p) => [p.id, round2(Number(p.cashAmount))]),
@@ -1520,9 +1526,32 @@ function EditVisit({ visit, onCancel, onSaved }) {
             <PersonsEditor
               persons={form.persons}
               kind={form.kind}
-              ended={Boolean(visit.endedAt)}
+              ended={Boolean(visit.endedAt) && form.orderCash === null}
               onChange={(persons) => setForm({ ...form, persons })}
             />
+            {visit.endedAt && (
+              <div className="mt-2.5 rounded-xl border border-ink/10 px-3 py-2">
+                {form.orderCash !== null ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[0.8rem] font-bold">Ümumi ödəniş:</span>
+                    <CashSplit
+                      id={`edit-order-split-${visit.id}`}
+                      due={round2(Number(visit.amount ?? 0) - Number(visit.deposit ?? 0))}
+                      value={form.orderCash}
+                      onChange={(v) => setForm({ ...form, orderCash: v })}
+                    />
+                    <button type="button" onClick={() => setForm({ ...form, orderCash: null })} className="ml-auto text-[0.78rem] font-bold text-primary hover:underline">
+                      Nəfərlər üzrə yaz
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setForm({ ...form, orderCash: '' })} className="text-[0.8rem] font-bold text-primary hover:underline">
+                    Bütün sifariş üçün nağd + kart
+                  </button>
+                )}
+                {fieldErrors.cashAmount && <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.cashAmount}</p>}
+              </div>
+            )}
             {(fieldErrors.persons || fieldErrors.people) && (
               <p className="text-[0.8rem] font-semibold text-brand-pink-deep mt-1">{fieldErrors.persons || fieldErrors.people}</p>
             )}
@@ -1700,8 +1729,8 @@ function PersonRows({ visit, shares, tone }) {
             )}
           </div>
         </td>
-        {shares ? (
-          <td colSpan={2} className={`${td} text-right font-semibold`}>
+        {shares || orderSplitPaid(visit) ? (
+          <td colSpan={2} className={`${td} text-right ${shares ? 'font-semibold' : 'text-inkdim'}`}>
             {share != null && money(share)}
           </td>
         ) : (
@@ -1721,14 +1750,27 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
   const persons = visit.persons
   const [methods, setMethods] = useState({})
   const [cash, setCash] = useState({}) // "nağd + kart" seçilənlərin nağd hissəsi
+  // "Hamısı nağd + kart": bütün sifariş üçün bir nağd məbləğ (null — bağlı); server onu nəfərlərə sırayla paylayır
+  const [orderCash, setOrderCash] = useState(null)
   const deposit = Number(visit.deposit ?? 0)
-  const all = (method) => setMethods(Object.fromEntries(persons.map((p) => [p.id, method])))
+  const all = (method) => {
+    setOrderCash(null)
+    setMethods(Object.fromEntries(persons.map((p) => [p.id, method])))
+  }
   const dueOf = (i) => (i === 0 ? round2((shares[i]?.share ?? 0) - deposit) : (shares[i]?.share ?? 0))
-  const ready = persons.every((p, i) => methods[p.id] && (methods[p.id] !== 'split' || cashValid(cash[p.id], dueOf(i))))
+  const totalDue = round2(persons.reduce((sum, _, i) => sum + dueOf(i), 0))
+  const ready =
+    orderCash !== null
+      ? cashValid(orderCash, totalDue)
+      : persons.every((p, i) => methods[p.id] && (methods[p.id] !== 'split' || cashValid(cash[p.id], dueOf(i))))
   const finish = () =>
     onEnd(
-      methods,
-      Object.fromEntries(persons.filter((p) => methods[p.id] === 'split').map((p) => [p.id, round2(Number(cash[p.id]))])),
+      orderCash !== null
+        ? { paymentMethod: 'split', cashAmount: round2(Number(orderCash)) }
+        : {
+            payments: methods,
+            cashAmounts: Object.fromEntries(persons.filter((p) => methods[p.id] === 'split').map((p) => [p.id, round2(Number(cash[p.id]))])),
+          },
     )
 
   return (
@@ -1744,9 +1786,18 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
               Hamısı {label.toLowerCase()}
             </Button>
           ))}
+          <Button variant={orderCash === null ? 'outline' : 'primary'} size="sm" onClick={() => setOrderCash((v) => (v === null ? '' : null))}>
+            Hamısı nağd + kart
+          </Button>
         </span>
       </div>
-      <ul className="flex flex-col gap-1">
+      {orderCash !== null && (
+        <div className="flex flex-wrap items-center justify-end gap-2 bg-card rounded-xl px-3 py-2">
+          <span className="text-[0.8rem] font-bold text-inkdim mr-auto">Ümumi {money(totalDue)}:</span>
+          <CashSplit id={`order-split-${visit.id}`} due={totalDue} value={orderCash} onChange={setOrderCash} autoFocus />
+        </div>
+      )}
+      <ul className={`flex flex-col gap-1 ${orderCash !== null ? 'hidden' : ''}`}>
         {persons.map((p, i) => {
           const due = dueOf(i)
           return (
@@ -1785,7 +1836,7 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
           Ləğv et
         </Button>
         <Button variant="dark" size="sm" loading={busy} disabled={!ready} onClick={finish}>
-          <PiStopFill size={12} /> {ready ? 'Bitir' : 'Hər kəs üçün üsul seç'}
+          <PiStopFill size={12} /> {ready ? 'Bitir' : orderCash !== null ? 'Nağd hissəni yaz' : 'Hər kəs üçün üsul seç'}
         </Button>
       </div>
     </div>

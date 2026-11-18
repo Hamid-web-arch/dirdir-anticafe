@@ -264,7 +264,10 @@ export function paymentSplit(v) {
   }
   if (deposit > 0) add(v.depositMethod, deposit)
   // Sifarişdə nəfərlər varsa — hər nəfərin payı öz üsulunda; beh birinci nəfərin ödəməsindən çıxılır
-  if (v.persons?.some((p) => p.amount != null)) {
+  if (v.paymentMethod === 'split' && v.cashAmount != null) {
+    // Bütün sifariş üçün bir "nağd + kart" (nəfərlərə bölünmür)
+    pay('split', Number(v.amount) - deposit, v.cashAmount)
+  } else if (v.persons?.some((p) => p.amount != null)) {
     v.persons.forEach((p, i) => pay(p.paymentMethod, Number(p.amount ?? 0) - (i === 0 ? deposit : 0), p.cashAmount))
   } else {
     pay(v.paymentMethod, amount - deposit, v.cashAmount)
