@@ -33,6 +33,7 @@ import { useSeo } from '../lib/seo.js'
 import { tierStyle } from '../lib/club.js'
 import { usePricing } from '../pricing/PricingContext.jsx'
 import { visitPrice, visitMinutes, elapsedClock, durationText, useNow, bakuTime } from '../pricing/visitPrice.js'
+import { useConfirm } from '../components/ConfirmDialog.jsx'
 
 const MAX_UPLOAD = 10 * 1024 * 1024
 
@@ -122,6 +123,7 @@ const card = 'bg-card border border-ink/10 rounded-[24px] p-5 sm:p-7'
 
 // Profil şəklini yükləmək / silmək — başlıqda və Ayarlarda eyni
 function useAvatar() {
+  const confirm = useConfirm()
   const { token, updateUser } = useAuth()
   const fileInput = useRef(null)
   const [uploading, setUploading] = useState(false)
@@ -143,6 +145,7 @@ function useAvatar() {
   }
 
   const remove = async () => {
+    if (!(await confirm())) return
     setUploading(true)
     setError(null)
     try {

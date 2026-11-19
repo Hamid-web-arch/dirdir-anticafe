@@ -111,7 +111,7 @@ export default function AdminPromos() {
                 Aktiv
               </Checkbox>
               <ConfirmButton
-                question="Kod silinsin?"
+                question="Promokod silinəcək."
                 onConfirm={async () => {
                   try {
                     await request(`/admin/promo-codes/${p.id}`, { method: 'DELETE' })

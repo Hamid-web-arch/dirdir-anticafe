@@ -12,6 +12,7 @@ import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import Account from './pages/Account.jsx'
+import Privacy from './pages/Privacy.jsx'
 import Games, { GameDetails } from './pages/Games.jsx'
 import SlideDetails from './pages/SlideDetails.jsx'
 import NotFound from './pages/NotFound.jsx'
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/qeydiyyat" element={<Register />} />
             <Route path="/sifre-berpa" element={<ForgotPassword />} />
             <Route path="/hesabim" element={<Account />} />
+            <Route path="/mexfilik" element={<Privacy />} />
             <Route path="/oyunlar" element={<Games />} />
             <Route path="/oyunlar/:id" element={<GameDetails />} />
             <Route path="/neler-var/:id" element={<SlideDetails />} />

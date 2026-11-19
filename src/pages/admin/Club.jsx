@@ -15,6 +15,7 @@ import {
 import Switch from '../../components/Switch.jsx'
 import { tierStyle, TIER_STYLE } from '../../lib/club.js'
 import { useAdminApi, card, Button, TextInput, ErrorBox, Spinner } from './ui.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 const ICONS = ['👋', '☕', '🛋️', '🏠', '⭐', '👑', '🎲', '🎬', '🔥', '💎']
 const COLOR_NAMES = { teal: 'Yaşıl', purple: 'Bənövşəyi', orange: 'Narıncı', pink: 'Çəhrayı', yellow: 'Sarı', cyan: 'Mavi' }
@@ -295,6 +296,7 @@ const TABS = [
 ]
 
 function TierEditor({ tier, index, range, maxPercent, errors, onChange, onClose, onRemove }) {
+  const confirm = useConfirm()
   const [tab, setTab] = useState('main')
   const style = tierStyle(tier.color)
   const err = (field) => errors[`tiers.${index}.${field}`]
@@ -448,7 +450,7 @@ function TierEditor({ tier, index, range, maxPercent, errors, onChange, onClose,
 
       {onRemove && (
         <footer className="px-5 py-3 border-t border-ink/10 flex justify-end">
-          <Button variant="danger" size="sm" onClick={onRemove}>
+          <Button variant="danger" size="sm" onClick={async () => (await confirm({ detail: 'Bu status silinəcək (yadda saxlayandan sonra).' })) && onRemove()}>
             <PiTrashBold size={15} /> Bu statusu sil
           </Button>
         </footer>
@@ -562,6 +564,7 @@ function Translations({ value, onChange, maxLength }) {
 
 // Sətir-sətir siyahı (üstünlüklər / hədiyyələr)
 function ListEditor({ hint, items, placeholder, onChange, errors, errorPrefix }) {
+  const confirm = useConfirm()
   const [open, setOpen] = useState(null) // tərcüməsi açıq olan sətir
   const update = (i, patch) => onChange(items.map((item, j) => (j === i ? { ...item, ...patch } : item)))
 
@@ -588,7 +591,7 @@ function ListEditor({ hint, items, placeholder, onChange, errors, errorPrefix })
               type="button"
               aria-label="Sil"
               title="Sil"
-              onClick={() => onChange(items.filter((_, j) => j !== i))}
+              onClick={async () => (await confirm()) && onChange(items.filter((_, j) => j !== i))}
               className="h-[42px] w-[42px] shrink-0 rounded-xl flex items-center justify-center text-brand-pink-deep hover:bg-brand-pink-soft"
             >
               <PiTrashBold size={17} />

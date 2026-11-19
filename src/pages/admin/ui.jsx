@@ -4,6 +4,7 @@ import { PiSpinnerBold, PiWarningCircleBold } from 'react-icons/pi'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { api } from '../../lib/api.js'
 import { useI18n, formatAzDate } from '../../i18n/index.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 // Admin sorğuları: token avtomatik əlavə olunur.
 export function useAdminApi() {
@@ -36,40 +37,28 @@ export function Button({ variant = 'outline', size = 'md', loading, children, cl
   )
 }
 
-// İki addımlı təsdiq: "Sil" → "Əminsən? Bəli / Xeyr". Brauzerin confirm() pəncərəsi olmadan.
-export function ConfirmButton({ onConfirm, children, question = 'Əminsən?', size = 'sm' }) {
-  const [asking, setAsking] = useState(false)
+// Təsdiqli düymə: basanda "Silmək istədiyinizə əminsinizmi?" pəncərəsi açılır; "Bəli" olsa onConfirm işləyir.
+// question — pəncərədə əlavə izah; silmə olmayan hallar üçün title/yes dəyişdirilə bilər.
+export function ConfirmButton({ onConfirm, children, question, title, yes, size = 'sm' }) {
+  const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
-  if (!asking) {
-    return (
-      <Button variant="danger" size={size} onClick={() => setAsking(true)}>
-        {children}
-      </Button>
-    )
-  }
   return (
-    <span className="inline-flex items-center gap-1.5 bg-brand-pink-soft rounded-full pl-3 pr-1 py-1">
-      <span className="text-[0.8rem] font-bold text-brand-pink-deep">{question}</span>
-      <Button
-        variant="dark"
-        size="sm"
-        loading={busy}
-        onClick={async () => {
-          setBusy(true)
-          try {
-            await onConfirm()
-          } finally {
-            setBusy(false)
-            setAsking(false)
-          }
-        }}
-      >
-        Bəli
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => setAsking(false)}>
-        Xeyr
-      </Button>
-    </span>
+    <Button
+      variant="danger"
+      size={size}
+      loading={busy}
+      onClick={async () => {
+        if (!(await confirm({ detail: question, title, yes }))) return
+        setBusy(true)
+        try {
+          await onConfirm()
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      {children}
+    </Button>
   )
 }
 

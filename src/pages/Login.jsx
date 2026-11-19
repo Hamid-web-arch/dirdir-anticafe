@@ -7,6 +7,7 @@ import { apiEnabled } from '../lib/api.js'
 import { isEmail, isPhone, phoneDigits, safeNext, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
 import { useSeo } from '../lib/seo.js'
+import GoogleButton from '../components/GoogleButton.jsx'
 
 export default function Login() {
   const { user, login } = useAuth()
@@ -106,6 +107,9 @@ export default function Login() {
 
         {sent && <DemoNotice>{t('auth.demoLogin')}</DemoNotice>}
       </form>
+      <div className="mt-5">
+        <GoogleButton />
+      </div>
     </AuthLayout>
   )
 }

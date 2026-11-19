@@ -10,6 +10,7 @@ export default function Footer() {
     { to: '/oyunlar', label: t('nav.games') },
     { to: '/arena', label: t('nav.arena') },
     { to: '/sponsorlar', label: t('nav.sponsors') },
+    { to: '/mexfilik', label: t('footer.privacy') },
   ]
 
   return (

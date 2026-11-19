@@ -20,7 +20,10 @@ import {
   profileUpdateSchema,
   passwordChangeSchema,
   emailChangeSchema,
+  googleLoginSchema,
 } from '../validation.js'
+import { randomBytes } from 'node:crypto'
+import { verifyGoogleCredential, googleClientId } from '../google.js'
 import { canSendCodes } from '../mail.js'
 import { issueCode, checkCode, consumeCodes, latestCode, assertCanResend } from '../emailCodes.js'
 import { processImage, rawImage } from '../images.js'
@@ -144,6 +147,44 @@ authRouter.post('/login', async (req, res) => {
   // Bloku yalnız şifrə düzgün olanda bildiririk.
   if (user.blockedAt) throw new HttpError(403, 'ACCOUNT_BLOCKED', 'Hesabın bloklanıb. Ətraflı məlumat üçün bizə yaz.')
   res.json({ token: signToken(user), user: publicUser(user) })
+})
+
+// ---------- Google ilə davam et ----------
+// Saytın Google düyməsi üçün Client ID (gizli deyil); boşdursa düymə göstərilmir
+authRouter.get('/google/config', (req, res) => {
+  res.json({ clientId: googleClientId() || null })
+})
+
+// Google-un imzalı tokeni yoxlanır, sonra:
+// - bu Google hesabı ilə əvvəl girilibsə — həmin hesab;
+// - bu emaillə hesab varsa — ona bağlanır (Google emaili təsdiqləyib);
+// - yoxdursa — yeni hesab yaranır (email kodla təsdiq lazım deyil, telefon könüllüdür).
+authRouter.post('/google', async (req, res) => {
+  const { credential, newsletter } = googleLoginSchema.parse(req.body)
+  const google = await verifyGoogleCredential(credential)
+  let user = await prisma.user.findUnique({ where: { googleId: google.sub } })
+  let created = false
+  if (!user) {
+    const byEmail = await prisma.user.findUnique({ where: { email: google.email } })
+    if (byEmail) {
+      user = byEmail.blockedAt ? byEmail : await prisma.user.update({ where: { id: byEmail.id }, data: { googleId: google.sub } })
+    } else {
+      user = await prisma.user.create({
+        data: {
+          firstName: google.firstName,
+          lastName: google.lastName,
+          email: google.email,
+          googleId: google.sub,
+          newsletter: Boolean(newsletter),
+          // Şifrə yoxdur — təsadüfi; istəsə "Şifrəni unutmusan?" ilə qoya bilər
+          passwordHash: await hashPassword(randomBytes(32).toString('hex')),
+        },
+      })
+      created = true
+    }
+  }
+  if (user.blockedAt) throw new HttpError(403, 'ACCOUNT_BLOCKED', 'Hesabın bloklanıb. Ətraflı məlumat üçün bizə yaz.')
+  res.status(created ? 201 : 200).json({ token: signToken(user), user: publicUser(user), created })
 })
 
 // ---------- Profil ----------

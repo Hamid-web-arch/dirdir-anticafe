@@ -292,12 +292,14 @@ function AdminCard({ admin: a, onChanged, onRemoved }) {
               )}
               <span className="ml-auto flex flex-wrap gap-1.5">
                 <ConfirmButton
-                  question="Adi istifadəçi olsun?"
+                  title="Əminsinizmi?"
+                  question="Bu admin adi istifadəçi olacaq."
+                  yes="Bəli, çıxar"
                   onConfirm={() => run('demote', `/admin/admins/${a.id}/demote`, { method: 'POST' }, onRemoved)}
                 >
                   <PiShieldSlashBold size={15} /> Adminlikdən çıxar
                 </ConfirmButton>
-                <ConfirmButton question="Hesab silinsin?" onConfirm={() => run('delete', `/admin/admins/${a.id}`, { method: 'DELETE' }, onRemoved)}>
+                <ConfirmButton question="Admin hesabı silinəcək." onConfirm={() => run('delete', `/admin/admins/${a.id}`, { method: 'DELETE' }, onRemoved)}>
                   <PiTrashBold size={15} /> Sil
                 </ConfirmButton>
               </span>

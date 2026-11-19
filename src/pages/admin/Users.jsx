@@ -289,7 +289,7 @@ function UserRow({ user: u, open, onToggle, onChanged, onDeleted, onError }) {
               <PiProhibitBold size={15} /> Blokla
             </Button>
           )}
-          <ConfirmButton onConfirm={remove} question="Hesab və komandaları silinsin?">
+          <ConfirmButton onConfirm={remove} question="Hesab və onun komandaları silinəcək.">
             <PiTrashBold size={15} /> Sil
           </ConfirmButton>
         </div>

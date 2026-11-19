@@ -136,7 +136,7 @@ export default function AdminGames() {
                 <PiPencilSimpleBold size={15} /> Redaktə
               </Button>
               <ConfirmButton
-                question="Oyun silinsin?"
+                question="Oyun saytdan silinəcək."
                 onConfirm={async () => {
                   try {
                     await request(`/admin/games/${g.id}`, { method: 'DELETE' })

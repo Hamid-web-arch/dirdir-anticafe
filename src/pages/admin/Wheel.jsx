@@ -3,6 +3,7 @@ import { PiPlusBold, PiTrashBold, PiArrowCounterClockwiseBold, PiCheckCircleBold
 import { formatAzDate } from '../../i18n/index.jsx'
 import { prizeEffect, effectText } from '../../lib/prizeEffect.js'
 import { useAdminApi, card, Button, Label, TextInput, ErrorBox, Spinner, Empty, Checkbox, Select } from './ui.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 const formatDate = (iso) => formatAzDate(iso, { day: 'numeric', month: 'short', hour: '2-digit' })
 
@@ -37,6 +38,7 @@ export default function AdminWheel() {
 }
 
 function Settings() {
+  const confirm = useConfirm()
   const request = useAdminApi()
   const [form, setForm] = useState(null)
   const [defaults, setDefaults] = useState(null)
@@ -182,7 +184,7 @@ function Settings() {
                   size="sm"
                   aria-label="Hədiyyəni sil"
                   disabled={form.prizes.length <= 2}
-                  onClick={() => change({ ...form, prizes: form.prizes.filter((_, j) => j !== i) })}
+                  onClick={async () => (await confirm({ detail: 'Bu hədiyyə çarxdan silinəcək.' })) && change({ ...form, prizes: form.prizes.filter((_, j) => j !== i) })}
                   className="mt-1"
                 >
                   <PiTrashBold size={16} />

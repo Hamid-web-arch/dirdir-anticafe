@@ -138,7 +138,7 @@ export default function AdminSlides() {
                 <PiPencilSimpleBold size={15} /> Redaktə
               </Button>
               <ConfirmButton
-                question="Slayd silinsin?"
+                question="Slayd silinəcək."
                 onConfirm={async () => {
                   try {
                     await request(`/admin/slides/${s.id}`, { method: 'DELETE' })

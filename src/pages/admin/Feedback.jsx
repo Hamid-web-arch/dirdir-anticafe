@@ -98,7 +98,7 @@ export default function AdminFeedback() {
                   </a>
                 )}
                 <ConfirmButton
-                  question="Mesaj silinsin?"
+                  question="Bu mesaj silinəcək."
                   onConfirm={async () => {
                     try {
                       await request(`/admin/feedback/${f.id}`, { method: 'DELETE' })

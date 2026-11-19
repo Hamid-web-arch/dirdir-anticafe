@@ -36,7 +36,7 @@ export default {
     spotsLeft: { one: '{count} yer qalıb', other: '{count} yer qalıb' },
   },
 
-  footer: { nav: 'Səhifələr', hours: 'Hər gün', rights: 'Bütün hüquqlar qorunur.' },
+  footer: { nav: 'Səhifələr', hours: 'Hər gün', rights: 'Bütün hüquqlar qorunur.', privacy: 'Məxfilik siyasəti' },
 
   nav: {
     main: 'Əsas menyu',
@@ -280,6 +280,7 @@ export default {
   },
 
   auth: {
+    or: 'və ya',
     optional: 'könüllü',
     codeTitle: 'Emailini təsdiqlə',
     codeSubtitle: '{email} ünvanına 6 rəqəmli kod göndərdik. Hesabın kodu yazandan sonra yaranacaq.',
@@ -346,7 +347,14 @@ export default {
     currentPassword: 'Köhnə şifrəni yaz.',
   },
 
+  confirm: {
+    title: 'Silmək istədiyinizə əminsinizmi?',
+    yes: 'Bəli, sil',
+    cancel: 'Ləğv et',
+  },
   errors: {
+    GOOGLE_INVALID: 'Google ilə giriş alınmadı — yenidən cəhd et.',
+    GOOGLE_OFF: 'Google ilə giriş hələ qurulmayıb.',
     CODE_INVALID: 'Kod yanlışdır.',
     CODE_EXPIRED: 'Kodun vaxtı bitib — yeni kod istə.',
     CODE_COOLDOWN: 'Yeni kodu bir dəqiqədən sonra istəyə bilərsən.',

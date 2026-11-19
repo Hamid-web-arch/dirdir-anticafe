@@ -39,7 +39,7 @@ export default {
     },
   },
 
-  footer: { nav: 'Страницы', hours: 'Ежедневно', rights: 'Все права защищены.' },
+  footer: { nav: 'Страницы', hours: 'Ежедневно', rights: 'Все права защищены.', privacy: 'Политика конфиденциальности' },
 
   nav: {
     main: 'Главное меню',
@@ -281,6 +281,7 @@ export default {
   },
 
   auth: {
+    or: 'или',
     optional: 'необязательно',
     codeTitle: 'Подтверди email',
     codeSubtitle: 'Мы отправили 6-значный код на {email}. Аккаунт будет создан после ввода кода.',
@@ -347,7 +348,14 @@ export default {
     currentPassword: 'Введите текущий пароль.',
   },
 
+  confirm: {
+    title: 'Вы уверены, что хотите удалить?',
+    yes: 'Да, удалить',
+    cancel: 'Отмена',
+  },
   errors: {
+    GOOGLE_INVALID: 'Не удалось войти через Google — попробуй ещё раз.',
+    GOOGLE_OFF: 'Вход через Google пока не настроен.',
     CODE_INVALID: 'Неверный код.',
     CODE_EXPIRED: 'Срок кода истёк — запроси новый.',
     CODE_COOLDOWN: 'Новый код можно запросить через минуту.',

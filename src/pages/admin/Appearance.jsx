@@ -4,6 +4,7 @@ import defaultImage from '../../assets/upper-hal.jpeg'
 import { assetUrl } from '../../lib/api.js'
 import { setSiteImagesCache, setHeroVideoCache } from '../../lib/site.js'
 import { useAdminApi, card, Button, ErrorBox, Spinner } from './ui.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 const MAX_UPLOAD = 10 * 1024 * 1024
 const MAX_VIDEO = 30 * 1024 * 1024 // server/src/videos.js ilə eyni
@@ -48,6 +49,7 @@ export default function AdminAppearance() {
 }
 
 function ImageSlot({ place, url, onSaved, onError }) {
+  const confirm = useConfirm()
   const request = useAdminApi()
   const fileInput = useRef(null)
   const [busy, setBusy] = useState(false)
@@ -68,6 +70,7 @@ function ImageSlot({ place, url, onSaved, onError }) {
   }
 
   const reset = async () => {
+    if (!(await confirm({ title: 'Əminsinizmi?', detail: 'Yüklədiyiniz şəkil silinəcək və standart şəkil qayıdacaq.', yes: 'Bəli' }))) return
     setBusy(true)
     try {
       onSaved((await request(`/admin/site-images/${place.key}`, { method: 'DELETE' })).images)
@@ -110,6 +113,7 @@ function ImageSlot({ place, url, onSaved, onError }) {
 
 // Ana səhifənin yuxarısındakı (Hero) fon videosu. Video yoxdursa — sadə fon.
 function HeroVideoSlot() {
+  const confirm = useConfirm()
   const request = useAdminApi()
   const fileInput = useRef(null)
   const [url, setUrl] = useState(undefined) // undefined — yüklənir
@@ -150,6 +154,7 @@ function HeroVideoSlot() {
   }
 
   const remove = async () => {
+    if (!(await confirm({ detail: 'Ana səhifənin fon videosu silinəcək.' }))) return
     setBusy(true)
     setError(null)
     try {

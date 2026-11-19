@@ -60,6 +60,8 @@ export function AuthProvider({ children }) {
       token,
       checking,
       login: async (credentials) => saveSession(await api('/auth/login', { method: 'POST', body: credentials })),
+      // "Google ilə davam et": Google-un imzalı tokeni ilə giriş (hesab yoxdursa yaranır)
+      loginWithGoogle: async (body) => saveSession(await api('/auth/google', { method: 'POST', body })),
       // Qeydiyyat: server emailə kod göndəribsə { pending, email } qaytarılır (hesab hələ yoxdur);
       // email göndərmə qurulmayıbsa hesab dərhal yaranır və daxil oluruq (null qaytarılır)
       register: async (data) => {

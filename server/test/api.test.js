@@ -2302,3 +2302,62 @@ describe('nağd + kart: hamısı nağd və ya hamısı kart', () => {
     assert.deepEqual([allCard.persons[0].paymentMethod, allCard.paymentMethod], ['card', 'card'])
   })
 })
+
+describe('Google ilə davam et', () => {
+  const token = (claims) => JSON.stringify(claims).padEnd(40, ' ')
+  const claims = (over = {}) => ({
+    aud: 'test-client.apps.googleusercontent.com',
+    iss: 'https://accounts.google.com',
+    exp: String(Math.floor(Date.now() / 1000) + 600),
+    sub: 'google-123',
+    email: 'Nigar@Gmail.com',
+    email_verified: 'true',
+    given_name: 'Nigar',
+    family_name: 'Əliyeva',
+    ...over,
+  })
+  let setGoogleVerifier
+  before(async () => {
+    ;({ setGoogleVerifier } = await import('../src/google.js'))
+  })
+  after(() => {
+    delete process.env.GOOGLE_CLIENT_ID
+  })
+
+  it('yeni hesab yaradır, sonra eyni hesaba girir; mövcud emailə bağlanır; saxta token qəbul olunmur', async () => {
+    const google = (claim) => api.post('/api/auth/google').send({ credential: token(claim) })
+    // Client ID qurulmayıbsa — söndürülüb
+    delete process.env.GOOGLE_CLIENT_ID
+    assert.equal((await google(claims())).status, 503)
+    assert.equal((await api.get('/api/auth/google/config')).body.clientId, null)
+
+    process.env.GOOGLE_CLIENT_ID = 'test-client.apps.googleusercontent.com'
+    setGoogleVerifier(async (credential) => JSON.parse(credential))
+
+    const first = await google(claims())
+    assert.equal(first.status, 201, JSON.stringify(first.body))
+    assert.equal(first.body.created, true)
+    assert.equal(first.body.user.email, 'nigar@gmail.com')
+    assert.equal(first.body.user.firstName, 'Nigar')
+    assert.equal(first.body.user.phone, null)
+    assert.ok(first.body.user.customerCode)
+    const again = await google(claims())
+    assert.equal(again.status, 200)
+    assert.equal(again.body.user.id, first.body.user.id)
+
+    // Başqa sayt üçün token, vaxtı keçmiş və ya email təsdiqlənməmiş — yox
+    assert.equal((await google(claims({ aud: 'another-app' }))).status, 401)
+    assert.equal((await google(claims({ exp: '1000' }))).status, 401)
+    assert.equal((await google(claims({ sub: 'x2', email: 'yeni@gmail.com', email_verified: 'false' }))).status, 401)
+
+    // Adi qeydiyyatla açılmış hesab — Google ilə girəndə ona bağlanır
+    const aysel = (await register()).body
+    const linked = await google(claims({ sub: 'google-aysel', email: 'aysel@mail.com' }))
+    assert.equal(linked.status, 200)
+    assert.equal(linked.body.user.id, aysel.user.id)
+
+    // Bloklanmış hesab girə bilməz
+    await ctx.prisma.user.update({ where: { id: aysel.user.id }, data: { blockedAt: new Date() } })
+    assert.equal((await google(claims({ sub: 'google-aysel', email: 'aysel@mail.com' }))).status, 403)
+  })
+})

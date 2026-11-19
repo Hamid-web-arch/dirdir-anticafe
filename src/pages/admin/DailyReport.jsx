@@ -51,6 +51,7 @@ import {
 import { formatAzDate } from '../../i18n/index.jsx'
 import { tierStyle } from '../../lib/club.js'
 import { useAdminApi, card, Button, ConfirmButton, Label, TextInput, ErrorBox, Spinner } from './ui.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 // Məbləğ: 4 → "4₼", 5.5 → "5.50₼"
 const money = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}₼`
@@ -589,7 +590,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
             <button type="button" title="Düzəlt" aria-label="Düzəlt" onClick={() => setEditing(true)} className={iconBtn}>
               <PiPencilSimpleBold size={16} />
             </button>
-            <ConfirmButton question="Silinsin?" onConfirm={() => act(`/admin/visits/${visit.id}`, { method: 'DELETE' }, 'Seans silindi')}>
+            <ConfirmButton question="Bu seans hesabatdan silinəcək." onConfirm={() => act(`/admin/visits/${visit.id}`, { method: 'DELETE' }, 'Seans silindi')}>
               <PiTrashBold size={16} />
             </ConfirmButton>
           </span>
@@ -1845,6 +1846,7 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
 
 // Düzəlişdə sifarişin nəfərləri: üzv əlavə et / çıxar, qonaq əlavə et, tələbə, (bitmişdə) ödəniş üsulu
 function PersonsEditor({ persons, kind, ended, onChange }) {
+  const confirm = useConfirm()
   const { room, studentDiscount } = usePricing()
   const isRoom = kind === 'room'
   const set = (i, patch) => onChange(persons.map((p, j) => (j === i ? { ...p, ...patch } : p)))
@@ -1893,7 +1895,7 @@ function PersonsEditor({ persons, kind, ended, onChange }) {
               type="button"
               aria-label="Çıxar"
               disabled={persons.length <= 1}
-              onClick={() => onChange(persons.filter((_, j) => j !== i))}
+              onClick={async () => (await confirm({ detail: 'Bu şəxs sifarişdən çıxarılacaq.' })) && onChange(persons.filter((_, j) => j !== i))}
               className="p-1.5 rounded-full text-inkdim hover:bg-ink/10 disabled:opacity-30"
             >
               <PiXBold size={13} />

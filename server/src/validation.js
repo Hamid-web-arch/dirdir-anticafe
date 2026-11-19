@@ -82,6 +82,12 @@ export const loginSchema = z.preprocess(
   }),
 )
 
+// Google ilə giriş: brauzerin Google-dan aldığı ID token
+export const googleLoginSchema = z.object({
+  credential: z.string({ error: 'Google cavabı gəlmədi.' }).min(20).max(5000),
+  newsletter: z.boolean().optional(),
+})
+
 export const profileUpdateSchema = z
   .object({ firstName: name('Adını'), lastName: name('Soyadını'), phone: optionalPhone, newsletter: z.boolean() })
   .partial()

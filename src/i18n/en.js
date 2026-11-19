@@ -34,7 +34,7 @@ export default {
     spotsLeft: { one: '{count} spot left', other: '{count} spots left' },
   },
 
-  footer: { nav: 'Pages', hours: 'Daily', rights: 'All rights reserved.' },
+  footer: { nav: 'Pages', hours: 'Daily', rights: 'All rights reserved.', privacy: 'Privacy policy' },
 
   nav: {
     main: 'Main menu',
@@ -276,6 +276,7 @@ export default {
   },
 
   auth: {
+    or: 'or',
     optional: 'optional',
     codeTitle: 'Confirm your email',
     codeSubtitle: 'We sent a 6-digit code to {email}. Your account is created once you enter it.',
@@ -342,7 +343,14 @@ export default {
     currentPassword: 'Enter your current password.',
   },
 
+  confirm: {
+    title: 'Are you sure you want to delete this?',
+    yes: 'Yes, delete',
+    cancel: 'Cancel',
+  },
   errors: {
+    GOOGLE_INVALID: 'Google sign-in failed — please try again.',
+    GOOGLE_OFF: 'Google sign-in is not set up yet.',
     CODE_INVALID: 'The code is wrong.',
     CODE_EXPIRED: 'The code has expired — ask for a new one.',
     CODE_COOLDOWN: 'You can ask for a new code in a minute.',

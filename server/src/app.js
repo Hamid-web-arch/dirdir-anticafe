@@ -63,6 +63,7 @@ export function createApp() {
 
   // Şifrə təxmin etməyə və kod axtarmağa qarşı daha sərt limit
   app.use('/api/auth/login', limiter(10, 15))
+  app.use('/api/auth/google', limiter(30, 15))
   // Bir hesaba müxtəlif IP-lərdən təxmin: hesab (email/telefon) üzrə ayrıca limit
   app.use(
     '/api/auth/login',

@@ -19,6 +19,7 @@ import {
   Spinner,
   Empty,
 } from './ui.jsx'
+import { useConfirm } from '../../components/ConfirmDialog.jsx'
 
 const STATUS = {
   UPCOMING: { label: 'Tezliklə', style: 'bg-brand-purple-soft text-brand-purple-deep' },
@@ -91,7 +92,7 @@ export default function AdminCompetitions() {
                 <PiPencilSimpleBold size={15} /> Redaktə
               </Button>
               <ConfirmButton
-                question="Yarış və bütün komandaları silinsin?"
+                question="Yarış və onun bütün komandaları silinəcək."
                 onConfirm={async () => {
                   try {
                     await request(`/admin/competitions/${c.id}`, { method: 'DELETE' })
@@ -214,12 +215,13 @@ function CompetitionForm({ competition, onDone }) {
 
 // Hədiyyələr: hər sətir — yer (1, 2, 3...) və hədiyyənin adı 3 dildə. Saytda yerə görə sıralı görünür.
 function PrizesEditor({ prizes, onChange, errors }) {
+  const confirm = useConfirm()
   const update = (i, patch) => onChange(prizes.map((p, j) => (j === i ? { ...p, ...patch } : p)))
   const add = () => {
     const next = Math.max(0, ...prizes.map((p) => Number(p.place) || 0)) + 1
     onChange([...prizes, { place: String(next), title: emptyLocalized() }])
   }
-  const remove = (i) => onChange(prizes.filter((_, j) => j !== i))
+  const remove = async (i) => (await confirm({ detail: 'Bu hədiyyə silinəcək.' })) && onChange(prizes.filter((_, j) => j !== i))
   const listError = errors.prizes
 
   return (
@@ -393,7 +395,7 @@ function TeamRow({ team, onChanged, onError }) {
             <PiClockCounterClockwiseBold size={16} />
           </Button>
           <ConfirmButton
-            question="Komanda silinsin?"
+            question="Komanda və xalları silinəcək."
             onConfirm={async () => {
               try {
                 await request(`/admin/teams/${team.id}`, { method: 'DELETE' })

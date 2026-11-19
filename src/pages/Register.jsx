@@ -9,6 +9,7 @@ import { CodeField, ResendCode } from '../components/EmailCode.jsx'
 import { isEmail, isPhone, phoneDigits, formatPhone, MIN_PASSWORD, safeNext, fieldMessage } from '../lib/forms.js'
 import { useI18n } from '../i18n/index.jsx'
 import { useSeo } from '../lib/seo.js'
+import GoogleButton from '../components/GoogleButton.jsx'
 
 export default function Register() {
   const { user, register } = useAuth()
@@ -173,6 +174,9 @@ export default function Register() {
 
         {sent && <DemoNotice>{t('auth.demoRegister')}</DemoNotice>}
       </form>
+      <div className="mt-5">
+        <GoogleButton newsletter={form.newsletter} />
+      </div>
     </AuthLayout>
   )
 }
