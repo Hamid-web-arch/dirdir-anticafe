@@ -6,7 +6,7 @@ import { HttpError } from '../middleware/error.js'
 import { requirePermission } from '../permissions.js'
 import { getPricing } from '../pricing.js'
 import { bakuDay, visitMinutes, visitPrice, publicVisit, paymentSplit } from '../visits.js'
-import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema } from '../validation.js'
+import { visitListQuerySchema, visitCreateSchema, visitUpdateSchema, visitEndSchema, personLeaveSchema } from '../validation.js'
 import { clubSnapshot } from '../club.js'
 import { prizeEffect, spinExpired } from '../wheel.js'
 
@@ -207,7 +207,7 @@ adminVisitsRouter.get('/visits/days', async (req, res) => {
       deposit: true,
       depositMethod: true,
       cashAmount: true,
-      persons: { select: { amount: true, paymentMethod: true, cashAmount: true }, orderBy: { position: 'asc' } },
+      persons: { select: { amount: true, paymentMethod: true, cashAmount: true, leftAt: true }, orderBy: { position: 'asc' } },
     },
     orderBy: { day: 'desc' },
   })
@@ -298,23 +298,25 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
     const pay = settle(paymentMethod, cashAmount, data.amount - Number(visit.deposit ?? 0))
     await prisma.visit.update({ where: { id: visit.id }, data: { ...data, paymentMethod: pay.method, cashAmount: pay.cash } })
   } else {
-    let methods = visit.persons.map((p) => payments[p.id] ?? paymentMethod)
+    // Tez gedib ödəyənlərə toxunulmur; gedib ödəməyənlər (sonda ödəyəcək) qalanlarla ödəyir
+    const active = visit.persons.map((p, i) => ({ p, i })).filter(({ p }) => !p.leftAt || !p.paymentMethod)
+    let methods = active.map(({ p }) => payments[p.id] ?? paymentMethod)
     if (methods.some((m) => !m)) {
       throw new HttpError(400, 'VALIDATION', 'Hər nəfər üçün ödəniş üsulunu seç: nağd və ya kart.', { fields: { payments: 'Hər nəfər üçün ödəniş üsulunu seç.' } })
     }
     const deposit = Number(visit.deposit ?? 0)
-    const dues = visit.persons.map((p, i) => round2(shares[i].share - (i === 0 ? deposit : 0)))
+    const dues = active.map(({ i }) => round2(shares[i].share - (i === 0 ? deposit : 0)))
     let cash
     let orderCash = null
-    if (paymentMethod === 'split' && Object.keys(payments).length === 0 && visit.persons.length > 1) {
+    if (paymentMethod === 'split' && Object.keys(payments).length === 0 && active.length > 1) {
       // Bütün sifariş üçün bir "nağd + kart": nəfərlərə bölünmür — sifarişdə ümumi nağd hissə saxlanır,
       // qalanı kart (hamısı nağd / 0 — sadəcə "nağd" / "kart")
       const pay = settle('split', cashAmount, round2(dues.reduce((s, d) => s + d, 0)))
       orderCash = pay.cash
-      methods = visit.persons.map(() => (pay.method === 'split' ? null : pay.method))
-      cash = visit.persons.map(() => null)
+      methods = active.map(() => (pay.method === 'split' ? null : pay.method))
+      cash = active.map(() => null)
     } else {
-      const settled = visit.persons.map((p, i) => settle(methods[i], cashAmounts[p.id] ?? cashAmount, dues[i], `${i + 1}-ci nəfər: `))
+      const settled = active.map(({ p, i }, k) => settle(methods[k], cashAmounts[p.id] ?? cashAmount, dues[k], `${i + 1}-ci nəfər: `))
       methods = settled.map((x) => x.method)
       cash = settled.map((x) => x.cash)
     }
@@ -323,16 +325,55 @@ adminVisitsRouter.post('/visits/:id/end', async (req, res) => {
         where: { id: visit.id },
         data: { ...data, paymentMethod: orderCash != null ? 'split' : commonMethod(methods), cashAmount: orderCash },
       })
-      for (const [i, p] of visit.persons.entries()) {
+      for (const [k, { p, i }] of active.entries()) {
         await tx.visitPerson.update({
           where: { id: p.id },
-          data: { amount: shares[i].share, discount: shares[i].discount, paymentMethod: methods[i], cashAmount: cash[i] },
+          data: { amount: shares[i].share, discount: shares[i].discount, paymentMethod: methods[k], cashAmount: cash[k] },
         })
       }
       // Hədiyyələr indi "istifadə olunub"
       await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
     })
   }
+  res.json({ visit: publicVisit(await loadVisit(visit.id)) })
+})
+
+// Bir nəfər tez gedir (yalnız zal): payı başlamadan getdiyi ana qədər hesablanır və ödənilir, sifariş qalanlar üçün davam edir
+adminVisitsRouter.post('/visits/:id/persons/:personId/leave', async (req, res) => {
+  const { paymentMethod, cashAmount, leftAt = new Date() } = personLeaveSchema.parse(req.body ?? {})
+  const visit = await findVisit(req.params.id)
+  if (visit.endedAt) throw new HttpError(409, 'VISIT_ENDED', 'Bu seans artıq bitib.')
+  if (visit.kind === 'room') throw new HttpError(400, 'VALIDATION', 'Kino otağında nəfər ayrıca gedə bilməz.')
+  const index = visit.persons.findIndex((p) => p.id === req.params.personId)
+  const person = visit.persons[index]
+  if (!person) throw new HttpError(404, 'NOT_FOUND', 'Nəfər tapılmadı.')
+  if (person.leftAt) throw new HttpError(409, 'PERSON_LEFT', 'Bu nəfər artıq gedib.')
+  if (visit.persons.filter((p) => !p.leftAt).length < 2) {
+    throw new HttpError(400, 'VALIDATION', 'Sonuncu nəfər gedirsə, sifarişi "Bitir" ilə bağla.')
+  }
+  assertNotFuture(leftAt, 'leftAt', 'Getmə vaxtı')
+  const { shares } = await closing(visit.startedAt, leftAt, visit)
+  const share = shares[index]
+  const pay = paymentMethod
+    ? settle(paymentMethod, cashAmount, share.share - (index === 0 ? Number(visit.deposit ?? 0) : 0))
+    : { method: null, cash: null } // sonda ödəyəcək
+  await prisma.visitPerson.update({
+    where: { id: person.id },
+    data: { leftAt, amount: share.share, discount: share.discount, paymentMethod: pay.method, cashAmount: pay.cash },
+  })
+  res.json({ visit: publicVisit(await loadVisit(visit.id)) })
+})
+
+// "Getdi" səhvən basılıbsa: nəfər yenidən sifarişdədir (sifariş hələ bitməyibsə)
+adminVisitsRouter.post('/visits/:id/persons/:personId/return', async (req, res) => {
+  const visit = await findVisit(req.params.id)
+  if (visit.endedAt) throw new HttpError(409, 'VISIT_ENDED', 'Bu seans artıq bitib.')
+  const person = visit.persons.find((p) => p.id === req.params.personId)
+  if (!person?.leftAt) throw new HttpError(404, 'NOT_FOUND', 'Nəfər tapılmadı.')
+  await prisma.visitPerson.update({
+    where: { id: person.id },
+    data: { leftAt: null, amount: null, discount: null, paymentMethod: null, cashAmount: null },
+  })
   res.json({ visit: publicVisit(await loadVisit(visit.id)) })
 })
 
@@ -460,6 +501,15 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     data.paymentMethod = paymentMethod
   }
 
+  // Tez gedənlər: payı və ödənişi getdiyi an yazılıb — redaktədə dəyişmir
+  nextPersons = nextPersons.map((p) => {
+    const old = p.id && visit.persons.find((o) => o.id === p.id)
+    return old?.leftAt
+      ? { ...p, leftAt: old.leftAt, amount: old.amount, discount: old.discount, paymentMethod: old.paymentMethod, cashAmount: old.cashAmount }
+      : p
+  })
+  const leftPaid = nextPersons.reduce((s, p, i) => (p.leftAt && p.paymentMethod ? s + Number(p.amount ?? 0) - (i === 0 ? Number(visit.deposit ?? 0) : 0) : s), 0)
+
   let shares = null
   const changed = startedAt || endedAt || people || kind || students !== undefined || promoChanged || discount !== undefined || personsChanged
   if (visit.endedAt && changed) {
@@ -482,10 +532,10 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
     const finalDeposit = Number(deposit !== undefined ? (deposit?.amount ?? 0) : (visit.deposit ?? 0))
     if (orderSplit) {
       const cash = cashAmount ?? (visit.cashAmount == null ? null : Number(visit.cashAmount))
-      const pay = settle('split', cash, finalAmount - finalDeposit)
+      const pay = settle('split', cash, finalAmount - finalDeposit - leftPaid)
       data.paymentMethod = pay.method
       data.cashAmount = pay.cash
-      if (pay.method !== 'split') nextPersons = nextPersons.map((p) => ({ ...p, paymentMethod: pay.method }))
+      if (pay.method !== 'split') nextPersons = nextPersons.map((p) => (p.leftAt ? p : { ...p, paymentMethod: pay.method }))
     } else if (grouped) {
       data.cashAmount = null
       nextPersons = nextPersons.map((p, i) => {
@@ -517,8 +567,8 @@ adminVisitsRouter.patch('/visits/:id', async (req, res) => {
         student: p.student,
         spinId: p.spinId ?? null,
         gift: p.gift ?? Prisma.DbNull,
-        paymentMethod: visit.endedAt ? p.paymentMethod : null,
-        cashAmount: visit.endedAt ? (p.cashAmount ?? null) : null,
+        paymentMethod: visit.endedAt || p.leftAt ? p.paymentMethod : null,
+        cashAmount: visit.endedAt || p.leftAt ? (p.cashAmount ?? null) : null,
         ...(shares ? { amount: shares[i].share, discount: shares[i].discount } : {}),
       }
       if (p.id) await tx.visitPerson.update({ where: { id: p.id }, data: fields })
@@ -538,7 +588,7 @@ adminVisitsRouter.post('/visits/:id/resume', async (req, res) => {
   if (visit.kind === 'room') await assertRoom({ people: visit.people })
   await prisma.$transaction(async (tx) => {
     await tx.visit.update({ where: { id: visit.id }, data: { endedAt: null, minutes: null, amount: null, paymentMethod: null, cashAmount: null } })
-    await tx.visitPerson.updateMany({ where: { visitId: visit.id }, data: { amount: null, discount: null, paymentMethod: null, cashAmount: null } })
+    await tx.visitPerson.updateMany({ where: { visitId: visit.id, leftAt: null }, data: { amount: null, discount: null, paymentMethod: null, cashAmount: null } })
     // Hədiyyələr yenidən gözləyir — sifariş bitəndə istifadə olunacaq
     await syncSpins(tx, visit.persons.map((p) => p.spinId), req.user.id)
   })

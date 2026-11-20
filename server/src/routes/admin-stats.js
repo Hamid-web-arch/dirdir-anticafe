@@ -44,7 +44,7 @@ adminStatsRouter.get('/stats', async (req, res) => {
       kind: true,
       endedAt: true,
       cashAmount: true,
-      persons: { select: { amount: true, paymentMethod: true, cashAmount: true }, orderBy: { position: 'asc' } },
+      persons: { select: { amount: true, paymentMethod: true, cashAmount: true, leftAt: true }, orderBy: { position: 'asc' } },
     },
   })
   for (const v of visits) {

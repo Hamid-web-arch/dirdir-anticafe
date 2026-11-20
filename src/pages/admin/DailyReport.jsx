@@ -31,6 +31,7 @@ import {
   PiXBold,
   PiFilePdfBold,
   PiFileXlsBold,
+  PiSignOutBold,
 } from 'react-icons/pi'
 import { downloadCsv, downloadPdf, dayText } from './exportReport.js'
 import { usePricing } from '../../pricing/PricingContext.jsx'
@@ -453,6 +454,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
   const [editing, setEditing] = useState(false)
   const [ending, setEnding] = useState(false) // "Bitir" basılıb — ödəniş üsulu soruşulur
   const [splitCash, setSplitCash] = useState(null) // "Nağd + kart" açıqdır — nağd hissə (mətn)
+  const [leaving, setLeaving] = useState(null) // "Getdi" basılan nəfərin id-si
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const isActive = !visit.endedAt
@@ -468,6 +470,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
       const res = await request(path, options)
       // Sətir cədvəldə qalır (bitən seans yerini dəyişmir) — ödəniş seçimi bağlanmalıdır
       setEnding(false)
+      setLeaving(null)
       if (res?.visit) onChange(res.visit)
       else onDelete(visit.id)
       notify(typeof message === 'function' ? message(res?.visit) : message)
@@ -518,7 +521,11 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
   )
   // Bitəndə ödəniləcək: məbləğ − beh (mənfidirsə — müştəriyə qaytarılır)
   const deposit = Number(visit.deposit ?? 0)
-  const due = round2(amount - deposit)
+  const leftPaid = (visit.persons ?? []).reduce((s, p, i) => (p.leftAt && p.paymentMethod ? s + Number(p.amount ?? 0) - (i === 0 ? deposit : 0) : s), 0)
+  const due = round2(amount - deposit - leftPaid)
+  const stayed = (visit.persons ?? []).filter((p) => !p.leftAt).length
+  const toPay = (visit.persons ?? []).filter((p) => !p.leftAt || !p.paymentMethod).length
+  const canLeave = isActive && !isRoom && stayed > 1
   const iconBtn = 'p-1.5 rounded-lg text-inkdim hover:text-ink hover:bg-ink/5 disabled:opacity-40'
 
   return (
@@ -596,10 +603,38 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
           </span>
         </td>
       </tr>
-      {grouped && <PersonRows visit={visit} shares={isActive ? price.persons : null} tone={tone} />}
+      {grouped && (
+        <PersonRows
+          visit={visit}
+          shares={isActive ? price.persons : null}
+          tone={tone}
+          canLeave={canLeave}
+          busy={busy}
+          onLeave={setLeaving}
+          onReturn={(p, label) => act(`/admin/visits/${visit.id}/persons/${p.id}/return`, { method: 'POST' }, `${label} yenidən sifarişdədir`)}
+        />
+      )}
+      {leaving &&
+        canLeave &&
+        full(
+          <LeavePerson
+            visit={visit}
+            personId={leaving}
+            pricing={pricing}
+            busy={busy}
+            onCancel={() => setLeaving(null)}
+            onLeave={(body, label) =>
+              act(`/admin/visits/${visit.id}/persons/${leaving}/leave`, { method: 'POST', body }, (v) => {
+                const p = v.persons.find((x) => x.id === leaving)
+                return `${label} getdi — ${money(p?.amount ?? 0)} ${p?.paymentMethod ? 'ödədi' : 'sonda ödəyəcək'}`
+              })
+            }
+          />,
+          'bg-brand-orange-soft/40',
+        )}
       {ending &&
         isActive &&
-        visit.persons?.length > 1 &&
+        toPay > 1 &&
         full(
           <EndPersons
             visit={visit}
@@ -613,7 +648,7 @@ function VisitTableRow({ tone = '', visit, now, pricing, onChange, onDelete, not
         )}
       {ending &&
         isActive &&
-        !(visit.persons?.length > 1) &&
+        !(toPay > 1) &&
         full(
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[0.88rem] font-bold mr-1">
@@ -1676,7 +1711,8 @@ function personLabel(persons, i) {
 // Yalnız qonaqlardan ibarət, eyni üsulla ödənən sifarişdə siyahı lazım deyil ("3 nəfər: 3 qonaq" kifayətdir).
 function hasPersonsList(visit) {
   const persons = visit.persons ?? []
-  if (persons.some((p) => p.user)) return true
+  if (persons.some((p) => p.user || p.leftAt)) return true
+  if (!visit.endedAt && visit.kind !== 'room' && persons.length > 1) return true
   return new Set(persons.map((p) => p.paymentMethod).filter(Boolean)).size > 1
 }
 
@@ -1690,12 +1726,13 @@ function personsSummary(persons) {
 
 // Sifarişin nəfərləri — cədvəldə sifarişin altında hər nəfər öz sətrində: ad, kod, status solda,
 // payı isə Nağd və ya Kart sütununda (davam edəndə — canlı pay). Sifarişlə eyni fon rəngində.
-function PersonRows({ visit, shares, tone }) {
+function PersonRows({ visit, shares, tone, canLeave, busy, onLeave, onReturn }) {
   const persons = visit.persons ?? []
   return persons.map((p, i) => {
     const last = i === persons.length - 1
     const td = `px-3 py-1 align-top ${last ? 'pb-2.5 border-b border-ink/10' : ''}`
-    const share = shares ? shares[i]?.share : p.amount
+    const share = shares && !p.leftAt ? shares[i]?.share : p.amount
+    const label = personLabel(persons, i)
     const percent = p.club ? (visit.kind === 'room' ? p.club.roomPercent : p.club.hallPercent) : 0
     const amountIn = (method) =>
       p.paymentMethod === 'split' && share != null ? (
@@ -1715,7 +1752,8 @@ function PersonRows({ visit, shares, tone }) {
             ) : (
               <PiUsersBold size={15} className="text-inkdim shrink-0" />
             )}
-            <span className={`whitespace-nowrap ${p.user ? 'font-semibold' : 'text-inkdim'}`}>{personLabel(persons, i)}</span>
+            <span className={`whitespace-nowrap ${p.user ? 'font-semibold' : 'text-inkdim'} ${p.leftAt ? 'line-through opacity-70' : ''}`}>{label}</span>
+            {p.leftAt && <span className="text-[0.72rem] font-bold text-brand-orange-deep whitespace-nowrap">getdi {bakuTime(p.leftAt)} · {p.paymentMethod || visit.endedAt ? 'ödədi' : 'sonda ödəyəcək'}</span>}
             {p.user?.customerCode && <span className="text-inkdim text-[0.75rem] whitespace-nowrap">{p.user.customerCode}</span>}
             {p.student && <PiStudentBold size={14} className="shrink-0 text-brand-cyan-deep" title="Tələbə" />}
             {p.club && percent > 0 && (
@@ -1730,7 +1768,7 @@ function PersonRows({ visit, shares, tone }) {
             )}
           </div>
         </td>
-        {shares || orderSplitPaid(visit) ? (
+        {(shares || orderSplitPaid(visit)) && !(p.leftAt && p.paymentMethod) ? (
           <td colSpan={2} className={`${td} text-right ${shares ? 'font-semibold' : 'text-inkdim'}`}>
             {share != null && money(share)}
           </td>
@@ -1740,7 +1778,18 @@ function PersonRows({ visit, shares, tone }) {
             <td className={`${td} text-right`}>{amountIn('card')}</td>
           </>
         )}
-        <td className={td} />
+        <td className={`${td} text-right whitespace-nowrap`}>
+          {!visit.endedAt && p.leftAt && (
+            <button type="button" disabled={busy} onClick={() => onReturn(p, label)} title="Səhvən basılıbsa — geri qaytar" className="text-[0.75rem] font-bold text-inkdim hover:text-ink underline disabled:opacity-40">
+              Geri qaytar
+            </button>
+          )}
+          {canLeave && !p.leftAt && (
+            <button type="button" disabled={busy} onClick={() => onLeave(p.id)} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border-2 border-ink/15 text-[0.75rem] font-bold hover:border-ink disabled:opacity-40">
+              <PiSignOutBold size={12} /> Getdi
+            </button>
+          )}
+        </td>
       </tr>
     )
   })
@@ -1748,7 +1797,9 @@ function PersonRows({ visit, shares, tone }) {
 
 // Sifarişi bitirmək: hər nəfərin payı və onun ödəniş üsulu (nağd/kart). "Hamısı nağd/kart" — birdən seçmək.
 function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
-  const persons = visit.persons
+  // Tez gedənlər artıq ödəyib — yalnız qalanlar (indeks sifarişdəki sıradır)
+  const persons = visit.persons.map((p, i) => ({ ...p, i })).filter((p) => !p.leftAt || !p.paymentMethod)
+  const paidBefore = round2(visit.persons.reduce((s, p) => (p.leftAt && p.paymentMethod ? s + Number(p.amount ?? 0) : s), 0))
   const [methods, setMethods] = useState({})
   const [cash, setCash] = useState({}) // "nağd + kart" seçilənlərin nağd hissəsi
   // "Hamısı nağd + kart": bütün sifariş üçün bir nağd məbləğ (null — bağlı); server onu nəfərlərə sırayla paylayır
@@ -1759,11 +1810,11 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
     setMethods(Object.fromEntries(persons.map((p) => [p.id, method])))
   }
   const dueOf = (i) => (i === 0 ? round2((shares[i]?.share ?? 0) - deposit) : (shares[i]?.share ?? 0))
-  const totalDue = round2(persons.reduce((sum, _, i) => sum + dueOf(i), 0))
+  const totalDue = round2(persons.reduce((sum, p) => sum + dueOf(p.i), 0))
   const ready =
     orderCash !== null
       ? cashValid(orderCash, totalDue)
-      : persons.every((p, i) => methods[p.id] && (methods[p.id] !== 'split' || cashValid(cash[p.id], dueOf(i))))
+      : persons.every((p) => methods[p.id] && (methods[p.id] !== 'split' || cashValid(cash[p.id], dueOf(p.i))))
   const finish = () =>
     onEnd(
       orderCash !== null
@@ -1779,6 +1830,7 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-bold text-[0.9rem]">
           {visit.name} · cəmi <span className="text-primary">{money(amount)}</span>
+          {paidBefore > 0 && <span className="text-inkdim font-semibold"> · gedənlər ödəyib {money(paidBefore)}</span>}
           {deposit > 0 && <span className="text-inkdim font-semibold"> · beh {money(deposit)} birinci nəfərin payından çıxılır</span>}
         </span>
         <span className="inline-flex flex-wrap gap-1">
@@ -1799,11 +1851,11 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
         </div>
       )}
       <ul className={`flex flex-col gap-1 ${orderCash !== null ? 'hidden' : ''}`}>
-        {persons.map((p, i) => {
-          const due = dueOf(i)
+        {persons.map((p) => {
+          const due = dueOf(p.i)
           return (
             <li key={p.id} className="flex flex-wrap items-center gap-2 bg-card rounded-xl px-3 py-1.5">
-              <span className={`flex-1 min-w-0 truncate text-[0.88rem] ${p.user ? 'font-bold' : ''}`}>{personLabel(persons, i)}</span>
+              <span className={`flex-1 min-w-0 truncate text-[0.88rem] ${p.user ? 'font-bold' : ''}`}>{personLabel(visit.persons, p.i)}</span>
               <span className="font-display font-bold tabular-nums text-[0.95rem]">
                 {due >= 0 ? money(due) : `qaytar ${money(-due)}`}
               </span>
@@ -1838,6 +1890,85 @@ function EndPersons({ visit, shares, amount, busy, onEnd, onCancel }) {
         </Button>
         <Button variant="dark" size="sm" loading={busy} disabled={!ready} onClick={finish}>
           <PiStopFill size={12} /> {ready ? 'Bitir' : orderCash !== null ? 'Nağd hissəni yaz' : 'Hər kəs üçün üsul seç'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Bir nəfər tez gedir: getmə vaxtı (indi və ya yazılan saat), o vaxta qədərki payı və ödəniş üsulu
+function LeavePerson({ visit, personId, pricing, busy, onLeave, onCancel }) {
+  const i = visit.persons.findIndex((p) => p.id === personId)
+  const label = personLabel(visit.persons, i)
+  const [time, setTime] = useState(() => bakuTime(new Date()))
+  const [method, setMethod] = useState(null)
+  const [cash, setCash] = useState('')
+  // Yazılan saat bu günün (Bakı) saatıdır; başlamadan əvvəl və ya gələcəkdə ola bilməz
+  const leftAt = (() => {
+    const [h, m] = time.split(':').map(Number)
+    if (Number.isNaN(h) || Number.isNaN(m)) return null
+    const d = new Date(Date.now() + 4 * 3600_000)
+    d.setUTCHours(h, m, 0, 0)
+    const at = new Date(d.getTime() - 4 * 3600_000)
+    return at > new Date(visit.startedAt) && at <= new Date(Date.now() + 60_000) ? at : null
+  })()
+  const share = leftAt ? (visitPrice(pricing, visitMinutes(visit.startedAt, leftAt), visit).persons?.[i]?.share ?? 0) : 0
+  const due = round2(share - (i === 0 ? Number(visit.deposit ?? 0) : 0))
+  const ready = leftAt && method && (method !== 'split' || cashValid(cash, due))
+  const LATER = { label: 'Sonda ödəyəcək', icon: PiClockBold }
+  if (i < 0) return null
+  return (
+    <div className="flex flex-col gap-2 w-full max-w-[560px] ml-auto">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-bold text-[0.9rem] mr-auto">
+          {label} gedir · <span className="text-primary">{leftAt ? money(due) : '—'}</span>
+          {i === 0 && Number(visit.deposit ?? 0) > 0 && <span className="text-inkdim font-semibold"> (beh çıxılıb)</span>}
+        </span>
+        <label className="inline-flex items-center gap-1.5 text-[0.8rem] font-bold">
+          Getmə vaxtı
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className={`bg-bg border-2 rounded-lg px-2 py-1 font-bold tabular-nums ${leftAt ? 'border-ink/15' : 'border-brand-pink'}`}
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <span className="inline-flex bg-ink/5 rounded-full p-0.5 gap-0.5">
+          {Object.entries({ ...PAY_OPTIONS, later: LATER }).map(([m, { label: text, icon: Icon }]) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={method === m}
+              onClick={() => setMethod(m)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[0.78rem] transition-colors ${method === m ? 'bg-ink text-bg' : 'text-inkdim hover:text-ink'}`}
+            >
+              <Icon size={13} /> {text}
+            </button>
+          ))}
+        </span>
+        {method === 'split' && <CashSplit id={`leave-split-${personId}`} due={due} value={cash} onChange={setCash} autoFocus />}
+      </div>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Ləğv et
+        </Button>
+        <Button
+          variant="dark"
+          size="sm"
+          loading={busy}
+          disabled={!ready}
+          onClick={() =>
+            onLeave(
+              method === 'later'
+                ? { leftAt: leftAt.toISOString() }
+                : { paymentMethod: method, leftAt: leftAt.toISOString(), ...(method === 'split' ? { cashAmount: round2(Number(cash)) } : {}) },
+              label,
+            )
+          }
+        >
+          <PiSignOutBold size={13} /> {!leftAt ? 'Vaxtı düzəlt' : method === 'later' ? 'Getdi — sonda ödəyəcək' : method ? 'Getdi — ödənildi' : 'Ödəniş üsulunu seç'}
         </Button>
       </div>
     </div>

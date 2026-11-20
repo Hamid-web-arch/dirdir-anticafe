@@ -485,6 +485,10 @@ const cashPart = z.number({ error: 'Nağd hissəni yaz.' }).min(0, 'Nağd hissə
 // split olan nəfərlərin nağd hissəsi: { nəfərinId: 5 }
 const personCash = z.record(z.string().min(1).max(40), cashPart)
 
+// Bir nəfər tez gedir: öz payını ödəyir (leftAt — göndərilməyibsə indi)
+// paymentMethod yoxdursa — gedib, amma sonda ödəyəcək
+export const personLeaveSchema = z.object({ paymentMethod: paymentMethod.optional(), cashAmount: cashPart.optional(), leftAt: z.coerce.date().optional() })
+
 export const visitEndSchema = z
   .object({ paymentMethod: paymentMethod.optional(), payments: personPayments.optional(), cashAmount: cashPart.optional(), cashAmounts: personCash.optional() })
   .refine((v) => v.paymentMethod || (v.payments && Object.keys(v.payments).length), {

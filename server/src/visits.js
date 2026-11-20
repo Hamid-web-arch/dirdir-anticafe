@@ -203,6 +203,10 @@ export function visitPrice(
         .filter((c) => c?.group)
         .reduce((a, c) => (clubPct(c, 'hallPercent') > clubPct(a, 'hallPercent') ? c : a), null)
       shares = persons.map((p) => {
+        // Tez gedib: payı getdiyi an hesablanıb və ödənilib
+        if (p.leftAt && p.amount != null) {
+          return { share: Number(p.amount), discount: Number(p.discount ?? 0), discountSource: null, clubDiscount: 0 }
+        }
         const personClub = p.club ?? groupClub
         const result = withClub(
           [
@@ -266,7 +270,15 @@ export function paymentSplit(v) {
   // Sifarişdə nəfərlər varsa — hər nəfərin payı öz üsulunda; beh birinci nəfərin ödəməsindən çıxılır
   if (v.paymentMethod === 'split' && v.cashAmount != null) {
     // Bütün sifariş üçün bir "nağd + kart" (nəfərlərə bölünmür)
-    pay('split', Number(v.amount) - deposit, v.cashAmount)
+    // Tez gedənlər öz paylarını ayrıca ödəyib; ümumi bölgü qalanlarındır
+    let rest = Number(v.amount) - deposit
+    v.persons?.forEach((p, i) => {
+      if (!p.leftAt || !p.paymentMethod) return // ödəməyib — sonda qalanlarla
+      const due = Number(p.amount ?? 0) - (i === 0 ? deposit : 0)
+      pay(p.paymentMethod, due, p.cashAmount)
+      rest -= due
+    })
+    pay('split', rest, v.cashAmount)
   } else if (v.persons?.some((p) => p.amount != null)) {
     v.persons.forEach((p, i) => pay(p.paymentMethod, Number(p.amount ?? 0) - (i === 0 ? deposit : 0), p.cashAmount))
   } else {
@@ -290,6 +302,7 @@ export const publicPerson = (p) => ({
   discount: p.discount == null ? null : Number(p.discount),
   paymentMethod: p.paymentMethod ?? null,
   cashAmount: p.cashAmount == null ? null : Number(p.cashAmount),
+  leftAt: p.leftAt ?? null,
   // Hədiyyə çarxının hədiyyəsi (endirim kimi)
   spinId: p.spinId ?? null,
   gift: p.gift ?? null,

@@ -2361,3 +2361,63 @@ describe('Google ilə davam et', () => {
     assert.equal((await google(claims({ sub: 'google-aysel', email: 'aysel@mail.com' }))).status, 403)
   })
 })
+
+describe('sifarişdən bir nəfər tez gedir', () => {
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString()
+
+  it('gedən öz payını getdiyi ana qədər ödəyir, qalanlar sifariş bitəndə', async () => {
+    const adminToken = await createAdmin()
+    const v = (await api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: minutesAgo(180), name: 'Dördlük', persons: [{}, {}, {}, {}] })).body.visit
+    const [a, b, c, d] = v.persons
+    const leave = (p, body) => api.post(`/api/admin/visits/${v.id}/persons/${p.id}/leave`).set(bearer(adminToken)).send(body)
+    // 2 saat qalıb gedirlər: 7₼
+    const ra = await leave(a, { paymentMethod: 'cash', leftAt: minutesAgo(60) })
+    assert.equal(ra.status, 200, JSON.stringify(ra.body))
+    assert.deepEqual([ra.body.visit.persons[0].amount, ra.body.visit.persons[0].paymentMethod], [7, 'cash'])
+    assert.ok(ra.body.visit.persons[0].leftAt)
+    assert.equal((await leave(a, { paymentMethod: 'cash' })).status, 409) // artıq gedib
+    assert.equal((await leave(b, { paymentMethod: 'card', leftAt: minutesAgo(60) })).status, 200)
+    // Sonuncu nəfər "Getdi" ilə gedə bilməz; səhvən basılan geri qaytarılır
+    assert.equal((await leave(c, { paymentMethod: 'cash' })).status, 200)
+    assert.equal((await leave(d, { paymentMethod: 'cash' })).status, 400)
+    const back = await api.post(`/api/admin/visits/${v.id}/persons/${c.id}/return`).set(bearer(adminToken))
+    assert.deepEqual([back.body.visit.persons[2].leftAt, back.body.visit.persons[2].amount], [null, null])
+
+    // Qalan 2 nəfər: ümumi nağd + kart yalnız onların payına
+    const end = await api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send({ paymentMethod: 'split', cashAmount: 5 })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    const ps = end.body.visit.persons
+    const rest = ps[2].amount + ps[3].amount
+    assert.ok(ps[2].amount > 7)
+    assert.deepEqual(ps.slice(0, 2).map((p) => [p.amount, p.paymentMethod]), [[7, 'cash'], [7, 'card']])
+    assert.equal(end.body.visit.amount, 14 + rest)
+    const day = async () => (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((x) => x.day === end.body.visit.day)
+    let r = await day()
+    assert.deepEqual([r.cash, r.card], [12, 7 + rest - 5])
+
+    // Düzəlişdə gedənlərin payı və ödənişi dəyişmir
+    const edited = await api.patch(`/api/admin/visits/${v.id}`).set(bearer(adminToken)).send({ paymentMethod: 'split', cashAmount: 6 })
+    assert.equal(edited.status, 200, JSON.stringify(edited.body))
+    assert.deepEqual(edited.body.visit.persons.slice(0, 2).map((p) => [p.amount, p.paymentMethod]), [[7, 'cash'], [7, 'card']])
+    r = await day()
+    assert.deepEqual([r.cash, r.card], [13, 7 + rest - 6])
+  })
+})
+
+describe('tez gedən sonda ödəyir', () => {
+  it('gedir, payı o an yazılır, ödəniş sifariş bitəndə qalanlarla', async () => {
+    const adminToken = await createAdmin()
+    const ago = (m) => new Date(Date.now() - m * 60_000).toISOString()
+    const v = (await api.post('/api/admin/visits').set(bearer(adminToken)).send({ startedAt: ago(180), name: 'Üçlük', persons: [{}, {}, {}] })).body.visit
+    const [a, b, c] = v.persons
+    const left = await api.post(`/api/admin/visits/${v.id}/persons/${a.id}/leave`).set(bearer(adminToken)).send({ leftAt: ago(60) })
+    assert.equal(left.status, 200, JSON.stringify(left.body))
+    assert.deepEqual([left.body.visit.persons[0].amount, left.body.visit.persons[0].paymentMethod], [7, null])
+    const end = await api.post(`/api/admin/visits/${v.id}/end`).set(bearer(adminToken)).send({ payments: { [a.id]: 'card', [b.id]: 'cash', [c.id]: 'cash' } })
+    assert.equal(end.status, 200, JSON.stringify(end.body))
+    const ps = end.body.visit.persons
+    assert.deepEqual([ps[0].amount, ps[0].paymentMethod], [7, 'card'])
+    const r = (await api.get('/api/admin/visits/days').set(bearer(adminToken))).body.days.find((x) => x.day === end.body.visit.day)
+    assert.deepEqual([r.cash, r.card], [ps[1].amount + ps[2].amount, 7])
+  })
+})

@@ -301,6 +301,7 @@ model VisitPerson {
   discount      Decimal? @db.Decimal(8, 2)
   paymentMethod String? // bitəndə: cash | card | split
   cashAmount    Decimal? @db.Decimal(8, 2) // split: bu nəfərin ödəməsinin nağd hissəsi (qalanı kartla)
+  leftAt        DateTime? // sifariş bitməmiş tez gedib: payı (amount) və ödənişi o an yazılır
   // Hədiyyə çarxından qazanılan hədiyyə bu nəfərin payına tətbiq olunur (sifariş bitəndə "istifadə olunub" olur)
   spinId        String?    @unique
   spin          WheelSpin? @relation(fields: [spinId], references: [id], onDelete: SetNull)

@@ -1,0 +1,1 @@
+ALTER TABLE "VisitPerson" ADD COLUMN "leftAt" TIMESTAMP(3);
